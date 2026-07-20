@@ -10,6 +10,7 @@ import { uploadImage } from '../../../services/api/admin/adminProductService';
 import { themes } from '../../../utils/themes';
 import { ICON_LIBRARY, getIconByName, IconDef } from '../../../utils/iconLibrary';
 import { useToast } from '../../../context/ToastContext';
+import ImageCropperModal from '../../../components/ImageCropperModal';
 
 export default function AdminHeaderCategory() {
   const { showToast } = useToast();
@@ -27,6 +28,7 @@ export default function AdminHeaderCategory() {
   const [selectedStatus, setSelectedStatus] = useState<'Published' | 'Unpublished'>('Published');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [cropperFile, setCropperFile] = useState<File | null>(null);
   const [addButtonColor, setAddButtonColor] = useState('');
   const [offerTagColor, setOfferTagColor] = useState('');
 
@@ -184,6 +186,22 @@ export default function AdminHeaderCategory() {
   const startIndex = (currentPage - 1) * entriesPerPage;
   const endIndex = startIndex + entriesPerPage;
   const displayedCategories = filteredCategories.slice(startIndex, endIndex);
+
+  const handleImageCropped = async (croppedFile: File) => {
+    setCropperFile(null);
+    setIsUploading(true);
+    try {
+      const res = await uploadImage(croppedFile);
+      if (res.success) {
+        setHeaderCategoryImage(res.data.url);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to upload image');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const resetForm = () => {
     setHeaderCategoryName('');
@@ -465,20 +483,9 @@ export default function AdminHeaderCategory() {
                                                type="file"
                                                accept="image/*"
                                                className="hidden"
-                                               onChange={async (e) => {
+                                               onChange={(e) => {
                                                    if (e.target.files && e.target.files[0]) {
-                                                       setIsUploading(true);
-                                                       try {
-                                                           const res = await uploadImage(e.target.files[0]);
-                                                            if (res.success) {
-                                                                setHeaderCategoryImage(res.data.url);
-                                                            }
-                                                       } catch (err) {
-                                                           console.error(err);
-                                                           alert('Failed to upload image');
-                                                       } finally {
-                                                           setIsUploading(false);
-                                                       }
+                                                       setCropperFile(e.target.files[0]);
                                                    }
                                                }}
                                            />
@@ -910,6 +917,13 @@ export default function AdminHeaderCategory() {
           </div>
         </div>
       </div>
+
+      <ImageCropperModal
+        file={cropperFile}
+        open={!!cropperFile}
+        onClose={() => setCropperFile(null)}
+        onCropped={handleImageCropped}
+      />
     </div>
   );
 }

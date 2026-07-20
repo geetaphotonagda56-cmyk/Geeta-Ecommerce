@@ -40,6 +40,7 @@ export interface IProduct extends Document {
     sku?: string;
     status?: string;
     barcode?: string[];
+    blockNumber?: string;
     rackNumber?: string;
     mainImage?: string;
     galleryImages?: string[];
@@ -217,6 +218,7 @@ export interface IProduct extends Document {
           },
           sku: String,
           barcode: { type: [String], default: [] },
+          blockNumber: { type: String, trim: true },
           rackNumber: { type: String, trim: true },
           mainImage: { type: String, trim: true },
           galleryImages: { type: [String], default: [] },

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Suspense, lazy, startTransition } from "react";
+import CropTestHarness from "./CropTestHarness";
 import { CartProvider } from "./context/CartContext";
 import { OrdersProvider } from "./context/OrdersContext";
 import { AuthProvider } from "./context/AuthContext";
@@ -61,6 +62,8 @@ const FlashDealsPage = lazy(() => import("./modules/user/FlashDealsPage"));
 const DealOfTheDayPage = lazy(() => import("./modules/user/DealOfTheDayPage"));
 const FeaturedDealsPage = lazy(() => import("./modules/user/FeaturedDealsPage"));
 const LowestPricesEverPage = lazy(() => import("./modules/user/LowestPricesEverPage"));
+const ExploreRangeProducts = lazy(() => import("./modules/user/ExploreRangeProducts"));
+const BestsellersPage = lazy(() => import("./modules/user/BestsellersPage"));
 // Lazy load delivery routes
 const DeliveryLayout = lazy(() => import("./modules/delivery/components/DeliveryLayout"));
 const DeliveryDashboard = lazy(() => import("./modules/delivery/pages/DeliveryDashboard"));
@@ -206,6 +209,7 @@ const AdminPOSCustomerOrders = lazy(() => import("./modules/admin/pages/AdminPOS
 const AdminPOSSuppliers = lazy(() => import("./modules/admin/pages/AdminPOSSuppliers"));
 const AdminPOSSupplierDetail = lazy(() => import("./modules/admin/pages/AdminPOSSupplierDetail"));
 const AdminBannerSetup = lazy(() => import("./modules/admin/pages/AdminBannerSetup"));
+const AdminExploreRange = lazy(() => import("./modules/admin/pages/AdminExploreRange"));
 const AdminFlashDeal = lazy(() => import("./modules/admin/pages/AdminFlashDeal"));
 const AdminDealOfTheDay = lazy(() => import("./modules/admin/pages/AdminDealOfTheDay"));
 const AdminFeaturedDeal = lazy(() => import("./modules/admin/pages/AdminFeaturedDeal"));
@@ -326,6 +330,7 @@ function App() {
                       <RouteLoaderTrigger />
                       <Routes>
                   {/* Public Routes */}
+                  <Route path="/crop-test" element={<CropTestHarness />} />
                   <Route
                     path="/login"
                     element={
@@ -616,6 +621,7 @@ function App() {
 
                             {/* Promotion Routes */}
                             <Route path="promotion/banner-setup" element={<AdminBannerSetup />} />
+                            <Route path="promotion/explore-range" element={<AdminExploreRange />} />
                             <Route path="promotion/flash-deals" element={<AdminFlashDeal />} />
                             <Route path="promotion/deal-of-the-day" element={<AdminDealOfTheDay />} />
                             <Route path="promotion/featured-deal" element={<AdminFeaturedDeal />} />
@@ -675,6 +681,8 @@ function App() {
                             <Route path="/featured-deals" element={<FeaturedDealsPage />} />
                             <Route path="/deal-of-the-day" element={<DealOfTheDayPage />} />
                             <Route path="/lowest-prices-ever" element={<LowestPricesEverPage />} />
+                            <Route path="/explore-range" element={<ExploreRangeProducts />} />
+                            <Route path="/bestsellers" element={<BestsellersPage />} />
                           </Routes>
                         </Suspense>
                       </AppLayout>

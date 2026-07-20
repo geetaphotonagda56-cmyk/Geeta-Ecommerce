@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
-import { v2 as cloudinary } from 'cloudinary';
+import { uploadImage as uploadToS3 } from '../services/s3Service';
 import Category from '../models/Category';
 import Product from '../models/Product';
 import Seller from '../models/Seller';
@@ -26,14 +26,7 @@ const FRONTEND_ASSETS_PATH = path.join(__dirname, '../../../frontend/public');
 log('Starting Seed Script');
 log(`MONGO_URI: ${MONGO_URI}`);
 log(`FRONTEND_ASSETS_PATH: ${FRONTEND_ASSETS_PATH}`);
-log(`CLOUDINARY_CLOUD_NAME: ${process.env.CLOUDINARY_CLOUD_NAME || 'MISSING'}`);
-
-// Configure Cloudinary
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-});
+log(`AWS_S3_BUCKET_NAME: ${process.env.AWS_S3_BUCKET_NAME || 'MISSING'}`);
 
 // --- Data ---
 // Extracted from frontend/src/data/categories.ts
@@ -173,7 +166,7 @@ const productsData = [
 
 // --- Helpers ---
 
-// Helper to upload to Cloudinary
+// Helper to upload to S3
 async function uploadToCloudinary(localPath: string, folder: string = 'products'): Promise<string | null> {
     try {
         if (!localPath) return null;
@@ -187,14 +180,12 @@ async function uploadToCloudinary(localPath: string, folder: string = 'products'
             return null;
         }
 
-        const result = await cloudinary.uploader.upload(fullPath, {
+        const result = await uploadToS3(fullPath, {
             folder: `Geeta Stores/${folder}`,
-            use_filename: true,
-            unique_filename: false,
         });
 
-        console.log(`Uploaded ${cleanPath} -> ${result.secure_url}`);
-        return result.secure_url;
+        console.log(`Uploaded ${cleanPath} -> ${result.secureUrl}`);
+        return result.secureUrl;
     } catch (error) {
         log(`Upload failed for ${localPath}: ${error}`);
         return null;

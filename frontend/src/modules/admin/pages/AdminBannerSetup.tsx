@@ -4,6 +4,7 @@ import { Banner, BannerPosition } from '../../../types/banner';
 import { getCategories } from '../../../services/api/categoryService';
 import { uploadImage } from '../../../services/api/uploadService';
 import { useToast } from '../../../context/ToastContext';
+import ImageCropperModal from '../../../components/ImageCropperModal';
 
 export default function AdminBannerSetup() {
   const { showToast } = useToast();
@@ -18,6 +19,10 @@ export default function AdminBannerSetup() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [editingBannerId, setEditingBannerId] = useState<string | null>(null);
+  // Serial crop queue - multiple banners can be selected at once, so we crop
+  // them one at a time via the shared cropper modal before finalizing.
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
+  const [croppedAccumulator, setCroppedAccumulator] = useState<File[]>([]);
 
   useEffect(() => {
     loadBanners();
@@ -46,9 +51,20 @@ export default function AdminBannerSetup() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files ? Array.from(e.target.files) : [];
       if (files.length > 0) {
-          setSelectedFiles(files);
-          const urls = files.map(file => URL.createObjectURL(file));
-          setPreviewUrls(urls);
+          setCroppedAccumulator([]);
+          setCropQueue(files);
+      }
+  };
+
+  const handleBannerCropped = (croppedFile: File) => {
+      const nextAccumulator = [...croppedAccumulator, croppedFile];
+      const remainingQueue = cropQueue.slice(1);
+      setCroppedAccumulator(nextAccumulator);
+      setCropQueue(remainingQueue);
+
+      if (remainingQueue.length === 0) {
+          setSelectedFiles(nextAccumulator);
+          setPreviewUrls(nextAccumulator.map(file => URL.createObjectURL(file)));
       }
   };
 
@@ -351,6 +367,18 @@ export default function AdminBannerSetup() {
           </div>
 
        </div>
+
+      <ImageCropperModal
+        file={cropQueue[0] || null}
+        open={cropQueue.length > 0}
+        onClose={() => {
+          setCropQueue([]);
+          setCroppedAccumulator([]);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }}
+        onCropped={handleBannerCropped}
+        defaultAspectIndex={2}
+      />
     </div>
   );
 }

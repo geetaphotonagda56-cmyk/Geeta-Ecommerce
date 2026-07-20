@@ -4,11 +4,29 @@ import { Camera, Save, ArrowLeft, Loader2, Trash2, Phone, MapPin, Building, File
 import { useNavigate } from "react-router-dom";
 import { uploadImage } from "../../../services/api/uploadService";
 import { ADMIN_POS_BILL_SETTINGS_KEY, ADMIN_POS_BILL_SETTINGS_UPDATED_EVENT } from "../../../utils/adminPosBillSettings";
+import { SimpleInvoice } from "../components/SimpleInvoice";
+import { GSTInvoice } from "../components/GSTInvoice";
+import ImageCropperModal from "../../../components/ImageCropperModal";
+
+const SAMPLE_INVOICE_BILL = {
+  invoiceNum: "INV-0001",
+  date: "17/07/2026",
+  time: "05:30 PM",
+  customerName: "Walk-in Customer",
+  customerPhone: "9876543210",
+  paymentMethod: "Cash",
+  total: 342.5,
+  cart: [
+    { productName: "Aashirvaad Atta 5kg", qty: 1, price: 249, compareAtPrice: 275, hsnCode: "1101", gst: 5 },
+    { productName: "Amul Butter 100g", qty: 2, price: 55, compareAtPrice: 62, hsnCode: "0405", gst: 12 },
+  ],
+};
 
 interface BillSettings {
   shopName: string;
   address: string;
   phone: string;
+  invoiceFormat?: "simple" | "gst";
   notes?: {
       text: string;
       enabled: boolean;
@@ -33,12 +51,14 @@ const AdminPOSBillSettings = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [uploadingQR, setUploadingQR] = useState(false);
+  const [qrCropperFile, setQrCropperFile] = useState<File | null>(null);
   const qrInputRef = useRef<HTMLInputElement>(null);
 
   const [settings, setSettings] = useState<BillSettings>({
     shopName: "",
     address: "",
     phone: "",
+    invoiceFormat: "simple",
     notes: {
         text: "Thank you for your business",
         enabled: true
@@ -109,13 +129,18 @@ const AdminPOSBillSettings = () => {
     }
   };
 
-  const handleQRUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleQRUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setQrCropperFile(file);
+  };
 
+  const handleQRCropped = async (croppedFile: File) => {
+    setQrCropperFile(null);
+    if (qrInputRef.current) qrInputRef.current.value = '';
     try {
         setUploadingQR(true);
-        const result = await uploadImage(file, 'pos-settings');
+        const result = await uploadImage(croppedFile, 'pos-settings');
         setSettings(prev => ({
             ...prev,
             qrCode: result.secureUrl
@@ -268,6 +293,59 @@ const AdminPOSBillSettings = () => {
           </div>
         </div>
 
+        {/* Invoice Format Selection */}
+        <div className="rounded-3xl bg-white p-8 shadow-sm border border-neutral-100">
+          <h2 className="text-base font-bold text-neutral-800 mb-6 flex items-center gap-2">
+            <FileText className="h-5 w-5 text-[var(--primary-color)]" />
+            Invoice Format
+          </h2>
+          <div className="space-y-4">
+            <p className="text-sm text-neutral-600">Select the invoice format for your POS bills</p>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => setSettings(prev => ({...prev, invoiceFormat: "simple"}))}
+                className={`p-4 rounded-2xl border-2 transition-all ${
+                  settings.invoiceFormat === "simple"
+                    ? 'border-[var(--primary-color)] bg-[var(--primary-color)]/5'
+                    : 'border-neutral-200 bg-neutral-50/30 hover:border-neutral-300'
+                }`}
+              >
+                <div className="text-sm font-bold text-neutral-800">Simple Format</div>
+                <div className="text-xs text-neutral-500 mt-1">Minimal display: Product, Qty, Price, Total</div>
+              </button>
+              <button
+                onClick={() => setSettings(prev => ({...prev, invoiceFormat: "gst"}))}
+                className={`p-4 rounded-2xl border-2 transition-all ${
+                  settings.invoiceFormat === "gst"
+                    ? 'border-[var(--primary-color)] bg-[var(--primary-color)]/5'
+                    : 'border-neutral-200 bg-neutral-50/30 hover:border-neutral-300'
+                }`}
+              >
+                <div className="text-sm font-bold text-neutral-800">GST Format</div>
+                <div className="text-xs text-neutral-500 mt-1">Professional format with HSN codes & tax breakup</div>
+              </button>
+            </div>
+
+            {/* Live Preview */}
+            <div className="pt-2">
+              <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">
+                Preview {settings.invoiceFormat === "gst" ? "— GST Format" : "— Simple Format"}
+              </p>
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/50 p-4 overflow-hidden">
+                <div className="mx-auto max-w-full overflow-auto rounded-xl bg-white shadow-sm border border-neutral-100" style={{ maxHeight: 420 }}>
+                  <div style={{ transform: "scale(0.62)", transformOrigin: "top center", width: "161.3%", marginLeft: "-30.65%" }}>
+                    {settings.invoiceFormat === "gst" ? (
+                      <GSTInvoice billDetails={SAMPLE_INVOICE_BILL} shopSettings={settings} />
+                    ) : (
+                      <SimpleInvoice billDetails={SAMPLE_INVOICE_BILL} shopSettings={settings} />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Notes & Terms */}
         <div className="rounded-3xl bg-white p-8 shadow-sm border border-neutral-100">
           <h2 className="text-base font-bold text-neutral-800 mb-6">Bill Footer Content</h2>
@@ -370,6 +448,16 @@ const AdminPOSBillSettings = () => {
           </div>
         </div>
       </div>
+
+      <ImageCropperModal
+        file={qrCropperFile}
+        open={!!qrCropperFile}
+        onClose={() => {
+          setQrCropperFile(null);
+          if (qrInputRef.current) qrInputRef.current.value = '';
+        }}
+        onCropped={handleQRCropped}
+      />
     </div>
   );
 };

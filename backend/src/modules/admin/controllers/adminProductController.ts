@@ -990,7 +990,8 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
       { sku: { $regex: search as string, $options: "i" } },
       { barcode: { $regex: search as string, $options: "i" } },
       { "variations.barcode": { $regex: search as string, $options: "i" } },
-      { rackNumber: { $regex: search as string, $options: "i" } },
+      { "variations.rackNumber": { $regex: search as string, $options: "i" } },
+      { "variations.blockNumber": { $regex: search as string, $options: "i" } },
       { hsnCode: { $regex: search as string, $options: "i" } },
     ];
 

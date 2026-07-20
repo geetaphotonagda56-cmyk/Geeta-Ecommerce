@@ -188,12 +188,13 @@ CustomerSchema.virtual('walletAmount').get(function (this: ICustomer) {
 // Generate refCode before saving if not provided
 CustomerSchema.pre('save', async function (next) {
   if (!this.refCode) {
-    // Generate a unique refCode (e.g., first 4 letters of name + random 4 chars)
+    // first 4 letters of name + random 6 chars (36^6 ≈ 2.2B combos) to keep
+    // collisions on the unique {refCode, sellerId} index effectively impossible.
     const namePart = this.name
       .replace(/\s+/g, '')
       .substring(0, 4)
       .toUpperCase();
-    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
     this.refCode = `${namePart}${randomPart}`;
   }
   next();

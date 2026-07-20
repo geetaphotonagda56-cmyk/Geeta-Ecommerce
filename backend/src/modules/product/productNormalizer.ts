@@ -97,6 +97,7 @@ export function extractVariantsFromBody(body: Record<string, unknown>): ProductV
       stock: body.stock ?? 0,
       sku: body.sku ?? body.itemCode,
       barcode: body.barcode,
+      blockNumber: body.blockNumber,
       rackNumber: body.rackNumber,
       mainImage: body.mainImage ?? body.mainImageUrl,
       galleryImages: body.galleryImages ?? body.galleryImageUrls,

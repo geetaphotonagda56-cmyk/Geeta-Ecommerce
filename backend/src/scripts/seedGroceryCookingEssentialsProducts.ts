@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
 import readline from "readline";
-import { v2 as cloudinary } from "cloudinary";
+import { uploadImage as uploadToS3 } from "../services/s3Service";
 import Category from "../models/Category";
 import HeaderCategory from "../models/HeaderCategory";
 import Product from "../models/Product";
@@ -38,20 +38,13 @@ const PRODUCT_IMAGES_BASE = path.join(
   "product"
 );
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// Helper to upload to Cloudinary
+// Helper to upload to S3
 async function uploadToCloudinary(
   localPath: string,
   folder: string = "products"
 ): Promise<string | null> {
-  if (!process.env.CLOUDINARY_CLOUD_NAME) {
-    log("Cloudinary not configured, using local path");
+  if (!process.env.AWS_S3_BUCKET_NAME) {
+    log("S3 not configured, using local path");
     return localPath.startsWith("http")
       ? localPath
       : `/assets/${path.basename(localPath)}`;
@@ -89,16 +82,14 @@ async function uploadToCloudinary(
   }
 
   try {
-    const result = await cloudinary.uploader.upload(fullPath, {
+    const result = await uploadToS3(fullPath, {
       folder: `Geeta Stores/${folder}`,
-      resource_type: "image",
-      use_filename: true,
-      unique_filename: false,
+      resourceType: "image",
     });
-    log(`Uploaded to Cloudinary: ${result.secure_url}`);
-    return result.secure_url;
+    log(`Uploaded to S3: ${result.secureUrl}`);
+    return result.secureUrl;
   } catch (error: any) {
-    log(`Cloudinary upload failed: ${error.message}`);
+    log(`S3 upload failed: ${error.message}`);
     return null; // Return null instead of placeholder - we'll skip products without images
   }
 }

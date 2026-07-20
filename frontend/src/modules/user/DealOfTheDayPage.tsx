@@ -4,6 +4,7 @@ import ProductCard from "./components/ProductCard";
 import { getProductById } from "../../services/api/customerProductService";
 import { bannerService } from "../../services/bannerService";
 import BannerSlider from "./components/banners/BannerSlider";
+import ShareButton from "../../components/ShareButton";
 
 // Drive the hero band and CTA off the admin-managed Customer App Theme rather
 // than the previously hardcoded orange (#FF6D00 / #FF9100 / #E65100).
@@ -77,6 +78,12 @@ export default function DealOfTheDayPage() {
             <h1 className="text-base md:text-xl font-bold text-neutral-900 leading-tight">Deal of the Day</h1>
             <p className="text-[10px] md:text-xs text-neutral-500 font-medium tracking-tight">Handpicked savings just for today</p>
           </div>
+          <ShareButton
+            iconOnly
+            title="Deal of the Day on Geeta Stores"
+            text="Check out today's Deal of the Day on Geeta Stores"
+            className="ml-auto w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors flex-shrink-0"
+          />
         </div>
       </div>
 

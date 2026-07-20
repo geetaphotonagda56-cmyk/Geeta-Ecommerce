@@ -86,6 +86,11 @@ export const getLowestPricesProducts = async (
   return response.data;
 };
 
+export const getAllBestsellers = async (): Promise<{ success: boolean; data: any[] }> => {
+  const response = await api.get("/customer/home/bestsellers");
+  return response.data;
+};
+
 /**
  * Get products for a specific "shop" (e.g. Spiritual Store)
  */

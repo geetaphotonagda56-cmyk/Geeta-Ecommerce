@@ -22,6 +22,7 @@ export const variantSchema = z.object({
   status: z.enum(["Available", "Sold out", "In stock"]).optional(),
   sku: z.string().optional(),
   barcode: z.array(z.string()).optional(),
+  blockNumber: z.string().optional(),
   rackNumber: z.string().optional(),
   mainImage: z.string().optional(),
   galleryImages: z.array(z.string()).optional(),

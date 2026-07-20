@@ -16,6 +16,8 @@ import { Html5QrcodeSupportedFormats } from "html5-qrcode";
 import QRScannerModal from '../../../components/QRScannerModal';
 import { openBarcodeScanner } from '../../../utils/scannerPlatform';
 import ConfirmModal from '../../../components/ConfirmModal';
+import ImageCropperModal from '../../../components/ImageCropperModal';
+import { uploadImage } from '../../../services/api/uploadService';
 import { useAppContext } from '../../../context/AppContext';
 import { formatAmount } from '../../../utils/priceUtils';
 import { appendPOSStaffBill, getStaffSession } from '../../../utils/staffSession';
@@ -40,6 +42,8 @@ import {
   resolveGstPercent,
   formatGstPercent,
 } from '../../../utils/gstUtils';
+import { SimpleInvoice } from '../components/SimpleInvoice';
+import { GSTInvoice } from '../components/GSTInvoice';
 
 // Interface for Cart Item extending Product
 export interface CartItem extends Product {
@@ -266,10 +270,11 @@ const AdminPOSOrders = () => {
         billName = `Bill ${nextNum}`;
     }
 
+    // Ensure the new bill has a completely fresh, isolated state
     const newBill: Bill = {
       id: newId,
       name: billName,
-      cart: [],
+      cart: [] as CartItem[],  // Always fresh empty array
       selectedCustomer: null,
       customerSearch: '',
       paymentMethod: 'Cash',
@@ -278,17 +283,18 @@ const AdminPOSOrders = () => {
     };
 
     setBills(prev => {
-      let updated;
+      let updated: Bill[];
       if (reset) {
           // If resetting, replace ONLY the active bill with the new empty one
           if (prev.some(b => b.id === activeBillId)) {
-               updated = prev.map(b => b.id === activeBillId ? newBill : b);
+               updated = prev.map(b => b.id === activeBillId ? { ...newBill } : b);
           } else {
                // Fallback if active bill not found, though unlikely
-               updated = [newBill];
+               updated = [{ ...newBill }];
           }
       } else {
-          updated = [...prev, newBill];
+          // Ensure deep isolation by spreading the newBill object
+          updated = [...prev, { ...newBill }];
       }
 
       localStorage.setItem('admin_pos_bills', JSON.stringify(updated));
@@ -752,7 +758,6 @@ const AdminPOSOrders = () => {
   // Mobile Search Modal State
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [mobileSearchQuery, setMobileSearchQuery] = useState('');
-  const [mobileCartView, setMobileCartView] = useState<'list' | 'grid'>('list');
   const [showPurchaseSheet, setShowPurchaseSheet] = useState(false);
   const [showPurchaseEntry, setShowPurchaseEntry] = useState(false);
   const [showPurchaseSearch, setShowPurchaseSearch] = useState(false);
@@ -775,6 +780,76 @@ const AdminPOSOrders = () => {
     } else {
       setQuotationItemsStore(action);
     }
+  };
+
+  // Spreadsheet-style entry table: always shows at least MIN_PURCHASE_TABLE_ROWS
+  // rows (existing items + blank rows to fill up), plus any extra rows the
+  // user added manually via the "+ Add Rows" button.
+  const MIN_PURCHASE_TABLE_ROWS = 10;
+  const [purchaseExtraBlankRows, setPurchaseExtraBlankRows] = useState(0);
+  const [purchaseDraftRows, setPurchaseDraftRows] = useState<Record<number, { name: string; qty: string; rate: string }>>({});
+  const purchaseTableCellRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const focusPurchaseTableCell = (row: number, col: 0 | 1 | 2) => {
+    requestAnimationFrame(() => {
+      purchaseTableCellRefs.current[`${row}-${col}`]?.focus();
+    });
+  };
+
+  const getPurchaseDraftRow = (blankIndex: number) =>
+    purchaseDraftRows[blankIndex] || { name: '', qty: '', rate: '' };
+
+  const updatePurchaseDraftRow = (blankIndex: number, updates: Partial<{ name: string; qty: string; rate: string }>) => {
+    setPurchaseDraftRows((prev) => ({
+      ...prev,
+      [blankIndex]: { ...getPurchaseDraftRow(blankIndex), ...updates },
+    }));
+  };
+
+  // Turns a blank draft row into a real manual PurchaseItem once it has a name.
+  const commitPurchaseDraftRow = (blankIndex: number): string | null => {
+    const draft = getPurchaseDraftRow(blankIndex);
+    const name = draft.name.trim();
+    if (!name) return null;
+
+    const newId = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const qty = parseInt(draft.qty) || 1;
+    const rate = parseFloat(draft.rate) || 0;
+
+    const newItem: PurchaseItem = {
+      id: newId,
+      productId: newId,
+      baseProductId: newId,
+      productName: name,
+      isVariant: false,
+      variationId: '',
+      image: '',
+      mrp: rate,
+      retailPrice: rate,
+      wholesalePrice: rate,
+      purchasePrice: rate,
+      qty,
+      currentQty: 0,
+      includingGST: true,
+      billDiscount: 0,
+      billDiscountType: '₹',
+      gstPercent: 0,
+      barcode: '',
+      mfgDate: '',
+      expiry: '',
+      hsn: '',
+      batch: '',
+      packOf: 1,
+      additionalOpen: false,
+    };
+
+    setPurchaseItems((prev) => [...prev, newItem]);
+    setPurchaseDraftRows((prev) => {
+      const next = { ...prev };
+      delete next[blankIndex];
+      return next;
+    });
+    return newId;
   };
   const [purchaseBarcodeScanItemId, setPurchaseBarcodeScanItemId] = useState<string | null>(null);
   const [purchaseSearchLoading, setPurchaseSearchLoading] = useState(false);
@@ -830,6 +905,8 @@ const AdminPOSOrders = () => {
   const [showVariantPicker, setShowVariantPicker] = useState(false);
   const [variantPickerItem, setVariantPickerItem] = useState<PurchaseItem | null>(null);
   const [billAttachment, setBillAttachment] = useState<string | null>(null);
+  const [billAttachmentUploading, setBillAttachmentUploading] = useState(false);
+  const [billCropperFile, setBillCropperFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [editingQuotationId, setEditingQuotationId] = useState<string | null>(null);
   const [savedPurchaseEntries, setSavedPurchaseEntries] = useState<PurchaseEntryRecord[]>(() => {
@@ -1345,7 +1422,7 @@ const AdminPOSOrders = () => {
       try {
           const res = await createCustomer({
               ...newCustomer,
-              email: newCustomer.email || `${newCustomer.phone}@placeholder.com` // Backend requires email
+              email: newCustomer.email || undefined
           });
 
           if (res.success && res.data) {
@@ -1681,6 +1758,57 @@ const AdminPOSOrders = () => {
     }
   };
 
+  // Cart Table: Sr.no / Edit / Image / Name / MRP(0) / Qty(1) / Retail Price(2) / Sub Total / Delete
+  const cartTableCellRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const focusCartTableCell = (row: number, col: 0 | 1 | 2) => {
+    requestAnimationFrame(() => {
+      cartTableCellRefs.current[`${row}-${col}`]?.focus();
+      cartTableCellRefs.current[`${row}-${col}`]?.select();
+    });
+  };
+
+  const handleCartCellKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    row: number,
+    col: -1 | 0 | 1 | 2,
+    totalRows: number
+  ) => {
+    const input = e.currentTarget;
+    const val = input.value.trim();
+
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      if (col === -1) {
+        focusCartTableCell(row, 0);
+      } else if (col < 2) {
+        focusCartTableCell(row, (col + 1) as 0 | 1 | 2);
+      } else if (row + 1 < totalRows) {
+        focusCartTableCell(row + 1, -1);
+      }
+      return;
+    }
+
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      if (val === '') {
+        if (col > -1) {
+          focusCartTableCell(row, ((col - 1) as any) as 0 | 1 | 2);
+        } else if (row > 0) {
+          focusCartTableCell(row - 1, 2);
+        }
+      } else {
+        input.value = val.slice(0, -1);
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+    }
+  };
+
   /*
    * Helper to get effective price based on Order Type
    * Retail -> item.price
@@ -1716,12 +1844,23 @@ const AdminPOSOrders = () => {
   const handleAttachBill = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setBillAttachment(reader.result as string);
-        showToast('Bill attached successfully', 'success');
-      };
-      reader.readAsDataURL(file);
+      setBillCropperFile(file);
+    }
+  };
+
+  const handleBillCropped = async (croppedFile: File) => {
+    setBillCropperFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    setBillAttachmentUploading(true);
+    try {
+      const uploadRes = await uploadImage(croppedFile, 'pos-bill-attachments');
+      setBillAttachment(uploadRes.secureUrl || uploadRes.url);
+      showToast('Bill attached successfully', 'success');
+    } catch (error) {
+      console.error('Failed to upload bill attachment', error);
+      showToast('Failed to attach bill', 'error');
+    } finally {
+      setBillAttachmentUploading(false);
     }
   };
 
@@ -3898,9 +4037,9 @@ const AdminPOSOrders = () => {
 
               {/* Payment Method & Order Type Controls */}
               <div className="flex-none px-4 pt-2 pb-1 md:hidden">
-                   {/* Payment Method + View Toggle (Mobile Row) */}
+                   {/* Payment Method (Mobile Row) */}
                    <div className="flex items-center gap-2 mb-2">
-                       <div className="relative flex-[0_0_58%]">
+                       <div className="relative flex-1">
                            <button
                                onClick={() => setShowPaymentDropdown(!showPaymentDropdown)}
                                className="w-full flex items-center justify-between bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)]"
@@ -3923,27 +4062,6 @@ const AdminPOSOrders = () => {
                                    ))}
                                </div>
                            )}
-                       </div>
-
-                       <div className="flex-1 flex justify-end">
-                           <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
-                               <button
-                                 onClick={() => setMobileCartView('list')}
-                                 className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
-                                   mobileCartView === 'list' ? 'bg-[var(--primary-color)] text-white' : 'text-gray-600'
-                                 }`}
-                               >
-                                 List
-                               </button>
-                               <button
-                                 onClick={() => setMobileCartView('grid')}
-                                 className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
-                                   mobileCartView === 'grid' ? 'bg-[var(--primary-color)] text-white' : 'text-gray-600'
-                                 }`}
-                               >
-                                 Grid
-                               </button>
-                           </div>
                        </div>
                    </div>
 
@@ -4041,309 +4159,220 @@ const AdminPOSOrders = () => {
 
               {/* Cart Items List */}
               <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden relative">
-                  {/* Cart Items List */}
+                  {/* Cart Items Table */}
                   <div className="flex-1 min-h-0 overflow-hidden w-full flex flex-col">
-                  <div className="flex-1 min-h-0 overflow-y-auto p-4 pb-40 md:p-0 md:pb-0 md:overflow-y-auto custom-pos-scroll">
-                      <div className={mobileCartView === 'grid'
-                          ? 'grid grid-cols-2 gap-2 md:flex md:flex-col'
-                          : 'space-y-2 flex flex-col'
-                      }>
-                  {/* Desktop Header Row */}
-                  <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-bold text-black pb-2 border-b border-gray-100 px-2 sticky top-0 bg-white z-10">
-                      <div className="col-span-1 text-center">Sr.no</div>
-                      <div className="col-span-1 text-center">Edit</div>
-                      <div className="col-span-1 text-center">Image</div>
-                      <div className="col-span-2">Name</div>
-                      <div className="col-span-1 text-center">MRP</div>
-                      <div className="col-span-2 text-center">Quantity</div>
-                      <div className="col-span-2 text-center">Retail Price</div>
-                      <div className="col-span-1 text-center">Sub Total</div>
-                      <div className="col-span-1 text-center">Delete</div>
-                  </div>
+                  <div className="flex-1 min-h-0 overflow-auto pb-40 md:pb-0 custom-pos-scroll">
+                      <table className="w-full border-collapse mb-2 table-fixed">
+                          <colgroup>
+                              <col style={{width: '8%'}} />
+                              <col style={{width: '30%'}} />
+                              <col style={{width: '15%'}} />
+                              <col style={{width: '12%'}} />
+                              <col style={{width: '15%'}} />
+                              <col style={{width: '15%'}} />
+                              <col style={{width: '5%'}} />
+                          </colgroup>
+                          <thead>
+                              <tr className="bg-[var(--primary-color)] text-white sticky top-0 z-10">
+                                  <th className="border border-gray-400 px-2 py-3 font-bold">Sr</th>
+                                  <th className="border border-gray-400 px-2 py-3 font-bold">Item Name</th>
+                                  <th className="border border-gray-400 px-2 py-3 font-bold">MRP</th>
+                                  <th className="border border-gray-400 px-2 py-3 font-bold">Qty</th>
+                                  <th className="border border-gray-400 px-2 py-3 font-bold">Rate</th>
+                                  <th className="border border-gray-400 px-2 py-3 font-bold">Total</th>
+                                  <th className="border border-gray-400 px-2 py-3 font-bold">Delete</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                              {Array.from({ length: Math.max(8, cart.length) }).map((_, index) => {
+                                  const item = cart[index];
+                                  const sp = item ? getEffectivePrice(item) : 0;
+                                  const mrp = item ? Number(item.compareAtPrice || 0) : 0;
+                                  const qty = item ? item.qty : 0;
+                                  const lineId = item ? getCartLineId(item) : `temp_${index}`;
 
-                  {cart.length === 0 ? (
-                      <div className="flex-1 flex flex-col items-center justify-center text-gray-400 min-h-[200px]">
-                          <svg className="w-12 h-12 mb-2 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                          <span className="text-sm">Cart is empty</span>
-                      </div>
-                  ) : (
-                      cart.map((item, index) => {
-                          const sp = getEffectivePrice(item);
-                          const mrp = Number(item.compareAtPrice || 0);
-                          const hasMrp = mrp > 0;
-                          const purchasePrice = item.purchasePrice || 0;
-                          const profit = sp - purchasePrice;
-                          const profitPercent = purchasePrice > 0 ? ((profit / purchasePrice) * 100).toFixed(2) : '0.00';
+                                  return (
+                                      <tr key={`row_${index}`} className="border-b border-gray-300">
+                                          <td className="border border-gray-300 px-3 py-4 text-center text-sm font-bold bg-gray-100">{item ? index + 1 : ''}</td>
 
-                          return (
-                          <React.Fragment key={getCartLineId(item)}>
-                              {/* --- MOBILE VIEW (Card Style) --- */}
-                               <div className={`${mobileCartView === 'list' ? 'block' : 'hidden'} md:hidden bg-white border border-gray-400 rounded-xl p-2 shadow-sm mb-1 relative overflow-hidden group shrink-0`}>
-                                   {/* Main Row: Image, Info, and Price */}
-                                   <div className="flex items-start gap-2 mb-0">
-                                       {/* Image */}
-                                       <div className="w-12 h-12 flex-shrink-0 bg-white rounded-lg border border-gray-200 flex items-center justify-center p-0.5 overflow-hidden shadow-sm">
-                                            {item.mainImage ? (
-                                                <img src={item.mainImage} alt="" className="w-full h-full object-contain" />
-                                            ) : (
-                                                <span className="text-[10px] text-gray-300">Img</span>
-                                            )}
-                                       </div>
-
-                                       {/* Product Details & Price */}
-                                       <div className="flex-1 min-w-0">
-                                            <div className="flex justify-between items-start mb-0 gap-2">
-                                                <div className="flex items-start gap-1 min-w-0">
-                                                     <span className="bg-gray-100 text-gray-500 text-[8px] font-bold px-1 py-0.5 rounded flex-shrink-0 mt-0.5">#{index + 1}</span>
-                                                     <div className="min-w-0">
-                                                          <h4 className="text-[12px] font-black text-gray-800 leading-tight line-clamp-1">{item.productName}</h4>
-                                                          {(item as any).warrantyType && (item as any).warrantyType !== 'None' && (
-                                                              <div className="text-[9px] text-[var(--primary-color)] font-bold mt-0.5">
-                                                                  {(item as any).warrantyType}: {(item as any).warrantyDuration}
-                                                              </div>
-                                                          )}
-                                                      </div>
-                                                </div>
-                                                <div className="font-bold text-gray-900 text-[13px] flex-shrink-0">₹{sp * item.qty}</div>
-                                            </div>
-
-                                            <div className="flex flex-col text-[11px]">
-                                                 <span className="text-gray-500 leading-none">
-                                                   {hasMrp ? <><span>MRP: </span><span className="line-through decoration-gray-400">Rs {mrp}</span></> : null}
-                                                   <span className="font-bold text-[var(--primary-color)] ml-1">SP: Rs {sp}</span>
-                                                 </span>
-
-                                                 {showProfit && (
-                                                      <span className={`${parseFloat(profitPercent) >= 0 ? 'text-[var(--primary-dark)]' : 'text-red-500'} font-medium leading-none mt-1`}>
-                                                          Profit: {profitPercent}%
-                                                      </span>
-                                                 )}
-                                            </div>
-                                       </div>
-                                   </div>
-
-                                  {/* Bottom Row: Actions & Quantity */}
-                                  <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-10">
-                                          <button
-                                             onClick={() => removeFromCart(getCartLineId(item))}
-                                             className="w-6 h-6 flex items-center justify-center bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-colors border border-red-100"
-                                          >
-                                             <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                          </button>
-                                          <button
-                                             onClick={() => openEditModal(item)}
-                                             className="px-5 py-1.5 flex items-center gap-2 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                                          >
-                                              <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                              Edit
-                                          </button>
-                                      </div>
-
-                                      {/* Quantity Control */}
-                                      <div className="flex items-center bg-gray-50 rounded-lg p-0 border border-gray-200 mr-2">
-                                           <button
-                                             onClick={() => updateQuantity(getCartLineId(item), -1)}
-                                             className="w-7 h-7 flex items-center justify-center text-gray-600 hover:bg-white hover:shadow-sm rounded transition-all font-bold text-base"
-                                           >−</button>
-                                           <input
-                                             type="number"
-                                             min={1}
-                                             step={1}
-                                             value={item.qty}
-                                             onChange={(e) => {
-                                               const nextQty = Number(e.target.value);
-                                               if (Number.isFinite(nextQty) && nextQty > 0) {
-                                                 setQuantity(getCartLineId(item), Math.floor(nextQty));
-                                               }
-                                             }}
-                                             className="w-9 h-7 text-center text-xs font-bold text-gray-800 bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                           />
-                                           <button
-                                             onClick={() => updateQuantity(getCartLineId(item), 1)}
-                                             className="w-7 h-7 flex items-center justify-center text-[var(--primary-color)] hover:bg-white hover:shadow-sm rounded transition-all font-bold text-base"
-                                           >+</button>
-                                      </div>
-                                  </div>
-                              </div>
-
-                              {mobileCartView === 'grid' && (
-                                  <div className="block md:hidden bg-white border border-gray-200 rounded-xl p-2 shadow-sm relative overflow-hidden">
-                                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                                          <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0">#{index + 1}</span>
-                                          <div className="text-xs font-bold text-gray-900">₹{sp * item.qty}</div>
-                                      </div>
-
-                                      <div className="flex items-center gap-2 mb-2">
-                                          <div className="w-10 h-10 flex-shrink-0 bg-white rounded-lg border border-gray-100 flex items-center justify-center p-1 overflow-hidden">
-                                              {item.mainImage ? (
-                                                  <img src={item.mainImage} alt="" className="w-full h-full object-contain" />
-                                              ) : (
-                                                  <span className="text-[10px] text-gray-300">Img</span>
-                                              )}
-                                          </div>
-                                          <h4 className="text-xs font-semibold text-gray-800 leading-tight line-clamp-2">{item.productName}</h4>
-                                      </div>
-
-                                      <div className="flex items-center justify-between gap-1.5">
-                                          <button
-                                            onClick={() => removeFromCart(getCartLineId(item))}
-                                            className="w-7 h-7 flex items-center justify-center bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-colors border border-red-100"
-                                          >
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                          </button>
-                                          <div className="flex items-center bg-gray-50 rounded-lg p-0.5 border border-gray-200">
-                                              <button
-                                                onClick={() => updateQuantity(getCartLineId(item), -1)}
-                                                className="w-6 h-6 flex items-center justify-center text-gray-600 hover:bg-white hover:shadow-sm rounded transition-all font-bold text-base"
-                                              >−</button>
+                                          <td className="border border-gray-300 px-0 py-0">
                                               <input
-                                                type="number"
-                                                min={1}
-                                                step={1}
-                                                value={item.qty}
-                                                onChange={(e) => {
-                                                  const nextQty = Number(e.target.value);
-                                                  if (Number.isFinite(nextQty) && nextQty > 0) {
-                                                    setQuantity(getCartLineId(item), Math.floor(nextQty));
-                                                  }
-                                                }}
-                                                className="w-8 h-6 text-center text-xs font-bold text-gray-800 bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                  ref={(el) => { cartTableCellRefs.current[`${index}--1`] = el; }}
+                                                  type="text"
+                                                  value={item?.productName || ''}
+                                                  onChange={(e) => {
+                                                      if (!item) {
+                                                          const newItem: CartItem = {
+                                                              _id: `temp_${index}_${Date.now()}`,
+                                                              productId: `temp_${index}_${Date.now()}`,
+                                                              productName: e.target.value,
+                                                              price: 0,
+                                                              qty: 1,
+                                                              compareAtPrice: 0,
+                                                              customPrice: undefined,
+                                                              mainImage: '',
+                                                              purchasePrice: 0,
+                                                              wholesalePrice: 0
+                                                          };
+                                                          const newCart = [...cart];
+                                                          newCart[index] = newItem;
+                                                          setCart(newCart);
+                                                      } else {
+                                                          updateItemDetails(lineId, { productName: e.target.value });
+                                                      }
+                                                  }}
+                                                  onKeyDown={(e) => handleCartCellKeyDown(e, index, -1, Math.max(8, cart.length))}
+                                                  className="w-full border-0 bg-white text-sm outline-none p-3 focus:bg-yellow-50 cursor-text"
+                                                  placeholder="Enter item name"
                                               />
-                                              <button
-                                                onClick={() => updateQuantity(getCartLineId(item), 1)}
-                                                className="w-6 h-6 flex items-center justify-center text-[var(--primary-color)] hover:bg-white hover:shadow-sm rounded transition-all font-bold text-base"
-                                              >+</button>
-                                          </div>
-                                          <button
-                                            onClick={() => openEditModal(item)}
-                                            className="px-2 py-1 flex items-center gap-1 bg-white border border-gray-300 rounded-lg text-[11px] font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                                          >
-                                            Edit
-                                          </button>
-                                      </div>
-                                  </div>
-                              )}
+                                          </td>
 
-                              {/* --- DESKTOP VIEW (Table Row Style) --- */}
-                               <div className="hidden md:grid grid-cols-12 gap-2 items-center py-0.5 px-2 border-b border-gray-100 hover:bg-gray-50/80 transition-all even:bg-gray-50/20">
-                                    {/* Sr No */}
-                                    <div className="col-span-1 text-center text-gray-500 text-sm font-bold">
-                                        {index + 1}
-                                    </div>
+                                          <td className="border border-gray-300 px-0 py-0">
+                                              <input
+                                                  ref={(el) => { cartTableCellRefs.current[`${index}-0`] = el; }}
+                                                  type="text"
+                                                  inputMode="numeric"
+                                                  value={mrp || ''}
+                                                  onChange={(e) => {
+                                                      const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                      if (!item) {
+                                                          const newItem: CartItem = {
+                                                              _id: `temp_${index}_${Date.now()}`,
+                                                              productId: `temp_${index}_${Date.now()}`,
+                                                              productName: '',
+                                                              price: 0,
+                                                              qty: 1,
+                                                              compareAtPrice: parseFloat(val) || 0,
+                                                              customPrice: undefined,
+                                                              mainImage: '',
+                                                              purchasePrice: 0,
+                                                              wholesalePrice: 0
+                                                          };
+                                                          const newCart = [...cart];
+                                                          newCart[index] = newItem;
+                                                          setCart(newCart);
+                                                      } else {
+                                                          updateItemDetails(lineId, { compareAtPrice: parseFloat(val) || 0 });
+                                                      }
+                                                  }}
+                                                  onKeyDown={(e) => handleCartCellKeyDown(e, index, 0, Math.max(8, cart.length))}
+                                                  className="w-full border-0 bg-white text-right text-sm outline-none p-3 focus:bg-yellow-50 cursor-text"
+                                              />
+                                          </td>
 
-                                    {/* Edit Button */}
-                                    <div className="col-span-1 text-center">
-                                        <button
-                                           onClick={() => openEditModal(item)}
-                                           className="p-1.5 text-gray-400 hover:text-[var(--primary-dark)] hover:bg-[var(--primary-alpha-10)] rounded-lg transition-colors inline-flex"
-                                        >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                        </button>
-                                    </div>
+                                          <td className="border border-gray-300 px-0 py-0">
+                                              <input
+                                                  ref={(el) => { cartTableCellRefs.current[`${index}-1`] = el; }}
+                                                  type="text"
+                                                  inputMode="numeric"
+                                                  value={qty || ''}
+                                                  onChange={(e) => {
+                                                      const val = e.target.value.replace(/[^0-9]/g, '');
+                                                      const nextQty = Number(val);
+                                                      if (!item) {
+                                                          const newItem: CartItem = {
+                                                              _id: `temp_${index}_${Date.now()}`,
+                                                              productId: `temp_${index}_${Date.now()}`,
+                                                              productName: '',
+                                                              price: 0,
+                                                              qty: nextQty || 1,
+                                                              compareAtPrice: 0,
+                                                              customPrice: undefined,
+                                                              mainImage: '',
+                                                              purchasePrice: 0,
+                                                              wholesalePrice: 0
+                                                          };
+                                                          const newCart = [...cart];
+                                                          newCart[index] = newItem;
+                                                          setCart(newCart);
+                                                      } else {
+                                                          if (nextQty > 0 || val === '') {
+                                                              setQuantity(lineId, nextQty || 1);
+                                                          }
+                                                      }
+                                                  }}
+                                                  onKeyDown={(e) => handleCartCellKeyDown(e, index, 1, Math.max(8, cart.length))}
+                                                  className="w-full border-0 bg-white text-right text-sm outline-none p-3 focus:bg-yellow-50 cursor-text"
+                                              />
+                                          </td>
 
-                                    {/* Image */}
-                                    <div className="col-span-1 flex justify-center">
-                                        <div className="w-14 h-14 bg-white rounded-lg border border-gray-200 flex items-center justify-center p-1 overflow-hidden shadow-sm">
-                                            {item.mainImage ? (
-                                                <img src={item.mainImage} alt="" className="w-full h-full object-contain" />
-                                            ) : (
-                                                <span className="text-[10px] text-gray-300 font-bold">IMG</span>
-                                            )}
-                                        </div>
-                                    </div>
+                                          <td className="border border-gray-300 px-0 py-0">
+                                              <input
+                                                  ref={(el) => { cartTableCellRefs.current[`${index}-2`] = el; }}
+                                                  type="text"
+                                                  inputMode="numeric"
+                                                  value={sp || ''}
+                                                  onChange={(e) => {
+                                                      const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                      if (!item) {
+                                                          const newItem: CartItem = {
+                                                              _id: `temp_${index}_${Date.now()}`,
+                                                              productId: `temp_${index}_${Date.now()}`,
+                                                              productName: '',
+                                                              price: 0,
+                                                              qty: 1,
+                                                              compareAtPrice: 0,
+                                                              customPrice: parseFloat(val) || 0,
+                                                              mainImage: '',
+                                                              purchasePrice: 0,
+                                                              wholesalePrice: 0
+                                                          };
+                                                          const newCart = [...cart];
+                                                          newCart[index] = newItem;
+                                                          setCart(newCart);
+                                                      } else {
+                                                          updateItemDetails(lineId, { customPrice: parseFloat(val) || 0 });
+                                                      }
+                                                  }}
+                                                  onKeyDown={(e) => handleCartCellKeyDown(e, index, 2, Math.max(8, cart.length))}
+                                                  className="w-full border-0 bg-white text-right text-sm outline-none p-3 focus:bg-yellow-50 cursor-text"
+                                              />
+                                          </td>
 
-                                    {/* Name */}
-                                     <div className="col-span-2 min-w-0">
-                                         <h4 className="text-base font-bold text-gray-900 whitespace-normal break-words leading-tight" title={item.productName}>{item.productName}</h4>
-                                         {(item as any).warrantyType && (item as any).warrantyType !== 'None' && (
-                                             <div className="text-xs text-[var(--primary-color)] font-bold mt-0.5">
-                                                 {(item as any).warrantyType}: {(item as any).warrantyDuration}
-                                             </div>
-                                         )}
-                                        {showProfit && (
-                                            <span className={`text-[11px] ${parseFloat(profitPercent) >= 0 ? 'text-[var(--primary-dark)]' : 'text-red-500'}`}>
-                                                Profit: {profitPercent}%
-                                            </span>
-                                        )}
-                                    </div>
+                                          <td className="border border-gray-300 px-3 py-4 text-right text-sm font-bold">
+                                              {item ? `₹${(sp * item.qty).toFixed(2)}` : ''}
+                                          </td>
 
-                                    {/* MRP Input */}
-                                    <div className="col-span-1">
-                                          <input
-                                              type="text"
-                                              inputMode="decimal"
-                                              value={mrp}
-                                              onChange={(e) => updateItemDetails(getCartLineId(item), { compareAtPrice: parseFloat(e.target.value) || 0 })}
-                                              onWheel={preventNumberScrollChange}
-                                              onKeyDown={preventArrowStepChange}
-                                              className="w-full text-center text-base border border-transparent hover:border-gray-200 focus:border-[var(--primary-color)] bg-transparent focus:bg-white rounded px-1 py-1 outline-none transition-all"
-                                          />
-                                     </div>
-
-                                    {/* Quantity */}
-                                    <div className="col-span-2 flex justify-center">
-                                        <div className="flex items-center bg-white border border-gray-200 rounded-lg h-9 w-28 shadow-sm">
-                                             <button
-                                               onClick={() => updateQuantity(getCartLineId(item), -1)}
-                                               className="w-8 h-full shrink-0 flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-gray-50 rounded-l transition-colors text-xl font-bold"
-                                             >−</button>
-                                             <input
-                                               type="number"
-                                               min={1}
-                                               step={1}
-                                               value={item.qty}
-                                               onChange={(e) => {
-                                                 const nextQty = Number(e.target.value);
-                                                 if (Number.isFinite(nextQty) && nextQty > 0) {
-                                                   setQuantity(getCartLineId(item), Math.floor(nextQty));
-                                                 }
-                                               }}
-                                               className="w-12 h-full shrink-0 text-center text-base font-bold text-gray-700 border-x border-gray-100 bg-gray-50/50 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                             />
-                                             <button
-                                               onClick={() => updateQuantity(getCartLineId(item), 1)}
-                                               className="w-8 h-full shrink-0 flex items-center justify-center text-[var(--primary-color)] hover:bg-gray-50 rounded-r transition-colors font-bold text-xl"
-                                             >+</button>
-                                        </div>
-                                    </div>
-
-                                    {/* Retail Price (SP) Input */}
-                                    <div className="col-span-2">
-                                         <input
-                                              type="text"
-                                              inputMode="decimal"
-                                              value={sp}
-                                              onChange={(e) => updateItemDetails(getCartLineId(item), { customPrice: parseFloat(e.target.value) || 0 })}
-                                              onWheel={preventNumberScrollChange}
-                                              onKeyDown={preventArrowStepChange}
-                                              className="w-full text-center text-base font-bold text-gray-900 border border-green-200 bg-[var(--primary-alpha-10)]/30 focus:bg-white focus:border-[var(--primary-color)] rounded px-1 py-1 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                     </div>
-
-                                    {/* Sub Total */}
-                                    <div className="col-span-1 text-center font-bold text-gray-900 text-base">
-                                        ₹{sp * item.qty}
-                                    </div>
-
-                                    {/* Delete */}
-                                    <div className="col-span-1 text-center">
-                                        <button
-                                           onClick={() => removeFromCart(getCartLineId(item))}
-                                           className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors inline-flex"
-                                           title="Remove Item"
-                                        >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                        </button>
-                                    </div>
-                               </div>
-                          </React.Fragment>
-                      );
-                  })
-              )}
-                      </div>
+                                          <td className="border border-gray-300 px-3 py-4 text-center">
+                                              {item ? (
+                                                  <button
+                                                      type="button"
+                                                      onClick={() => removeFromCart(lineId)}
+                                                      className="text-red-500 hover:text-red-700 text-lg font-bold"
+                                                      title="Delete"
+                                                  >
+                                                      ✕
+                                                  </button>
+                                              ) : null}
+                                          </td>
+                                      </tr>
+                                  );
+                              })}
+                          </tbody>
+                      </table>
+                      <button
+                          type="button"
+                          onClick={() => {
+                              const newItem: CartItem = {
+                                  _id: 'temp_' + Date.now(),
+                                  productId: 'temp_' + Date.now(),
+                                  productName: '',
+                                  price: 0,
+                                  qty: 1,
+                                  compareAtPrice: 0,
+                                  customPrice: undefined,
+                                  mainImage: '',
+                                  purchasePrice: 0,
+                                  wholesalePrice: 0
+                              };
+                              setCart([...cart, newItem]);
+                          }}
+                          className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded font-bold text-sm"
+                      >
+                          + Add Row
+                      </button>
                   </div>
-              </div>
+                  </div>
 
               {/* Footer Summary */}
 
@@ -4571,16 +4600,16 @@ const AdminPOSOrders = () => {
                   </div>
 
                   {/* Mobile Footer Actions - POS */}
-                  <div className="lg:hidden space-y-2 mt-1.5">
-                      <div className="flex justify-between items-center px-1">
+                  <div className="lg:hidden space-y-1 mt-1">
+                      <div className="flex justify-between items-center px-1 py-1">
                           <span className="text-gray-600 font-medium text-xs">Subtotal</span>
-                          <span className="text-lg font-bold text-gray-900">₹{calculateTotal().toLocaleString()}</span>
+                          <span className="text-sm font-bold text-gray-900">₹{calculateTotal().toLocaleString()}</span>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-3 gap-1">
                           <button
                             onClick={() => setShowQuickAdd(true)}
-                            className="rounded-2xl bg-[#f7d8e7] text-[#b34f7e] py-2.5 font-semibold border border-[var(--primary-alpha-20)] active:scale-[0.98]"
+                            className="rounded-lg bg-[#f7d8e7] text-[#b34f7e] py-1.5 text-xs font-semibold border border-[var(--primary-alpha-20)] active:scale-[0.98]"
                           >
                             Quick add +
                           </button>
@@ -4588,7 +4617,7 @@ const AdminPOSOrders = () => {
                           <button
                             onClick={activeBillId.startsWith('edit_') ? handleUpdateOrder : handleAccessPayment}
                             disabled={loading || cart.length === 0}
-                            className="rounded-2xl bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-2.5 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="rounded-lg bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-1.5 text-xs transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                           >
                             {loading ? (activeBillId.startsWith('edit_') ? 'Updating...' : 'Paying...') : (activeBillId.startsWith('edit_') ? 'Update' : 'Pay')}
                           </button>
@@ -4597,29 +4626,28 @@ const AdminPOSOrders = () => {
                             <button
                               onClick={handleGenerateBill}
                               disabled={cart.length === 0}
-                              className="rounded-2xl bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-2.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="rounded-lg bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-1.5 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               Bill
                             </button>
                           )}
                       </div>
 
-                      <div className="grid grid-cols-[1fr_110px] gap-2">
+                      <div className="grid grid-cols-[1fr_70px] gap-1">
                         <button
                           onClick={() => setShowMobileSearch(true)}
-                          className="w-full rounded-xl border border-[var(--primary-alpha-20)] px-4 py-2.5 text-left text-gray-500 bg-[#fffafd] flex items-center gap-2"
+                          className="w-full rounded-lg border border-[var(--primary-alpha-20)] px-2 py-1.5 text-left text-gray-500 bg-[#fffafd] flex items-center gap-1"
                         >
-                          <svg className="w-5 h-5 text-[var(--primary-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4 text-[var(--primary-color)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                           </svg>
-                          <span className="font-semibold text-sm">Search Items</span>
+                          <span className="font-semibold text-xs truncate">Search</span>
                         </button>
                         <button
                           onClick={() => { setScanTarget('inventory'); openBarcodeScanner(() => setShowScanner(true)); }}
-                          className="rounded-xl border border-[var(--primary-alpha-20)] px-3 py-2.5 font-semibold text-gray-700 bg-white flex items-center justify-center gap-2"
+                          className="rounded-lg border border-[var(--primary-alpha-20)] px-2 py-1.5 font-semibold text-gray-700 bg-white flex items-center justify-center gap-1"
                         >
-                          <span className="font-semibold text-sm">Scan</span>
-                          <svg className="w-5 h-5 text-[var(--primary-color)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <svg className="w-4 h-4 text-[var(--primary-color)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 5v2a2 2 0 002 2h2m10 0h2a2 2 0 002-2V5M3 19v-2a2 2 0 012-2h2m10 0h2a2 2 0 012 2v2m-6-13h-4m4 4h-4m4 4h-4m4 4h-4"/>
                           </svg>
                         </button>
@@ -4744,13 +4772,14 @@ const AdminPOSOrders = () => {
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className={`rounded-xl py-2.5 text-sm font-semibold transition-colors md:py-2 md:text-[13px] border ${
+                disabled={billAttachmentUploading}
+                className={`rounded-xl py-2.5 text-sm font-semibold transition-colors md:py-2 md:text-[13px] border disabled:opacity-60 ${
                   billAttachment
                     ? 'bg-[var(--primary-color)] text-white border-[var(--primary-color)]'
                     : 'bg-[var(--primary-color)] text-white border-[var(--primary-color)] hover:bg-[var(--primary-dark)]'
                 }`}
               >
-                {billAttachment ? '✓ Bill Attached' : '+Attach Bills'}
+                {billAttachmentUploading ? 'Uploading...' : billAttachment ? '✓ Bill Attached' : '+Attach Bills'}
               </button>
             </div>
 
@@ -4824,276 +4853,194 @@ const AdminPOSOrders = () => {
               </div>
             )}
 
-            {purchaseItems.length === 0 ? (
-              <div className="min-h-[45vh] flex flex-col items-center justify-center text-center bg-white rounded-2xl border border-[var(--primary-alpha-20)]">
-                <div className="w-16 h-16 rounded-2xl bg-gray-200 flex items-center justify-center mb-3">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13l-1 5h12" />
-                  </svg>
-                </div>
-                <p className="text-2xl md:text-2xl font-semibold text-gray-700">No items added yet</p>
-                <p className="text-gray-500 mt-2">Search and add products to start your purchase entry</p>
-              </div>
-            ) : (
-              <div className="space-y-4 md:space-y-3">
-                {purchaseItems.map((item, index) => {
-                  const subtotal = item.purchasePrice * item.qty;
-                  const afterPurchaseQty = item.currentQty + item.qty;
-                  const discountAmount = item.billDiscountType === '%' ? (subtotal * item.billDiscount) / 100 : item.billDiscount;
+            {(() => {
+              const blankCount = Math.max(MIN_PURCHASE_TABLE_ROWS - purchaseItems.length, 0) + purchaseExtraBlankRows;
+              const totalRows = purchaseItems.length + blankCount;
+              const totalQty = purchaseItems.reduce((sum, item) => sum + (item.qty || 0), 0);
 
-                  if (purchaseMode === 'Quotation') {
-                    return (
-                      <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-2 shadow-sm mb-2 relative overflow-hidden group shrink-0">
+              const handleCellKeyDown = (
+                e: React.KeyboardEvent<HTMLInputElement>,
+                row: number,
+                col: 0 | 1 | 2,
+                isBlank: boolean,
+                blankIndex: number
+              ) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
 
-                         {/* Main Row: Image, Info, and Price */}
-                         <div className="flex items-start gap-3 mb-2">
-                             {/* Large Image */}
-                             <div className="w-16 h-16 flex-shrink-0 bg-white rounded-lg border border-gray-100 flex items-center justify-center p-1 overflow-hidden shadow-sm">
-                                  {item.image ? (
-                                      <img src={item.image} alt={item.productName} className="w-full h-full object-contain" />
-                                  ) : (
-                                      <span className="text-xs text-gray-300">Img</span>
-                                  )}
-                             </div>
-
-                             {/* Product Details & Price */}
-                             <div className="flex-1 min-w-0">
-                                  <div className="flex justify-between items-start mb-1 gap-2">
-                                      <div className="flex items-start gap-2 min-w-0">
-                                           <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">#{index + 1}</span>
-                                           <div className="min-w-0">
-                                                <h4 className="text-sm font-semibold text-gray-800 leading-tight line-clamp-2">{item.productName}</h4>
-                                            </div>
-                                      </div>
-                                      <div className="font-bold text-gray-900 text-base flex-shrink-0">₹{Math.max(subtotal - discountAmount, 0).toFixed(2)}</div>
-                                  </div>
-
-                                  <div className="flex flex-col text-xs">
-                                       <span className="text-gray-500 leading-none">
-                                         MRP: <span className="line-through decoration-gray-400">₹{item.mrp}</span>{' '}
-                                         <span className="font-bold text-[var(--primary-color)] ml-1">SP: ₹{item.retailPrice}</span>
-                                       </span>
-                                  </div>
-                             </div>
-                         </div>
-
-                        {/* Bottom Row: Actions & Quantity */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => removePurchaseItem(item.id)}
-                              className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-colors border border-red-100"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => openPurchaseEditModal(item)}
-                              className="px-3 py-1.5 flex items-center gap-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                            >
-                              <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                              </svg>
-                              Edit
-                            </button>
-                          </div>
-
-                          {/* Quantity Control */}
-                          <div className="flex items-center bg-gray-50 rounded-lg p-0.5 border border-gray-200">
-                            <button
-                              onClick={() => updatePurchaseItem(item.id, { qty: Math.max(1, item.qty - 1) })}
-                              className="w-7 h-7 flex items-center justify-center text-gray-600 hover:bg-white hover:shadow-sm rounded transition-all font-bold text-lg"
-                            >
-                              -
-                            </button>
-                            <input
-                              type="number"
-                              min={1}
-                              value={item.qty || ''}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value);
-                                updatePurchaseItem(item.id, { qty: isNaN(val) ? 0 : Math.max(1, val) });
-                              }}
-                              className="w-12 text-center bg-transparent text-sm font-bold text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                            <button
-                              onClick={() => updatePurchaseItem(item.id, { qty: item.qty + 1 })}
-                              className="w-7 h-7 flex items-center justify-center text-[var(--primary-color)] hover:bg-white hover:shadow-sm rounded transition-all font-bold text-lg"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
+                if (isBlank) {
+                  const newId = commitPurchaseDraftRow(blankIndex);
+                  if (newId) {
+                    // Row just became real - move to its Qty cell.
+                    focusPurchaseTableCell(row, 1);
+                    return;
                   }
+                  // Nothing typed - just move within the row / to next row.
+                  if (col < 2) {
+                    focusPurchaseTableCell(row, (col + 1) as 0 | 1 | 2);
+                  } else if (row + 1 < totalRows) {
+                    focusPurchaseTableCell(row + 1, 0);
+                  }
+                  return;
+                }
 
-                  return (
-                    <div key={item.id} className="bg-white rounded-2xl border border-[var(--primary-alpha-20)] shadow-sm p-2 md:p-3 mb-2">
-                      <div className="flex gap-3 items-start">
-                        <div className="text-xl font-bold text-gray-600">#{index + 1}</div>
-                        <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center">
-                          {item.image ? <img src={item.image} alt={item.productName} className="w-full h-full object-contain" /> : <span className="text-xs text-gray-400">IMG</span>}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-xs text-gray-500">MRP: ₹{item.mrp} | Sp.: ₹{item.retailPrice}</p>
-                          {purchaseMode === 'Purchase' && (
-                            <p className="text-xs text-gray-500">Current Quantity: {item.currentQty} Piece</p>
-                          )}
-                          <h3 className="text-xl md:text-3xl font-bold text-gray-800 leading-tight">{item.productName}</h3>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs text-gray-500">Subtotal</div>
-                          <div className="font-bold text-gray-800">₹{Math.max(subtotal - discountAmount, 0).toFixed(2)}</div>
-                        </div>
-                      </div>
+                if (col < 2) {
+                  focusPurchaseTableCell(row, (col + 1) as 0 | 1 | 2);
+                } else if (row + 1 < totalRows) {
+                  focusPurchaseTableCell(row + 1, 0);
+                }
+              };
 
-                      <div className="mt-3 flex gap-2 flex-wrap">
-                        <button
-                          onClick={() => openVariantPicker(item)}
-                          className="px-3 py-1.5 rounded-full border border-gray-300 text-sm font-medium md:py-1 md:text-[13px]"
-                        >
-                          + Add Variant
-                        </button>
-                        <button
-                          onClick={() => openPurchaseEditModal(item)}
-                          className="px-3 py-1.5 rounded-full border border-[var(--primary-color)] text-[var(--primary-color)] text-sm font-medium md:py-1 md:text-[13px]"
-                        >
-                          Edit
-                        </button>
-                        <button onClick={() => removePurchaseItem(item.id)} className="px-3 py-1.5 rounded-full border border-red-200 text-red-500 text-sm font-medium md:py-1 md:text-[13px]">Remove</button>
-                        <label className="ml-auto inline-flex items-center gap-2 text-sm font-medium text-gray-700">
-                          <input type="checkbox" checked={item.includingGST} onChange={(e) => updatePurchaseItem(item.id, { includingGST: e.target.checked })} />
-                          Including GST
-                        </label>
-                      </div>
+              return (
+                <div className="bg-white rounded-2xl border border-[var(--primary-alpha-20)] overflow-hidden shadow-sm">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-[var(--primary-color)] text-white">
+                        <th className="px-2 py-2.5 text-left font-bold w-10">#</th>
+                        <th className="px-2 py-2.5 text-left font-bold">Item</th>
+                        <th className="px-2 py-2.5 text-right font-bold w-20">Qty</th>
+                        <th className="px-2 py-2.5 text-right font-bold w-24">Rate</th>
+                        <th className="px-2 py-2.5 text-right font-bold w-24">Total</th>
+                        <th className="px-2 py-2.5 text-center font-bold w-20">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {purchaseItems.map((item, index) => {
+                        const rowTotal = item.purchasePrice * item.qty;
+                        return (
+                          <tr key={item.id} className="border-t border-gray-100 hover:bg-gray-50/60">
+                            <td className="px-2 py-1.5 text-gray-400 font-medium">{index + 1}</td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                ref={(el) => { purchaseTableCellRefs.current[`${index}-0`] = el; }}
+                                type="text"
+                                value={item.productName}
+                                onChange={(e) => updatePurchaseItem(item.id, { productName: e.target.value })}
+                                onKeyDown={(e) => handleCellKeyDown(e, index, 0, false, -1)}
+                                className="w-full bg-transparent focus:outline-none focus:bg-white px-1 py-1 rounded"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                ref={(el) => { purchaseTableCellRefs.current[`${index}-1`] = el; }}
+                                type="number"
+                                min={1}
+                                value={item.qty}
+                                onChange={(e) => updatePurchaseItem(item.id, { qty: Math.max(1, Number(e.target.value) || 1) })}
+                                onKeyDown={(e) => handleCellKeyDown(e, index, 1, false, -1)}
+                                className="w-full bg-transparent text-right focus:outline-none focus:bg-white px-1 py-1 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                ref={(el) => { purchaseTableCellRefs.current[`${index}-2`] = el; }}
+                                type="number"
+                                min={0}
+                                value={item.purchasePrice}
+                                onChange={(e) => updatePurchaseItem(item.id, { purchasePrice: Math.max(0, Number(e.target.value) || 0) })}
+                                onKeyDown={(e) => handleCellKeyDown(e, index, 2, false, -1)}
+                                className="w-full bg-transparent text-right focus:outline-none focus:bg-white px-1 py-1 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5 text-right font-semibold text-gray-800">₹{rowTotal.toFixed(2)}</td>
+                            <td className="px-2 py-1.5">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => openPurchaseEditModal(item)}
+                                  className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--primary-color)] hover:bg-[var(--primary-alpha-10)] transition-colors"
+                                  title="Edit"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removePurchaseItem(item.id)}
+                                  className="w-7 h-7 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                                  title="Delete"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
 
-                      <div className="grid grid-cols-3 gap-2 mt-3">
-                        <label className="text-xs text-gray-500">Total Price
-                          <input type="number" value={subtotal.toFixed(2)} readOnly className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
-                        </label>
-                        <label className="text-xs text-gray-500">Qty
-                          <input type="number" min={1} value={item.qty} onChange={(e) => updatePurchaseItem(item.id, { qty: Math.max(1, Number(e.target.value || 1)) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
-                        </label>
-                        <label className="text-xs text-gray-500">Purchase Price
-                          <input type="number" value={item.purchasePrice} onChange={(e) => updatePurchaseItem(item.id, { purchasePrice: Number(e.target.value || 0) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
-                        </label>
-                      </div>
-
-                      {purchaseMode === 'Purchase' && (
-                        <div className="grid grid-cols-3 gap-2 mt-2">
-                          <label className="text-xs text-gray-500">Current Quantity
-                            <input type="number" readOnly value={item.currentQty} className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
-                          </label>
-                          <label className="text-xs text-gray-500">Qty
-                            <input type="number" min={1} value={item.qty} onChange={(e) => updatePurchaseItem(item.id, { qty: Math.max(1, Number(e.target.value || 1)) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
-                          </label>
-                          <label className="text-xs text-gray-500">After Purchase
-                            <input type="number" readOnly value={afterPurchaseQty} className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
-                          </label>
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <div className="grid grid-cols-[1fr_72px] gap-2 items-end">
-                          <label className="text-xs text-gray-500">Bill Discount
-                            <input type="number" value={item.billDiscount} onChange={(e) => updatePurchaseItem(item.id, { billDiscount: Number(e.target.value || 0) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
-                          </label>
-                          <select value={item.billDiscountType} onChange={(e) => updatePurchaseItem(item.id, { billDiscountType: e.target.value as '%' | '₹' })} className="rounded-xl border border-gray-300 px-2 py-2 h-[42px] md:h-10 md:py-1.5 md:text-sm">
-                            <option value="%">%</option>
-                            <option value="₹">₹</option>
-                          </select>
-                        </div>
-                        <label className="text-xs text-gray-500">GST
-                          <input type="number" value={item.gstPercent} onChange={(e) => updatePurchaseItem(item.id, { gstPercent: Number(e.target.value || 0) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
-                        </label>
-                      </div>
-
-                      <button
-                        onClick={() => updatePurchaseItem(item.id, { additionalOpen: !item.additionalOpen })}
-                        className="w-full mt-3 text-left px-1 py-2 font-semibold text-gray-800 flex items-center justify-between"
-                      >
-                        <span>Additional Details</span>
-                        <span>{item.additionalOpen ? '▴' : '▾'}</span>
-                      </button>
-                      {item.additionalOpen && (
-                      <div className="space-y-2">
-                          <label className="text-xs text-gray-500 block">Enter Barcode Number</label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={item.barcode}
-                              onChange={(e) => updatePurchaseItem(item.id, { barcode: e.target.value })}
-                              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2"
-                              placeholder="Scan or Enter"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPurchaseBarcodeScanItemId(item.id);
-                                setScanTarget('purchase-barcode');
-                                openBarcodeScanner(() => setShowScanner(true));
-                                setScannerKey((k: number) => k + 1);
-                              }}
-                              className="mt-1 px-3 py-2 bg-pink-50 border border-pink-200 rounded-xl hover:bg-pink-100 text-[var(--primary-color)] flex items-center justify-center gap-1 text-xs font-semibold"
-                              title="Scan Barcode"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7V5a2 2 0 012-2h2m6 0h2a2 2 0 012 2v2M5 17v2a2 2 0 002 2h2m6 0h2a2 2 0 002-2v-2M7 12h10M7 9h2m6 0h2m-4 6h2m-8 0h2" /></svg>
-                              Scan
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              onClick={() => handlePrintPurchaseBarcode(item)}
-                              className="rounded-lg bg-[var(--primary-color)] text-white py-2 text-sm font-semibold"
-                            >
-                              Print Barcode
-                            </button>
-                            <button
-                              onClick={() => handleAutoGeneratePurchaseBarcode(item.id)}
-                              className="rounded-lg bg-gray-100 text-gray-800 py-2 text-sm font-semibold"
-                            >
-                              Auto Generate Barcode
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <label className="text-xs text-gray-500">MRP
-                              <input type="number" value={item.mrp} onChange={(e) => updatePurchaseItem(item.id, { mrp: Number(e.target.value || 0) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
-                            </label>
-                            <label className="text-xs text-gray-500">Retail Price
-                              <input type="number" value={item.retailPrice} onChange={(e) => updatePurchaseItem(item.id, { retailPrice: Number(e.target.value || 0) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
-                            </label>
-                          </div>
-                          <div className="grid grid-cols-3 gap-2">
-                            <label className="text-xs text-gray-500">Wholesale
-                              <input type="number" value={item.wholesalePrice} onChange={(e) => updatePurchaseItem(item.id, { wholesalePrice: Number(e.target.value || 0) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
-                            </label>
-                            <label className="text-xs text-gray-500">Mfg Date
-                              <input type="date" value={item.mfgDate} onChange={(e) => updatePurchaseItem(item.id, { mfgDate: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
-                            </label>
-                            <label className="text-xs text-gray-500">Expiry
-                              <input type="date" value={item.expiry} onChange={(e) => updatePurchaseItem(item.id, { expiry: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
-                            </label>
-                          </div>
-                          <div className="grid grid-cols-3 gap-2">
-                            <label className="text-xs text-gray-500">Hsn
-                              <input type="text" value={item.hsn} onChange={(e) => updatePurchaseItem(item.id, { hsn: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
-                            </label>
-                            <label className="text-xs text-gray-500">Batch
-                              <input type="text" value={item.batch} onChange={(e) => updatePurchaseItem(item.id, { batch: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
-                            </label>
-                            <label className="text-xs text-gray-500">Pack of
-                              <input type="number" min={1} value={item.packOf} onChange={(e) => updatePurchaseItem(item.id, { packOf: Math.max(1, Number(e.target.value || 1)) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
-                            </label>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                      {Array.from({ length: blankCount }).map((_, i) => {
+                        const rowIndex = purchaseItems.length + i;
+                        const draft = getPurchaseDraftRow(i);
+                        return (
+                          <tr key={`blank-${i}`} className="border-t border-gray-100">
+                            <td className="px-2 py-1.5 text-gray-300 font-medium">{rowIndex + 1}</td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                ref={(el) => { purchaseTableCellRefs.current[`${rowIndex}-0`] = el; }}
+                                type="text"
+                                value={draft.name}
+                                placeholder="Type item name..."
+                                onChange={(e) => updatePurchaseDraftRow(i, { name: e.target.value })}
+                                onBlur={() => commitPurchaseDraftRow(i)}
+                                onKeyDown={(e) => handleCellKeyDown(e, rowIndex, 0, true, i)}
+                                className="w-full bg-transparent focus:outline-none focus:bg-white px-1 py-1 rounded placeholder:text-gray-300"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                ref={(el) => { purchaseTableCellRefs.current[`${rowIndex}-1`] = el; }}
+                                type="number"
+                                min={1}
+                                value={draft.qty}
+                                placeholder="1"
+                                onChange={(e) => updatePurchaseDraftRow(i, { qty: e.target.value })}
+                                onBlur={() => commitPurchaseDraftRow(i)}
+                                onKeyDown={(e) => handleCellKeyDown(e, rowIndex, 1, true, i)}
+                                className="w-full bg-transparent text-right focus:outline-none focus:bg-white px-1 py-1 rounded placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                ref={(el) => { purchaseTableCellRefs.current[`${rowIndex}-2`] = el; }}
+                                type="number"
+                                min={0}
+                                value={draft.rate}
+                                placeholder="0"
+                                onChange={(e) => updatePurchaseDraftRow(i, { rate: e.target.value })}
+                                onBlur={() => commitPurchaseDraftRow(i)}
+                                onKeyDown={(e) => handleCellKeyDown(e, rowIndex, 2, true, i)}
+                                className="w-full bg-transparent text-right focus:outline-none focus:bg-white px-1 py-1 rounded placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5 text-right text-gray-300">—</td>
+                            <td className="px-2 py-1.5"></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-[var(--primary-alpha-20)] bg-[var(--primary-alpha-10)] font-bold text-gray-800">
+                        <td className="px-2 py-2.5" colSpan={2}>Total Qty: {totalQty}</td>
+                        <td className="px-2 py-2.5" colSpan={2}>Total</td>
+                        <td className="px-2 py-2.5 text-right" colSpan={2}>₹{calculatePurchaseTotal().toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                  <div className="p-2 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => setPurchaseExtraBlankRows((n) => n + 5)}
+                      className="w-full py-2 rounded-xl border border-dashed border-[var(--primary-alpha-30)] text-[var(--primary-color)] text-sm font-semibold hover:bg-[var(--primary-alpha-10)] transition-colors"
+                    >
+                      + Add 5 Rows
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="bg-white border-t border-[var(--primary-alpha-20)] p-3 space-y-2 pb-4 md:pb-2.5 md:rounded-xl md:border md:shadow-sm md:max-w-[1450px] md:mx-auto md:w-full md:pt-2.5">
@@ -6154,6 +6101,53 @@ const AdminPOSOrders = () => {
               }
             }
           ` }} />
+          {(posBillSettings?.invoiceFormat === 'simple' || posBillSettings?.invoiceFormat === 'gst') ? (
+            <div className="hidden admin-order-print-wrapper bg-white p-0 m-0">
+              {posBillSettings?.invoiceFormat === 'simple' ? (
+                <SimpleInvoice
+                  billDetails={{
+                    invoiceNum: lastBillDetails.invoiceNum,
+                    date: lastBillDetails.date,
+                    time: lastBillDetails.time,
+                    customerName: getBillCustomerDisplay(lastBillDetails).name,
+                    customerPhone: getBillCustomerDisplay(lastBillDetails).phone,
+                    paymentMethod: lastBillDetails.paymentMethod,
+                    total: lastBillDetails.total,
+                    cart: (lastBillDetails.cart || cart).map((item) => ({
+                      productName: item.productName,
+                      qty: item.qty,
+                      price: getEffectivePrice(item),
+                      compareAtPrice: item.compareAtPrice,
+                      hsnCode: (item as any).hsnCode,
+                      gst: (item as any).gst,
+                    })),
+                  }}
+                  shopSettings={posBillSettings}
+                />
+              ) : (
+                <GSTInvoice
+                  billDetails={{
+                    invoiceNum: lastBillDetails.invoiceNum,
+                    date: lastBillDetails.date,
+                    time: lastBillDetails.time,
+                    customerName: getBillCustomerDisplay(lastBillDetails).name,
+                    customerPhone: getBillCustomerDisplay(lastBillDetails).phone,
+                    paymentMethod: lastBillDetails.paymentMethod,
+                    total: lastBillDetails.total,
+                    cart: (lastBillDetails.cart || cart).map((item) => ({
+                      productName: item.productName,
+                      qty: item.qty,
+                      price: getEffectivePrice(item),
+                      compareAtPrice: item.compareAtPrice,
+                      hsnCode: (item as any).hsnCode,
+                      gst: (item as any).gst,
+                    })),
+                  }}
+                  shopSettings={posBillSettings}
+                />
+              )}
+            </div>
+          ) : (
           <div className="hidden admin-order-print-wrapper bg-white p-0 m-0">
           <div className="receipt-container text-black font-medium" style={{ fontFamily: "'Times New Roman', serif" }}>
               {/* Header */}
@@ -6288,6 +6282,7 @@ const AdminPOSOrders = () => {
               </div>
           </div>
       </div>
+          )}
       </>,
       document.body
   )}
@@ -6671,6 +6666,16 @@ const AdminPOSOrders = () => {
         confirmText="Remove"
         cancelText="Cancel"
         type="danger"
+      />
+
+      <ImageCropperModal
+        file={billCropperFile}
+        open={!!billCropperFile}
+        onClose={() => {
+          setBillCropperFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }}
+        onCropped={handleBillCropped}
       />
     </div>
   );

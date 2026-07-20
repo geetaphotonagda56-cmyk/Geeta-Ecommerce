@@ -11,6 +11,7 @@ import {
   type Coupon,
 } from "../../../services/api/admin/adminCouponService";
 import { useAuth } from "../../../context/AuthContext";
+import ImageCropperModal from "../../../components/ImageCropperModal";
 
 export default function AdminCoupon() {
   const { isAuthenticated, token } = useAuth();
@@ -30,6 +31,7 @@ export default function AdminCoupon() {
 
   const [couponImageFile, setCouponImageFile] = useState<File | null>(null);
   const [couponImagePreview, setCouponImagePreview] = useState<string>("");
+  const [cropperFile, setCropperFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string>("");
 
@@ -87,11 +89,16 @@ export default function AdminCoupon() {
       return;
     }
 
-    setCouponImageFile(file);
     setUploadError("");
+    setCropperFile(file);
+  };
+
+  const handleCropped = async (croppedFile: File) => {
+    setCropperFile(null);
+    setCouponImageFile(croppedFile);
 
     try {
-      const preview = await createImagePreview(file);
+      const preview = await createImagePreview(croppedFile);
       setCouponImagePreview(preview);
     } catch (error) {
       setUploadError("Failed to create image preview");
@@ -772,6 +779,13 @@ export default function AdminCoupon() {
           Geeta Stores - 10 Minute App
         </a>
       </footer>
+
+      <ImageCropperModal
+        file={cropperFile}
+        open={!!cropperFile}
+        onClose={() => setCropperFile(null)}
+        onCropped={handleCropped}
+      />
     </div>
   );
 }

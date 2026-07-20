@@ -651,6 +651,82 @@ export const getLowestPricesProducts = async (req: Request, res: Response) => {
   }
 };
 
+// Get all active bestseller category cards (unlike the home feed, which caps
+// at 6 for the preview row, this returns the full curated list for the
+// "View All" page).
+export const getAllBestsellers = async (_req: Request, res: Response) => {
+  try {
+    const bestsellerCards = await BestsellerCard.find({ isActive: true })
+      .populate("category", "name slug image")
+      .sort({ order: 1 })
+      .lean();
+
+    const bestsellers = (
+      await Promise.all(
+        bestsellerCards.map(async (card: any) => {
+          const categoryId = card?.category?._id ?? card?.category;
+          if (!categoryId) return null;
+
+          const activeCategory = await Category.findOne({ _id: categoryId, status: "Active" })
+            .select("_id")
+            .lean();
+          if (!activeCategory) return null;
+
+          const categoryProducts = await Product.find({
+            category: categoryId,
+            status: "Active",
+            publish: true,
+          })
+            .select("productName mainImage galleryImages")
+            .sort({ createdAt: -1 })
+            .limit(4)
+            .lean();
+
+          const productImages: string[] = [];
+          categoryProducts.forEach((product: any) => {
+            if (productImages.length < 4 && product.mainImage) {
+              productImages.push(product.mainImage);
+            }
+          });
+          if (productImages.length < 4) {
+            categoryProducts.forEach((product: any) => {
+              if (
+                productImages.length < 4 &&
+                product.galleryImages &&
+                product.galleryImages.length > 0
+              ) {
+                productImages.push(product.galleryImages[0]);
+              }
+            });
+          }
+          while (productImages.length < 4 && productImages[0]) {
+            productImages.push(productImages[0]);
+          }
+
+          return {
+            id: card._id.toString(),
+            categoryId: String(categoryId),
+            name: card.name,
+            productImages: productImages.slice(0, 4),
+            productCount: categoryProducts.length,
+          };
+        })
+      )
+    ).filter(Boolean);
+
+    res.status(200).json({
+      success: true,
+      data: bestsellers,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching bestsellers",
+      error: error.message,
+    });
+  }
+};
+
 // Get Products for a specific "Store" (Campaign/Collection)
 // Fetch products based on store configuration from database
 export const getStoreProducts = async (req: Request, res: Response) => {

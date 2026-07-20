@@ -14,6 +14,7 @@ import {
   type Category,
 } from "../../../services/api/admin/adminProductService";
 import { useAuth } from "../../../context/AuthContext";
+import ImageCropperModal from "../../../components/ImageCropperModal";
 
 export default function AdminSubCategory() {
   const { isAuthenticated, token } = useAuth();
@@ -27,6 +28,7 @@ export default function AdminSubCategory() {
   const [subcategoryImagePreview, setSubcategoryImagePreview] =
     useState<string>("");
   const [subcategoryImageUrl, setSubcategoryImageUrl] = useState<string>("");
+  const [cropperFile, setCropperFile] = useState<File | null>(null);
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -112,11 +114,16 @@ export default function AdminSubCategory() {
       return;
     }
 
-    setSubcategoryImageFile(file);
     setUploadError("");
+    setCropperFile(file);
+  };
+
+  const handleCropped = async (croppedFile: File) => {
+    setCropperFile(null);
+    setSubcategoryImageFile(croppedFile);
 
     try {
-      const preview = await createImagePreview(file);
+      const preview = await createImagePreview(croppedFile);
       setSubcategoryImagePreview(preview);
     } catch (error) {
       setUploadError("Failed to create image preview");
@@ -755,6 +762,13 @@ export default function AdminSubCategory() {
           Geeta Stores - 10 Minute App
         </a>
       </div>
+
+      <ImageCropperModal
+        file={cropperFile}
+        open={!!cropperFile}
+        onClose={() => setCropperFile(null)}
+        onCropped={handleCropped}
+      />
     </div>
   );
 }

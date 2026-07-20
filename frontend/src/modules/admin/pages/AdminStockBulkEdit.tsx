@@ -20,6 +20,7 @@ import SearchableSelect from "../../../components/SearchableSelect";
 import VariationEditor from "../../../components/VariationEditor";
 import VariationDropdown from "../../../components/VariationDropdown";
 import { searchProductImage } from "../../../services/api/productService";
+import ImageCropperModal from "../../../components/ImageCropperModal";
 
 interface AdminStockBulkEditProps {
   products: Product[];
@@ -103,6 +104,7 @@ interface EditableProduct {
   isChanged: boolean;
   // New fields
   itemCode: string; // SKU
+  blockNumber: string;
   rackNumber: string;
   description: string;
   barcode: string[];
@@ -138,6 +140,9 @@ export default function AdminStockBulkEdit({
   onSave,
 }: AdminStockBulkEditProps) {
   const [editableProducts, setEditableProducts] = useState<EditableProduct[]>([]);
+  // Serial crop queue for newly-added product images - multiple files/products
+  // can be queued at once, so we crop them one at a time via the shared modal.
+  const [imageCropQueue, setImageCropQueue] = useState<{ productIndex: number; file: File }[]>([]);
   const [page, setPage] = useState(initialPage);
   const [pageLimit, setPageLimit] = useState(initialLimit);
   const [serverPagination, setServerPagination] = useState<
@@ -309,6 +314,7 @@ export default function AdminStockBulkEdit({
             ],
              isChanged: false,
             itemCode: p.variations?.[0]?.sku || (p as any).itemCode || p.sku || "",
+            blockNumber: p.variations?.[0]?.blockNumber || (p as any).blockNumber || "",
             rackNumber: p.variations?.[0]?.rackNumber || (p as any).rackNumber || "",
             description: p.smallDescription || p.description || "",
             barcode: p.variations?.[0]?.barcode || (Array.isArray((p as any).barcode)
@@ -377,6 +383,7 @@ export default function AdminStockBulkEdit({
     images: [],
     isChanged: false,
     itemCode: "",
+    blockNumber: "",
     rackNumber: "",
     description: "",
     barcode: [],
@@ -494,6 +501,7 @@ export default function AdminStockBulkEdit({
         publish: p.publish,
         // New fields initialization
         itemCode: p.variations?.[0]?.sku || (p as any).itemCode || p.sku || "",
+        blockNumber: p.variations?.[0]?.blockNumber || (p as any).blockNumber || "",
         rackNumber: p.variations?.[0]?.rackNumber || (p as any).rackNumber || "",
         description: p.smallDescription || p.description || "",
         barcode: p.variations?.[0]?.barcode || (Array.isArray((p as any).barcode) ? (p as any).barcode : (p as any).barcode ? [(p as any).barcode] : []),
@@ -546,23 +554,33 @@ export default function AdminStockBulkEdit({
 
   const handleImageChange = (index: number, files: FileList | null) => {
       if (!files || files.length === 0) return;
+      setImageCropQueue((prev) => [
+        ...prev,
+        ...Array.from(files).map((file) => ({ productIndex: index, file })),
+      ]);
+  };
 
-      const newImages: ProductImage[] = Array.from(files).map((f) => ({
-        id: URL.createObjectURL(f),
-        url: URL.createObjectURL(f),
-        file: f,
-      }));
+  const handleQueuedImageCropped = (croppedFile: File) => {
+      const [current, ...rest] = imageCropQueue;
+      setImageCropQueue(rest);
+      if (!current) return;
+
+      const newImage: ProductImage = {
+        id: URL.createObjectURL(croppedFile),
+        url: URL.createObjectURL(croppedFile),
+        file: croppedFile,
+      };
 
       setEditableProducts((prev) => {
           const updated = [...prev];
-          const currentProduct = updated[index];
+          const currentProduct = updated[current.productIndex];
 
-          updated[index] = {
+          updated[current.productIndex] = {
               ...currentProduct,
-              images: [...currentProduct.images, ...newImages],
+              images: [...currentProduct.images, newImage],
               isChanged: true
           };
-          upsertEditedCache(updated[index]);
+          upsertEditedCache(updated[current.productIndex]);
 
           return updated;
       });
@@ -637,6 +655,7 @@ export default function AdminStockBulkEdit({
           galleryImages: galleryImages,
           sku: p.itemCode || null,
           // itemCode: p.itemCode, // Commenting out to avoid duplication issues if backend doesn't expect it
+          blockNumber: p.blockNumber,
           rackNumber: p.rackNumber,
           smallDescription: p.description,
           description: p.description,
@@ -657,7 +676,7 @@ export default function AdminStockBulkEdit({
           ...(p.subSubCategory ? { subSubCategory: p.subSubCategory } : {}),
           ...(p.brandId ? { brand: p.brandId } : {}),
           ...(p.brandId ? { brand: p.brandId } : {}),
-           variations: p.variations.map((v: any) => {
+           variations: p.variations.map((v: any, vIdx: number) => {
              if (p.variations.length <= 1) {
                return {
                  ...v,
@@ -668,6 +687,7 @@ export default function AdminStockBulkEdit({
                  wholesalePrice: p.wholesalePrice || 0,
                  purchasePrice: p.purchasePrice || 0,
                  sku: p.itemCode || undefined,
+                 blockNumber: p.blockNumber || undefined,
                  rackNumber: p.rackNumber || undefined,
                  barcode: p.barcode || [],
                  tieredPrices: p.unitPricing || [],
@@ -684,7 +704,11 @@ export default function AdminStockBulkEdit({
                  wholesalePrice: v.wholesalePrice || 0,
                  purchasePrice: v.purchasePrice || 0,
                  sku: v.sku,
-                 rackNumber: v.rackNumber,
+                 // The bulk-edit grid only has one Block/Rack input per product
+                 // row (mapped to the first variation) - apply the edited
+                 // value there, leave other variants' own values untouched.
+                 blockNumber: vIdx === 0 ? (p.blockNumber || undefined) : v.blockNumber,
+                 rackNumber: vIdx === 0 ? (p.rackNumber || undefined) : v.rackNumber,
                  barcode: v.barcode || [],
                  tieredPrices: v.tieredPrices || v.unitPricing || [],
                  mainImage: v.mainImage || undefined,
@@ -735,6 +759,7 @@ export default function AdminStockBulkEdit({
           mainImage: mainImage || undefined,
           galleryImages: galleryImages.length ? galleryImages : undefined,
           sku: p.itemCode || undefined,
+          blockNumber: p.blockNumber || undefined,
           rackNumber: p.rackNumber || undefined,
           smallDescription: p.description || undefined,
           description: p.description || undefined,
@@ -751,7 +776,7 @@ export default function AdminStockBulkEdit({
           ...(p.variationName ? { variationName: p.variationName } : {}),
           ...(p.variations && p.variations.length > 0
             ? {
-                variations: p.variations.map((v: any) => {
+                variations: p.variations.map((v: any, vIdx: number) => {
                   if (p.variations.length <= 1) {
                     return {
                       ...v,
@@ -762,6 +787,7 @@ export default function AdminStockBulkEdit({
                       wholesalePrice: p.wholesalePrice || 0,
                       purchasePrice: p.purchasePrice || 0,
                       sku: p.itemCode || undefined,
+                      blockNumber: p.blockNumber || undefined,
                       rackNumber: p.rackNumber || undefined,
                       barcode: p.barcode || [],
                       tieredPrices: p.unitPricing || [],
@@ -778,7 +804,8 @@ export default function AdminStockBulkEdit({
                       wholesalePrice: v.wholesalePrice || 0,
                       purchasePrice: v.purchasePrice || 0,
                       sku: v.sku,
-                      rackNumber: v.rackNumber,
+                      blockNumber: vIdx === 0 ? (p.blockNumber || undefined) : v.blockNumber,
+                      rackNumber: vIdx === 0 ? (p.rackNumber || undefined) : v.rackNumber,
                       barcode: v.barcode || [],
                       tieredPrices: v.tieredPrices || v.unitPricing || [],
                       mainImage: v.mainImage || undefined,
@@ -890,6 +917,7 @@ export default function AdminStockBulkEdit({
     "variations",
     "variationName",
     "sku",
+    "blockNumber",
     "rackNumber",
     "description",
     "barcode",
@@ -971,30 +999,31 @@ export default function AdminStockBulkEdit({
     subCategory: "2. Sub Cat",
     subSubCategory: "3. Sub Sub Cat",
     sku: "5. SKU",
-    rackNumber: "6. Rack",
-    description: "7. Desc",
-    barcode: "8. Barcode",
-    hsnCode: "9. HSN",
-    pack: "10. Unit",
-    size: "11. Size",
-    color: "12. Color",
-    tax: "13. Tax Cat",
-    gst: "14. GST",
-    purchasePrice: "15. Pur. Price",
-    mfgDate: "16. Mfg Date",
-    expiryDate: "17. Expiry Date",
-    weight: "18. Weight",
-    compareAtPrice: "19. MRP",
-    price: "20. Sell Price",
-    deliveryTime: "21. Del. Time",
-    stock: "22. Stock",
-    offerPrice: "23. Offer Price",
-    wholesalePrice: "24. Wholesale Price",
-    lowStockQuantity: "25. Low Stock",
-    brand: "26. Brand",
-    valMrp: "27. Val (MRP)",
-    valPur: "28. Val (Pur)",
-    unitPrice: "29. Unit Pricing Rules", // Rename
+    blockNumber: "6. Block/Room No.",
+    rackNumber: "7. Rack",
+    description: "8. Desc",
+    barcode: "9. Barcode",
+    hsnCode: "10. HSN",
+    pack: "11. Unit",
+    size: "12. Size",
+    color: "13. Color",
+    tax: "14. Tax Cat",
+    gst: "15. GST",
+    purchasePrice: "16. Pur. Price",
+    mfgDate: "17. Mfg Date",
+    expiryDate: "18. Expiry Date",
+    weight: "19. Weight",
+    compareAtPrice: "20. MRP",
+    price: "21. Sell Price",
+    deliveryTime: "22. Del. Time",
+    stock: "23. Stock",
+    offerPrice: "24. Offer Price",
+    wholesalePrice: "25. Wholesale Price",
+    lowStockQuantity: "26. Low Stock",
+    brand: "27. Brand",
+    valMrp: "28. Val (MRP)",
+    valPur: "29. Val (Pur)",
+    unitPrice: "30. Unit Pricing Rules", // Rename
     attributes: "Attributes",
     variations: "Variations",
     variationName: "Variation Name",
@@ -1269,7 +1298,8 @@ export default function AdminStockBulkEdit({
     subCategory: 130,
     subSubCategory: 130,
     sku: 130,
-    rackNumber: 100,
+    blockNumber: 110,
+    rackNumber: 110,
     description: 130,
     barcode: 130,
     hsnCode: 100,
@@ -1456,8 +1486,53 @@ export default function AdminStockBulkEdit({
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.subSubCategory} onChange={(e) => handleFieldChange(originalIndex, 'subSubCategory', e.target.value)} /></td>;
       case "sku":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.itemCode} onChange={(e) => handleFieldChange(originalIndex, 'itemCode', e.target.value)} /></td>;
-      case "rackNumber":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.rackNumber} onChange={(e) => handleFieldChange(originalIndex, 'rackNumber', e.target.value)} /></td>;
+      case "blockNumber":
+        return (
+          <td key={key} className="p-0 border-r border-neutral-200">
+            <select
+              className="w-full h-full px-2 py-2 bg-transparent border-none text-sm"
+              value={product.blockNumber}
+              onChange={(e) => handleFieldChange(originalIndex, 'blockNumber', e.target.value)}
+            >
+              <option value="">-</option>
+              {Array.from({ length: 50 }, (_, i) => String(i + 1)).map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </td>
+        );
+      case "rackNumber": {
+        const rackLetter = (product.rackNumber.match(/^[A-Za-z]+/)?.[0] || "").toUpperCase();
+        const rackDigits = product.rackNumber.replace(/^[A-Za-z]+/, "");
+        const setRack = (letter: string, digits: string) =>
+          handleFieldChange(originalIndex, 'rackNumber', `${letter}${digits}`);
+        return (
+          <td key={key} className="p-0 border-r border-neutral-200">
+            <div className="flex h-full">
+              <select
+                className="w-1/2 h-full px-1 py-2 bg-transparent border-none text-sm border-r border-neutral-200"
+                value={rackLetter}
+                onChange={(e) => setRack(e.target.value, rackDigits)}
+              >
+                <option value="">-</option>
+                {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map((letter) => (
+                  <option key={letter} value={letter}>{letter}</option>
+                ))}
+              </select>
+              <select
+                className="w-1/2 h-full px-1 py-2 bg-transparent border-none text-sm"
+                value={rackDigits}
+                onChange={(e) => setRack(rackLetter, e.target.value)}
+              >
+                <option value="">-</option>
+                {Array.from({ length: 50 }, (_, i) => String(i + 1)).map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+          </td>
+        );
+      }
       case "description":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.description} onChange={(e) => handleFieldChange(originalIndex, 'description', e.target.value)} /></td>;
       case "barcode":
@@ -2017,6 +2092,13 @@ export default function AdminStockBulkEdit({
               </div>
           </div>
       )}
+
+      <ImageCropperModal
+        file={imageCropQueue[0]?.file || null}
+        open={imageCropQueue.length > 0}
+        onClose={() => setImageCropQueue([])}
+        onCropped={handleQueuedImageCropped}
+      />
     </div>
   );
 }

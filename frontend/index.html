@@ -10,6 +10,22 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <title>Geeta Stores - Fast Grocery Delivery</title>
 
+    <!-- Open Graph / social share preview. This is a client-rendered SPA with
+         no server-side rendering, so crawlers (WhatsApp, Facebook, Twitter,
+         etc.) only ever see this static markup - per-page dynamic previews
+         (e.g. a specific product's image) aren't possible without SSR. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Geeta Stores" />
+    <meta property="og:title" content="Geeta Stores - Fast Grocery Delivery" />
+    <meta property="og:description" content="Order groceries, essentials, and more with fast delivery from Geeta Stores." />
+    <meta property="og:image" content="https://geeta.today/geetastoreslogo.png" />
+    <meta property="og:url" content="https://geeta.today" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Geeta Stores - Fast Grocery Delivery" />
+    <meta name="twitter:description" content="Order groceries, essentials, and more with fast delivery from Geeta Stores." />
+    <meta name="twitter:image" content="https://geeta.today/geetastoreslogo.png" />
+    <meta name="description" content="Order groceries, essentials, and more with fast delivery from Geeta Stores." />
+
     <!-- Preload critical assets for route changes -->
     <link rel="preload" href="/animations/loading.json" as="fetch" crossorigin="anonymous">
   </head>

@@ -19,6 +19,7 @@ import {
 import { uploadImage } from '../../../services/api/uploadService';
 import { useAppContext } from '../../../context/AppContext';
 import { getAdminAppSettings, updateAdminAppSettings } from '../../../services/api/adminAppSettingsService';
+import ImageCropperModal from '../../../components/ImageCropperModal';
 
 export default function AdminStoreSettings() {
     const navigate = useNavigate();
@@ -27,6 +28,8 @@ export default function AdminStoreSettings() {
     const [saving, setSaving] = useState(false);
     const [uploadingLogo, setUploadingLogo] = useState(false);
     const [uploadingFavicon, setUploadingFavicon] = useState(false);
+    const [cropperFile, setCropperFile] = useState<File | null>(null);
+    const [cropperType, setCropperType] = useState<'logo' | 'favicon' | null>(null);
 
     const [formData, setFormData] = useState({
         appName: '',
@@ -157,15 +160,24 @@ export default function AdminStoreSettings() {
         }));
     };
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'favicon') => {
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'favicon') => {
         const file = e.target.files?.[0];
         if (!file) return;
+        setCropperFile(file);
+        setCropperType(type);
+    };
+
+    const handleCropped = async (croppedFile: File) => {
+        const type = cropperType;
+        setCropperFile(null);
+        setCropperType(null);
+        if (!type) return;
 
         try {
             if (type === 'logo') setUploadingLogo(true);
             else setUploadingFavicon(true);
 
-            const result = await uploadImage(file, 'app-settings');
+            const result = await uploadImage(croppedFile, 'app-settings');
             setFormData(prev => ({
                 ...prev,
                 [type === 'logo' ? 'appLogo' : 'appFavicon']: result.secureUrl
@@ -585,6 +597,13 @@ export default function AdminStoreSettings() {
                     </div>
                 </div>
             </div>
+
+            <ImageCropperModal
+                file={cropperFile}
+                open={!!cropperFile}
+                onClose={() => { setCropperFile(null); setCropperType(null); }}
+                onCropped={handleCropped}
+            />
         </div>
     );
 }

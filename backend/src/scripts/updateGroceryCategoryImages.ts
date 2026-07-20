@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
-import { v2 as cloudinary } from "cloudinary";
+import { uploadImage as uploadToS3 } from "../services/s3Service";
 import Category from "../models/Category";
 import HeaderCategory from "../models/HeaderCategory";
 
@@ -23,13 +23,6 @@ const FRONTEND_ASSETS_PATH = path.join(__dirname, "../../../frontend/assets");
 log("Starting Update Grocery Category Images Script");
 log(`MONGO_URI: ${MONGO_URI}`);
 log(`FRONTEND_ASSETS_PATH: ${FRONTEND_ASSETS_PATH}`);
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 // Category name to image file mapping
 const categoryImageMap: { [key: string]: string } = {
@@ -54,13 +47,13 @@ const categoryImageMap: { [key: string]: string } = {
   "Pet Care": "Pet Care.png",
 };
 
-// Helper to upload to Cloudinary
+// Helper to upload to S3
 async function uploadToCloudinary(
   localPath: string,
   folder: string = "categories"
 ): Promise<string | null> {
-  if (!process.env.CLOUDINARY_CLOUD_NAME) {
-    log("Cloudinary not configured, using local path");
+  if (!process.env.AWS_S3_BUCKET_NAME) {
+    log("S3 not configured, using local path");
     return localPath.startsWith("http")
       ? localPath
       : `/assets/category/${path.basename(localPath)}`;
@@ -76,14 +69,14 @@ async function uploadToCloudinary(
   }
 
   try {
-    const result = await cloudinary.uploader.upload(fullPath, {
+    const result = await uploadToS3(fullPath, {
       folder: folder,
-      resource_type: "image",
+      resourceType: "image",
     });
-    log(`Uploaded to Cloudinary: ${result.secure_url}`);
-    return result.secure_url;
+    log(`Uploaded to S3: ${result.secureUrl}`);
+    return result.secureUrl;
   } catch (error: any) {
-    log(`Cloudinary upload failed: ${error.message}, using local path`);
+    log(`S3 upload failed: ${error.message}, using local path`);
     return localPath.startsWith("http")
       ? localPath
       : `/assets/category/${path.basename(localPath)}`;

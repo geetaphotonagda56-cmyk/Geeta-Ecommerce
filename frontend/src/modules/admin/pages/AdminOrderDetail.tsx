@@ -352,6 +352,10 @@ export default function AdminOrderDetail() {
                     const unitPrice = item.unitPrice || 0;
                     const quantity = item.quantity || 0;
                     const total = unitPrice * quantity;
+                    const matchedVariation = product?.variations?.find((v: any) => String(v._id) === String(item.variantId))
+                      || product?.variations?.[0];
+                    const blockNumber = matchedVariation?.blockNumber;
+                    const rackNumber = matchedVariation?.rackNumber;
 
                     return (
                       <tr key={item._id || index} className="border-b">
@@ -359,6 +363,13 @@ export default function AdminOrderDetail() {
                           <div>
                             <div className="font-medium">{item.productName || product?.productName || 'N/A'}</div>
                             {item.variation && <div className="text-xs text-[var(--primary-color)] font-medium">{item.variation}</div>}
+                            {(blockNumber || rackNumber) && (
+                              <div className="text-xs text-neutral-500 mt-0.5">
+                                {blockNumber && <span>Block {blockNumber}</span>}
+                                {blockNumber && rackNumber && <span> · </span>}
+                                {rackNumber && <span>Rack {rackNumber}</span>}
+                              </div>
+                            )}
                             {item.warrantyType && item.warrantyType !== 'None' && (
                               <div className="text-xs text-blue-600 font-medium">
                                 {item.warrantyType}: {item.warrantyDuration}

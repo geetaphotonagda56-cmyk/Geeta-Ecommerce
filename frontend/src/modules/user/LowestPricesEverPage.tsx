@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import ProductCard from "./components/ProductCard";
 import { getLowestPricesProducts } from "../../services/api/customerHomeService";
 import { useLocation } from "../../hooks/useLocation";
+import ShareButton from "../../components/ShareButton";
 
 const BRAND_GRADIENT =
   "linear-gradient(135deg, var(--customer-primary) 0%, var(--customer-primary-light) 100%)";
@@ -65,6 +66,12 @@ export default function LowestPricesEverPage() {
               Handpicked deals at unbeatable prices
             </p>
           </div>
+          <ShareButton
+            iconOnly
+            title="Lowest Prices Ever on Geeta Stores"
+            text="Check out these unbeatable deals on Geeta Stores"
+            className="ml-auto w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors flex-shrink-0"
+          />
         </div>
       </div>
 

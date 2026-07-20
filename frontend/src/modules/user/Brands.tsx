@@ -96,7 +96,7 @@ export default function Brands() {
             `}
           >
             {/* Top Section - Logo/Name */}
-            <div className={`flex-1 ${getBackgroundColor(brand.name)} flex flex-col items-center justify-center p-4 relative`}>
+            <div className={`flex-1 bg-white flex flex-col items-center justify-center p-4 relative`}>
                  {/* Decorative cloud-like shape (CSS simulation) could be complex, sticking to simple clean design */}
 
                  {/* Brand Name (Top) */}
@@ -113,7 +113,7 @@ export default function Brands() {
                         <img
                             src={brand.image}
                             alt={brand.name}
-                            className="max-w-full max-h-full object-contain drop-shadow-md"
+                            className="max-w-full max-h-full object-contain"
                         />
                     ) : (
                         <div className="text-4xl font-bold text-neutral-300 select-none">

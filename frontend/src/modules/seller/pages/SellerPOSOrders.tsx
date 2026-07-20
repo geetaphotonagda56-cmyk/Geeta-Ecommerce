@@ -16,6 +16,8 @@ import { Html5QrcodeSupportedFormats } from "html5-qrcode";
 import QRScannerModal from '../../../components/QRScannerModal';
 import { openBarcodeScanner } from '../../../utils/scannerPlatform';
 import ConfirmModal from '../../../components/ConfirmModal';
+import ImageCropperModal from '../../../components/ImageCropperModal';
+import { uploadImage } from '../../../services/api/uploadService';
 import { useAppContext } from '../../../context/AppContext';
 import { formatAmount } from '../../../utils/priceUtils';
 import { appendPOSStaffBill, getStaffSession } from '../../../utils/staffSession';
@@ -235,10 +237,11 @@ const SellerPOSOrders = () => {
          else billName = `Bill 1`; // Fallback for full reset scenario
     }
 
+    // Ensure the new bill has a completely fresh, isolated state
     const newBill: Bill = {
       id: newId,
       name: billName,
-      cart: [],
+      cart: [] as CartItem[],  // Always fresh empty array
       selectedCustomer: null,
       customerSearch: '',
       paymentMethod: 'Cash',
@@ -247,17 +250,18 @@ const SellerPOSOrders = () => {
     };
 
     setBills(prev => {
-      let updated;
+      let updated: Bill[];
       if (reset) {
           // If resetting, replace ONLY the active bill with the new empty one
           if (prev.some(b => b.id === activeBillId)) {
-               updated = prev.map(b => b.id === activeBillId ? newBill : b);
+               updated = prev.map(b => b.id === activeBillId ? { ...newBill } : b);
           } else {
                // Fallback if active bill not found, though unlikely
-               updated = [newBill];
+               updated = [{ ...newBill }];
           }
       } else {
-          updated = [...prev, newBill];
+          // Ensure deep isolation by spreading the newBill object
+          updated = [...prev, { ...newBill }];
       }
 
       localStorage.setItem('seller_pos_bills', JSON.stringify(updated));
@@ -807,6 +811,8 @@ const SellerPOSOrders = () => {
   const [showVariantPicker, setShowVariantPicker] = useState(false);
   const [variantPickerItem, setVariantPickerItem] = useState<PurchaseItem | null>(null);
   const [billAttachment, setBillAttachment] = useState<string | null>(null);
+  const [billAttachmentUploading, setBillAttachmentUploading] = useState(false);
+  const [billCropperFile, setBillCropperFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [editingQuotationId, setEditingQuotationId] = useState<string | null>(null);
   const [savedPurchaseEntries, setSavedPurchaseEntries] = useState<PurchaseEntryRecord[]>([]);
@@ -1749,12 +1755,23 @@ const SellerPOSOrders = () => {
   const handleAttachBill = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setBillAttachment(reader.result as string);
-        showToast('Bill attached successfully', 'success');
-      };
-      reader.readAsDataURL(file);
+      setBillCropperFile(file);
+    }
+  };
+
+  const handleBillCropped = async (croppedFile: File) => {
+    setBillCropperFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    setBillAttachmentUploading(true);
+    try {
+      const uploadRes = await uploadImage(croppedFile, 'pos-bill-attachments');
+      setBillAttachment(uploadRes.secureUrl || uploadRes.url);
+      showToast('Bill attached successfully', 'success');
+    } catch (error) {
+      console.error('Failed to upload bill attachment', error);
+      showToast('Failed to attach bill', 'error');
+    } finally {
+      setBillAttachmentUploading(false);
     }
   };
 
@@ -3914,7 +3931,7 @@ const SellerPOSOrders = () => {
                                       const profitPercent = purchasePrice > 0 ? ((profit / purchasePrice) * 100).toFixed(2) : '0.00';
 
                                       return (
-                                      <React.Fragment key={index}>
+                                      <React.Fragment key={`cart_item_${index}`}>
                                           {/* --- MOBILE VIEW (Card Style) --- */}
                                           <div className={`${mobileCartView === 'list' ? 'block' : 'hidden'} md:hidden bg-white border border-gray-400 rounded-xl p-2 shadow-sm mb-1 relative overflow-hidden group shrink-0`}>
                                                {/* Main Row: Image, Info, and Price */}
@@ -4369,16 +4386,16 @@ const SellerPOSOrders = () => {
                   </div>
 
                   {/* Mobile Footer Actions - POS */}
-                  <div className="lg:hidden space-y-2 mt-1.5">
-                      <div className="flex justify-between items-center px-1">
+                  <div className="lg:hidden space-y-1 mt-1">
+                      <div className="flex justify-between items-center px-1 py-1">
                           <span className="text-gray-600 font-medium text-xs">Subtotal</span>
-                          <span className="text-lg font-bold text-gray-900">₹{calculateTotal().toLocaleString()}</span>
+                          <span className="text-sm font-bold text-gray-900">₹{calculateTotal().toLocaleString()}</span>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-3 gap-1">
                           <button
                             onClick={() => setShowQuickAdd(true)}
-                            className="rounded-2xl bg-[#f7d8e7] text-[#b34f7e] py-2.5 font-semibold border border-[var(--primary-alpha-20)] active:scale-[0.98]"
+                            className="rounded-lg bg-[#f7d8e7] text-[#b34f7e] py-1.5 text-xs font-semibold border border-[var(--primary-alpha-20)] active:scale-[0.98]"
                           >
                             Quick add +
                           </button>
@@ -4386,7 +4403,7 @@ const SellerPOSOrders = () => {
                           <button
                             onClick={activeBillId.startsWith('edit_') ? handleUpdateOrder : handleAccessPayment}
                             disabled={loading || cart.length === 0}
-                            className="rounded-2xl bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-2.5 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="rounded-lg bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-1.5 text-xs transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                           >
                             {loading ? (activeBillId.startsWith('edit_') ? 'Updating...' : 'Paying...') : (activeBillId.startsWith('edit_') ? 'Update' : 'Pay')}
                           </button>
@@ -4395,29 +4412,28 @@ const SellerPOSOrders = () => {
                             <button
                               onClick={handleGenerateBill}
                               disabled={cart.length === 0}
-                              className="rounded-2xl bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-2.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="rounded-lg bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-1.5 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               Bill
                             </button>
                           )}
                       </div>
 
-                      <div className="grid grid-cols-[1fr_110px] gap-2">
+                      <div className="grid grid-cols-[1fr_70px] gap-1">
                         <button
                           onClick={() => setShowMobileSearch(true)}
-                          className="w-full rounded-xl border border-[var(--primary-alpha-20)] px-4 py-2.5 text-left text-gray-500 bg-[#fffafd] flex items-center gap-2"
+                          className="w-full rounded-lg border border-[var(--primary-alpha-20)] px-2 py-1.5 text-left text-gray-500 bg-[#fffafd] flex items-center gap-1"
                         >
-                          <svg className="w-5 h-5 text-[var(--primary-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4 text-[var(--primary-color)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                           </svg>
-                          <span className="font-semibold text-sm">Search Items</span>
+                          <span className="font-semibold text-xs truncate">Search</span>
                         </button>
                         <button
                           onClick={() => { setScanTarget('inventory'); openBarcodeScanner(() => setShowScanner(true)); }}
-                          className="rounded-xl border border-[var(--primary-alpha-20)] px-3 py-2.5 font-semibold text-gray-700 bg-white flex items-center justify-center gap-2"
+                          className="rounded-lg border border-[var(--primary-alpha-20)] px-2 py-1.5 font-semibold text-gray-700 bg-white flex items-center justify-center gap-1"
                         >
-                          <span className="font-semibold text-sm">Scan</span>
-                          <svg className="w-5 h-5 text-[var(--primary-color)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <svg className="w-4 h-4 text-[var(--primary-color)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 5v2a2 2 0 002 2h2m10 0h2a2 2 0 002-2V5M3 19v-2a2 2 0 012-2h2m10 0h2a2 2 0 012 2v2m-6-13h-4m4 4h-4m4 4h-4m4 4h-4"/>
                           </svg>
                         </button>
@@ -4539,13 +4555,14 @@ const SellerPOSOrders = () => {
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className={`w-full h-full rounded-xl py-2.5 text-sm font-semibold transition-colors md:py-2 md:text-[13px] border ${
+                    disabled={billAttachmentUploading}
+                    className={`w-full h-full rounded-xl py-2.5 text-sm font-semibold transition-colors md:py-2 md:text-[13px] border disabled:opacity-60 ${
                       billAttachment
                         ? 'bg-[var(--primary-color)] text-white border-[var(--primary-color)]'
                         : 'bg-[var(--primary-color)] text-white border-[var(--primary-color)] hover:bg-[var(--primary-dark)]'
                     }`}
                   >
-                    {billAttachment ? 'Bill Attached' : '+Attach Bills'}
+                    {billAttachmentUploading ? 'Uploading...' : billAttachment ? 'Bill Attached' : '+Attach Bills'}
                   </button>
                 </div>
               </div>
@@ -6507,6 +6524,16 @@ const SellerPOSOrders = () => {
         confirmText="Remove"
         cancelText="Cancel"
         type="danger"
+      />
+
+      <ImageCropperModal
+        file={billCropperFile}
+        open={!!billCropperFile}
+        onClose={() => {
+          setBillCropperFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }}
+        onCropped={handleBillCropped}
       />
     </div>
   );

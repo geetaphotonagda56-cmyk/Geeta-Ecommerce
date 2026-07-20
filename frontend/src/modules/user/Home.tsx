@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useLocation as useRouterLocation, useNavigate, useNavigationType } from "react-router-dom";
 import HomeHero from "./components/HomeHero";
-import PromoStrip from "./components/PromoStrip";
+// import PromoStrip from "./components/PromoStrip";
 import LowestPricesEver from "./components/LowestPricesEver";
 import CategoryTileSection from "./components/CategoryTileSection";
 import ProductCard from "./components/ProductCard";
@@ -9,7 +9,8 @@ import BannerSlider from "./components/banners/BannerSlider";
 import HomePopup from "./components/banners/HomePopup";
 import FlashDealSection from "./components/banners/FlashDealSection";
 import FeaturedDeal from "./components/banners/FeaturedDeal";
-import DealOfTheDay from "./components/banners/DealOfTheDay";
+// import DealOfTheDay from "./components/banners/DealOfTheDay";
+import ExploreOurRange from "./components/banners/ExploreOurRange";
 import FirstOrderOfferBanner from "./components/banners/FirstOrderOfferBanner";
 import { getCachedHomeContent, getHomeContent } from "../../services/api/customerHomeService";
 import { getHeaderCategoriesPublic } from "../../services/api/headerCategoryService";
@@ -481,8 +482,9 @@ export default function Home() {
           <BannerSlider position="HOME_MAIN_SLIDER" />
       </div>
 
-      {/* Promo Strip */}
-      <PromoStrip activeTab={activeTab} />
+      {/* Promo Strip - commented out per request, replaced with Explore Our Range */}
+      {/* <PromoStrip activeTab={activeTab} /> */}
+      <ExploreOurRange />
 
       {/* LOWEST PRICES EVER Section */}
       <LowestPricesEver activeTab={activeTab} products={homeData.lowestPrices} />
@@ -523,12 +525,13 @@ export default function Home() {
                 }
                 columns={3}
                 showProductCount={true}
+                viewAllLink="/bestsellers"
               />
             </div>
         )}
 
-        {/* Deal of the Day Section */}
-        <DealOfTheDay />
+        {/* Deal of the Day Section - commented out, Explore Our Range now lives up near the top (Promo Strip slot) */}
+        {/* <DealOfTheDay /> */}
 
         {/* First Order Offer (First-time users) */}
         <FirstOrderOfferBanner />

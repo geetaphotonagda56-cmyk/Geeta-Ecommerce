@@ -12,6 +12,7 @@ import {
   deleteShopByStore,
   ShopByStore
 } from "../../../services/api/admin/adminMiscService";
+import ImageCropperModal from "../../../components/ImageCropperModal";
 
 // Using ShopByStore from API service instead of local interface
 
@@ -19,6 +20,7 @@ export default function AdminShopByStore() {
   const [storeName, setStoreName] = useState("");
   const [storeImageFile, setStoreImageFile] = useState<File | null>(null);
   const [storeImagePreview, setStoreImagePreview] = useState<string>("");
+  const [cropperFile, setCropperFile] = useState<File | null>(null);
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -198,11 +200,16 @@ export default function AdminShopByStore() {
       return;
     }
 
-    setStoreImageFile(file);
     setUploadError("");
+    setCropperFile(file);
+  };
+
+  const handleCropped = async (croppedFile: File) => {
+    setCropperFile(null);
+    setStoreImageFile(croppedFile);
 
     try {
-      const preview = await createImagePreview(file);
+      const preview = await createImagePreview(croppedFile);
       setStoreImagePreview(preview);
     } catch (error) {
       setUploadError("Failed to create image preview");
@@ -1043,6 +1050,13 @@ export default function AdminShopByStore() {
           Geeta Stores - 10 Minute App
         </a>
       </div>
+
+      <ImageCropperModal
+        file={cropperFile}
+        open={!!cropperFile}
+        onClose={() => setCropperFile(null)}
+        onCropped={handleCropped}
+      />
     </div>
   );
 }

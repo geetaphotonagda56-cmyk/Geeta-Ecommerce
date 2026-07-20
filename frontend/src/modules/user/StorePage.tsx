@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { getStoreProducts } from '../../services/api/customerHomeService';
 import { useLocation } from '../../hooks/useLocation';
 import ProductCard from './components/ProductCard';
+import ShareButton from '../../components/ShareButton';
 
 export default function StorePage() {
     const { slug } = useParams<{ slug: string }>();
@@ -150,6 +151,12 @@ export default function StorePage() {
                         </div>
 
                         <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <ShareButton
+                                iconOnly
+                                title={storeName}
+                                text={`Check out ${storeName} on Geeta Stores`}
+                                className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-lg bg-white/70 shadow-sm hover:bg-white/80 transition-colors border border-white/20"
+                            />
                             <button
                                 onClick={() => navigate('/search')}
                                 className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-lg bg-white/70 shadow-sm hover:bg-white/80 transition-colors border border-white/20"

@@ -63,7 +63,7 @@ const AdminPOSCustomers = () => {
         try {
             const res = await createCustomer({
                 ...newCustomer,
-                email: newCustomer.email || `${newCustomer.phone}@placeholder.com`
+                email: newCustomer.email || undefined
             });
 
             if (res.success && res.data) {

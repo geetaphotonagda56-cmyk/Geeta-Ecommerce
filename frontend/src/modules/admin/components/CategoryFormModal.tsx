@@ -17,6 +17,7 @@ import {
   getHeaderCategoriesAdmin,
   HeaderCategory,
 } from "../../../services/api/headerCategoryService";
+import ImageCropperModal from "../../../components/ImageCropperModal";
 
 interface CategoryFormModalProps {
   isOpen: boolean;
@@ -51,6 +52,7 @@ export default function CategoryFormModal({
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
+  const [cropperFile, setCropperFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -212,15 +214,20 @@ export default function CategoryFormModal({
       return;
     }
 
-    setImageFile(file);
     setErrors((prev) => {
       const newErrors = { ...prev };
       delete newErrors.image;
       return newErrors;
     });
+    setCropperFile(file);
+  };
+
+  const handleImageCropped = async (croppedFile: File) => {
+    setCropperFile(null);
+    setImageFile(croppedFile);
 
     try {
-      const preview = await createImagePreview(file);
+      const preview = await createImagePreview(croppedFile);
       setImagePreview(preview);
     } catch (error) {
       setErrors((prev) => ({
@@ -826,6 +833,13 @@ export default function CategoryFormModal({
           </button>
         </div>
       </div>
+
+      <ImageCropperModal
+        file={cropperFile}
+        open={!!cropperFile}
+        onClose={() => setCropperFile(null)}
+        onCropped={handleImageCropped}
+      />
     </div>
   );
 }

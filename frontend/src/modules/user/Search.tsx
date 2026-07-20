@@ -21,6 +21,8 @@ import {
   SearchSuggestion,
   trackSearchClick,
 } from "../../services/api/searchService";
+import { getProducts as getCustomerProducts } from "../../services/api/customerProductService";
+import ShareButton from "../../components/ShareButton";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useLocation } from "../../hooks/useLocation";
 
@@ -33,32 +35,72 @@ const sortLabels: Record<SortOption, string> = {
   popular: "Popular",
 };
 
+// Price-range shortcuts (e.g. from the "Explore Our Range" cards) navigate here
+// with q set to a slug like "under-200", "above-500", or "range-100-500"
+// instead of real search text, so we can filter by price without needing a
+// literal product match.
+interface PriceSlug {
+  min?: number;
+  max?: number;
+  label: string;
+}
+
+const PRICE_SLUG_REGEX = /^(under|above|range)-(\d+)(?:-(\d+))?$/i;
+
+function parsePriceSlug(raw: string): PriceSlug | null {
+  const match = raw.trim().toLowerCase().match(PRICE_SLUG_REGEX);
+  if (!match) return null;
+
+  const [, kind, a, b] = match;
+  if (kind === "under") {
+    const max = Number(a);
+    return { max, label: `Under ₹${max}` };
+  }
+  if (kind === "above") {
+    const min = Number(a);
+    return { min, label: `Above ₹${min}` };
+  }
+  const min = Number(a);
+  const max = Number(b);
+  return { min, max, label: `₹${min} - ₹${max}` };
+}
+
 export default function Search() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { location } = useLocation();
   const initialQuery = searchParams.get("q") || "";
-  const [inputValue, setInputValue] = useState(initialQuery);
+  const initialPriceSlug = parsePriceSlug(initialQuery);
+  const [inputValue, setInputValue] = useState(initialPriceSlug ? initialPriceSlug.label : initialQuery);
+  const [priceSlug, setPriceSlug] = useState<PriceSlug | null>(initialPriceSlug);
   const [results, setResults] = useState<SearchProduct[]>([]);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [popularSearches, setPopularSearches] = useState<string[]>([]);
   const [zeroResultSearches, setZeroResultSearches] = useState<string[]>([]);
   const [recommendedProducts, setRecommendedProducts] = useState<SearchProduct[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!initialQuery);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(Number(searchParams.get("page") || 1));
   const [totalPages, setTotalPages] = useState(0);
   const [totalResults, setTotalResults] = useState(0);
   const [sort, setSort] = useState<SortOption>((searchParams.get("sort") as SortOption) || "relevance");
-  const [minPrice, setMinPrice] = useState(searchParams.get("minPrice") || "");
-  const [maxPrice, setMaxPrice] = useState(searchParams.get("maxPrice") || "");
+  const [minPrice, setMinPrice] = useState(
+    searchParams.get("minPrice") || (initialPriceSlug?.min !== undefined ? String(initialPriceSlug.min) : "")
+  );
+  const [maxPrice, setMaxPrice] = useState(
+    searchParams.get("maxPrice") || (initialPriceSlug?.max !== undefined ? String(initialPriceSlug.max) : "")
+  );
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
-  const [selectedQuery, setSelectedQuery] = useState(initialQuery);
+  const [selectedQuery, setSelectedQuery] = useState(initialPriceSlug ? "" : initialQuery);
   const debouncedQuery = useDebouncedValue(inputValue, 300);
   const debouncedMinPrice = useDebouncedValue(minPrice, 300);
   const debouncedMaxPrice = useDebouncedValue(maxPrice, 300);
+  // Location resolves in stages (raw GPS coords, then reverse-geocoded) -
+  // debounce it so each refinement doesn't re-trigger and cancel the search.
+  const debouncedLatitude = useDebouncedValue(location?.latitude, 500);
+  const debouncedLongitude = useDebouncedValue(location?.longitude, 500);
   const activeQuery = selectedQuery || debouncedQuery;
   const suggestionBoxRef = useRef<HTMLDivElement>(null);
   const inputValueRef = useRef(inputValue);
@@ -70,12 +112,14 @@ export default function Search() {
 
   useEffect(() => {
     const query = searchParams.get("q") || "";
-    setInputValue(query);
-    setSelectedQuery(query);
+    const slug = parsePriceSlug(query);
+    setPriceSlug(slug);
+    setInputValue(slug ? slug.label : query);
+    setSelectedQuery(slug ? "" : query);
     setPage(Number(searchParams.get("page") || 1));
     setSort((searchParams.get("sort") as SortOption) || "relevance");
-    setMinPrice(searchParams.get("minPrice") || "");
-    setMaxPrice(searchParams.get("maxPrice") || "");
+    setMinPrice(searchParams.get("minPrice") || (slug?.min !== undefined ? String(slug.min) : ""));
+    setMaxPrice(searchParams.get("maxPrice") || (slug?.max !== undefined ? String(slug.max) : ""));
   }, [searchParams]);
 
   useEffect(() => {
@@ -120,7 +164,7 @@ export default function Search() {
 
   useEffect(() => {
     const query = debouncedQuery.trim();
-    if (query.length < 2) {
+    if (query.length < 2 || priceSlug) {
       setSuggestions([]);
       return;
     }
@@ -144,12 +188,12 @@ export default function Search() {
       .finally(() => setSuggestionsLoading(false));
 
     return () => controller.abort();
-  }, [debouncedQuery]);
+  }, [debouncedQuery, priceSlug]);
 
   useEffect(() => {
     const query = activeQuery.trim();
 
-    if (!query || !inputValueRef.current.trim()) {
+    if (!query) {
       setResults([]);
       setTotalPages(0);
       setTotalResults(0);
@@ -165,16 +209,57 @@ export default function Search() {
       return;
     }
 
-    const params: Record<string, string> = { q: query };
+    // In price-slug mode (e.g. q=under-200 from an "Explore Our Range" card),
+    // keep the slug itself in the URL rather than the friendly label shown
+    // in the search box.
+    const urlQuery = priceSlug ? (searchParams.get("q") || query) : query;
+    const params: Record<string, string> = { q: urlQuery };
     if (page > 1) params.page = String(page);
     if (sort !== "relevance") params.sort = sort;
     if (debouncedMinPrice) params.minPrice = debouncedMinPrice;
     if (debouncedMaxPrice) params.maxPrice = debouncedMaxPrice;
     setSearchParams(params, { replace: true });
 
-    const controller = new AbortController();
     setLoading(true);
     setError(null);
+
+    if (priceSlug) {
+      // Price-range browsing has no real search text - filter the plain
+      // product listing by price instead of running semantic search.
+      let cancelled = false;
+
+      getCustomerProducts({
+        minPrice: debouncedMinPrice ? Number(debouncedMinPrice) : undefined,
+        maxPrice: debouncedMaxPrice ? Number(debouncedMaxPrice) : undefined,
+        sort: sort === "relevance" ? undefined : sort,
+        page,
+        limit,
+        latitude: debouncedLatitude,
+        longitude: debouncedLongitude,
+      })
+        .then((response) => {
+          if (cancelled) return;
+          setResults((response.data || []) as unknown as SearchProduct[]);
+          setTotalPages(response.pagination?.pages || 0);
+          setTotalResults(response.pagination?.total || 0);
+          setLoading(false);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          console.error("Price range fetch failed", err);
+          setResults([]);
+          setTotalPages(0);
+          setTotalResults(0);
+          setError("Search failed. Please try again.");
+          setLoading(false);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const controller = new AbortController();
 
     semanticSearch(
       {
@@ -184,8 +269,8 @@ export default function Search() {
         sort,
         minPrice: debouncedMinPrice ? Number(debouncedMinPrice) : undefined,
         maxPrice: debouncedMaxPrice ? Number(debouncedMaxPrice) : undefined,
-        latitude: location?.latitude,
-        longitude: location?.longitude,
+        latitude: debouncedLatitude,
+        longitude: debouncedLongitude,
       },
       controller.signal
     )
@@ -193,26 +278,32 @@ export default function Search() {
         setResults(response.data || []);
         setTotalPages(response.pagination?.pages || 0);
         setTotalResults(response.pagination?.total || 0);
+        setLoading(false);
       })
       .catch((err) => {
+        // A canceled request means a newer one has already taken over (it
+        // already set loading=true) - don't touch loading here, or we'd
+        // flip it back to false while the real in-flight request is still
+        // pending, flashing "No products found" between retries.
         if (err.name === "CanceledError" || err.name === "AbortError") return;
         console.error("Search failed", err);
         setResults([]);
         setTotalPages(0);
         setTotalResults(0);
         setError("Search failed. Please try again.");
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      });
 
     return () => controller.abort();
   }, [
     activeQuery,
+    priceSlug,
     page,
     sort,
     debouncedMinPrice,
     debouncedMaxPrice,
-    location?.latitude,
-    location?.longitude,
+    debouncedLatitude,
+    debouncedLongitude,
     setSearchParams,
   ]);
 
@@ -294,6 +385,7 @@ export default function Search() {
   const clearSearch = () => {
     setInputValue("");
     setSelectedQuery("");
+    setPriceSlug(null);
     setResults([]);
     setSuggestions([]);
     setPage(1);
@@ -312,6 +404,7 @@ export default function Search() {
                 onChange={(event) => {
                   setInputValue(event.target.value);
                   setSelectedQuery("");
+                  setPriceSlug(null);
                   setShowSuggestions(true);
                 }}
                 onFocus={() => setShowSuggestions(true)}
@@ -393,6 +486,14 @@ export default function Search() {
               {activeQuery.trim()
                 ? `${totalResults.toLocaleString("en-IN")} results for "${activeQuery.trim()}"`
                 : "Trending searches"}
+              {activeQuery.trim() && (
+                <ShareButton
+                  iconOnly
+                  title={`"${activeQuery.trim()}" on Geeta Stores`}
+                  text={`Check out "${activeQuery.trim()}" on Geeta Stores`}
+                  className="ml-1 flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 transition-colors"
+                />
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2 rounded-lg border border-neutral-200 px-2 py-1.5">

@@ -1,6 +1,7 @@
 import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useState, useMemo, useEffect, useRef } from "react";
 import ProductCard from "./components/ProductCard";
+import ShareButton from "../../components/ShareButton";
 
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -371,6 +372,12 @@ export default function CategoryPage() {
                 {category?.name}
               </h1>
             </div>
+            <ShareButton
+              iconOnly
+              title={category?.name}
+              text={category?.name ? `Check out ${category.name} on Geeta Stores` : undefined}
+              className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors flex-shrink-0"
+            />
           </div>
         </div>
       </div>

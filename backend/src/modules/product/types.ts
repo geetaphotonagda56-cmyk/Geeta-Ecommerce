@@ -17,6 +17,7 @@ export interface ProductVariant {
   status?: VariantStatus;
   sku?: string;
   barcode?: string[];
+  blockNumber?: string;
   rackNumber?: string;
   mainImage?: string;
   galleryImages?: string[];

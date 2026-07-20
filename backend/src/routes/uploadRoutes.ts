@@ -13,8 +13,8 @@ import {
   uploadDocumentFromBuffer,
   uploadVideoFromBuffer,
   deleteImage,
-} from "../services/cloudinaryService";
-import { CLOUDINARY_FOLDERS } from "../config/cloudinary";
+} from "../services/s3Service";
+import { S3_FOLDERS } from "../config/s3";
 import { asyncHandler } from "../utils/asyncHandler";
 
 const router = Router();
@@ -40,10 +40,11 @@ router.post(
       });
     }
 
-    const folder = (req.body.folder as string) || CLOUDINARY_FOLDERS.PRODUCTS;
+    const folder = (req.body.folder as string) || S3_FOLDERS.PRODUCTS;
     const result = await uploadImageFromBuffer((req as any).file.buffer, {
       folder,
       resourceType: "image",
+      originalFilename: (req as any).file.originalname,
     });
 
     return res.status(200).json({
@@ -71,13 +72,14 @@ router.post(
       });
     }
 
-    const folder = (req.body.folder as string) || CLOUDINARY_FOLDERS.PRODUCTS;
+    const folder = (req.body.folder as string) || S3_FOLDERS.PRODUCTS;
     const files = (req as any).files as any[];
 
     const uploadPromises = files.map((file) =>
       uploadImageFromBuffer(file.buffer, {
         folder,
         resourceType: "image",
+        originalFilename: file.originalname,
       })
     );
 
@@ -108,14 +110,14 @@ router.post(
     }
 
     // Determine folder: Use provided folder OR fallback based on user type
-    let folder: string = (req.body.folder as string) || CLOUDINARY_FOLDERS.SELLER_DOCUMENTS;
+    let folder: string = (req.body.folder as string) || S3_FOLDERS.SELLER_DOCUMENTS;
     const userType = (req as any).user?.userType;
 
     if (!req.body.folder && userType) {
         if (userType === "Delivery") {
-            folder = CLOUDINARY_FOLDERS.DELIVERY_DOCUMENTS;
+            folder = S3_FOLDERS.DELIVERY_DOCUMENTS;
         } else if (userType === "Seller") {
-            folder = CLOUDINARY_FOLDERS.SELLER_DOCUMENTS;
+            folder = S3_FOLDERS.SELLER_DOCUMENTS;
         }
     }
 
@@ -126,6 +128,7 @@ router.post(
     const result = await uploadDocumentFromBuffer((req as any).file.buffer, {
       folder,
       resourceType,
+      originalFilename: (req as any).file.originalname,
     });
 
     return res.status(200).json({
@@ -153,13 +156,13 @@ router.post(
     }
 
     // Determine folder based on user type
-    let folder: string = CLOUDINARY_FOLDERS.SELLER_DOCUMENTS;
+    let folder: string = S3_FOLDERS.SELLER_DOCUMENTS;
     const userType = (req as any).user?.userType;
 
     if (userType === "Delivery") {
-      folder = CLOUDINARY_FOLDERS.DELIVERY_DOCUMENTS;
+      folder = S3_FOLDERS.DELIVERY_DOCUMENTS;
     } else if (userType === "Seller") {
-      folder = CLOUDINARY_FOLDERS.SELLER_DOCUMENTS;
+      folder = S3_FOLDERS.SELLER_DOCUMENTS;
     }
 
     const files = (req as any).files as any[];
@@ -170,6 +173,7 @@ router.post(
       return uploadDocumentFromBuffer(file.buffer, {
         folder,
         resourceType,
+        originalFilename: file.originalname,
       });
     });
 
@@ -200,10 +204,11 @@ router.post(
       });
     }
 
-    const folder = (req.body.folder as string) || CLOUDINARY_FOLDERS.PRODUCTS;
+    const folder = (req.body.folder as string) || S3_FOLDERS.PRODUCTS;
     const result = await uploadVideoFromBuffer((req as any).file.buffer, {
       folder,
       resourceType: "video",
+      originalFilename: (req as any).file.originalname,
     });
 
     return res.status(200).json({
@@ -215,7 +220,7 @@ router.post(
 
 /**
  * DELETE /api/v1/upload/:publicId
- * Delete an image from Cloudinary
+ * Delete an image from S3
  */
 router.delete(
   "/:publicId",

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { uploadImage } from "../../../services/api/uploadService";
 import { validateImageFile, createImagePreview } from "../../../utils/imageUpload";
+import ImageCropperModal from "../../../components/ImageCropperModal";
 import {
   getBrands,
   createBrand,
@@ -27,6 +28,7 @@ export default function AdminBrand() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [cropperFile, setCropperFile] = useState<File | null>(null);
 
   // Fetch brands on component mount
   useEffect(() => {
@@ -89,11 +91,16 @@ export default function AdminBrand() {
       return;
     }
 
-    setBrandImageFile(file);
     setUploadError("");
+    setCropperFile(file);
+  };
+
+  const handleCropped = async (croppedFile: File) => {
+    setCropperFile(null);
+    setBrandImageFile(croppedFile);
 
     try {
-      const preview = await createImagePreview(file);
+      const preview = await createImagePreview(croppedFile);
       setBrandImagePreview(preview);
     } catch (error) {
       setUploadError("Failed to create image preview");
@@ -687,6 +694,13 @@ export default function AdminBrand() {
           Geeta Stores - 10 Minute App
         </a>
       </div>
+
+      <ImageCropperModal
+        file={cropperFile}
+        open={!!cropperFile}
+        onClose={() => setCropperFile(null)}
+        onCropped={handleCropped}
+      />
     </div>
   );
 }

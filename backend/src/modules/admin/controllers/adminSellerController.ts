@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Seller from "../../../models/Seller";
-import { CLOUDINARY_FOLDERS } from "../../../config/cloudinary";
-import { uploadDocumentFromBuffer, uploadImageFromBuffer } from "../../../services/cloudinaryService";
+import { S3_FOLDERS } from "../../../config/s3";
+import { uploadDocumentFromBuffer, uploadImageFromBuffer } from "../../../services/s3Service";
 
 /**
  * Get all sellers (for dropdowns/lists)
@@ -70,23 +70,23 @@ export const createSeller = asyncHandler(async (req: Request, res: Response) => 
         });
     }
 
-    // Upload files to Cloudinary
+    // Upload files to S3
     let profileUrl = "";
     let idProofUrl = "";
     let addressProofUrl = "";
 
     if (files?.profile?.[0]) {
-        const result = await uploadImageFromBuffer(files.profile[0].buffer, { folder: CLOUDINARY_FOLDERS.SELLER_PROFILE });
+        const result = await uploadImageFromBuffer(files.profile[0].buffer, { folder: S3_FOLDERS.SELLER_PROFILE, originalFilename: files.profile[0].originalname });
         profileUrl = result.secureUrl;
     }
 
     if (files?.idProof?.[0]) {
-        const result = await uploadDocumentFromBuffer(files.idProof[0].buffer, { folder: CLOUDINARY_FOLDERS.SELLER_DOCUMENTS });
+        const result = await uploadDocumentFromBuffer(files.idProof[0].buffer, { folder: S3_FOLDERS.SELLER_DOCUMENTS, originalFilename: files.idProof[0].originalname });
         idProofUrl = result.secureUrl;
     }
 
     if (files?.addressProof?.[0]) {
-        const result = await uploadDocumentFromBuffer(files.addressProof[0].buffer, { folder: CLOUDINARY_FOLDERS.SELLER_DOCUMENTS });
+        const result = await uploadDocumentFromBuffer(files.addressProof[0].buffer, { folder: S3_FOLDERS.SELLER_DOCUMENTS, originalFilename: files.addressProof[0].originalname });
         addressProofUrl = result.secureUrl;
     }
 

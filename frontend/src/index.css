@@ -47,6 +47,81 @@
   }
 }
 
+/* Admin dark mode (scoped to .admin-dark so it never affects the storefront) */
+.admin-dark {
+  background-color: #0f1115;
+  color: #e5e7eb;
+  color-scheme: dark;
+}
+.admin-dark .bg-white { background-color: #1a1d24 !important; }
+.admin-dark .bg-neutral-50 { background-color: #14161b !important; }
+.admin-dark .bg-neutral-100 { background-color: #20242c !important; }
+.admin-dark .bg-neutral-200 { background-color: #262a33 !important; }
+.admin-dark .bg-gray-50 { background-color: #14161b !important; }
+.admin-dark .bg-gray-100 { background-color: #20242c !important; }
+.admin-dark .bg-gray-200 { background-color: #262a33 !important; }
+.admin-dark .border-neutral-100,
+.admin-dark .border-neutral-200,
+.admin-dark .border-neutral-300,
+.admin-dark .border-gray-100,
+.admin-dark .border-gray-200 { border-color: #2a2e37 !important; }
+.admin-dark .text-neutral-900,
+.admin-dark .text-gray-900 { color: #f3f4f6 !important; }
+.admin-dark .text-neutral-800,
+.admin-dark .text-gray-800 { color: #e5e7eb !important; }
+.admin-dark .text-neutral-700,
+.admin-dark .text-gray-700 { color: #d1d5db !important; }
+.admin-dark .text-neutral-600,
+.admin-dark .text-neutral-500,
+.admin-dark .text-gray-600,
+.admin-dark .text-gray-500 { color: #9ca3af !important; }
+.admin-dark .text-black { color: #f3f4f6 !important; }
+/* Printable receipts stay black-on-white regardless of admin theme */
+.admin-dark .receipt-container.text-black,
+.admin-dark .receipt-container .text-black { color: #000 !important; }
+.admin-dark input,
+.admin-dark select,
+.admin-dark textarea {
+  background-color: #1a1d24 !important;
+  color: #e5e7eb !important;
+  border-color: #2a2e37 !important;
+}
+.admin-dark table { color: #e5e7eb; }
+.admin-dark thead { background-color: #1a1d24 !important; }
+.admin-dark tr { border-color: #2a2e37 !important; }
+.admin-dark .hover\:bg-white:hover,
+.admin-dark .hover\:bg-neutral-50:hover,
+.admin-dark .hover\:bg-neutral-100:hover,
+.admin-dark .hover\:bg-gray-50:hover,
+.admin-dark .hover\:bg-gray-100:hover { background-color: #20242c !important; }
+.admin-dark .hover\:bg-neutral-200:hover,
+.admin-dark .hover\:bg-gray-200:hover { background-color: #262a33 !important; }
+
+/* Opacity-modifier hover/bg variants (e.g. hover:bg-gray-50/80) produce class
+   names that need substring matching since the "/NN" suffix varies per use */
+.admin-dark [class*="hover:bg-white/"]:hover,
+.admin-dark [class*="hover:bg-neutral-50/"]:hover,
+.admin-dark [class*="hover:bg-neutral-100/"]:hover,
+.admin-dark [class*="hover:bg-gray-50/"]:hover,
+.admin-dark [class*="hover:bg-gray-100/"]:hover,
+.admin-dark [class*="hover:bg-orange-50/"]:hover,
+.admin-dark [class*="hover:bg-red-50/"]:hover,
+.admin-dark [class*='hover:bg-[var(--primary-alpha-10)]/']:hover { background-color: #20242c !important; }
+.admin-dark [class*="hover:bg-gray-200/"]:hover,
+.admin-dark [class*="hover:bg-neutral-200/"]:hover { background-color: #262a33 !important; }
+
+/* Light colored chip/badge backgrounds (status pills, filter chips) */
+.admin-dark [class*="bg-orange-50"],
+.admin-dark [class*="bg-orange-100"] { background-color: rgba(251, 146, 60, 0.15) !important; }
+.admin-dark [class*="bg-red-50"],
+.admin-dark [class*="bg-red-100"] { background-color: rgba(248, 113, 113, 0.15) !important; }
+.admin-dark [class*="bg-green-50"],
+.admin-dark [class*="bg-green-100"] { background-color: rgba(74, 222, 128, 0.15) !important; }
+.admin-dark .shadow-sm,
+.admin-dark .shadow,
+.admin-dark .shadow-md,
+.admin-dark .shadow-lg { box-shadow: none !important; }
+
 /* Remove default video styling */
 video {
   border: none !important;

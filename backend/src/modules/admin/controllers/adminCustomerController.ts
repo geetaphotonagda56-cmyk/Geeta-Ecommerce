@@ -236,6 +236,85 @@ export const createCustomer = asyncHandler(
 );
 
 /**
+ * Update a customer
+ */
+export const updateCustomer = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { name, email, phone, address, city, state, pincode, dateOfBirth } = req.body;
+    const rawGst = (req.body.gst ?? req.body.gstNumber) as string | undefined;
+    const gst = rawGst
+      ? String(rawGst).toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15)
+      : rawGst;
+
+    const scopeQuery: any = { _id: id };
+    if (req.user && req.user.userType === "Seller") {
+      scopeQuery.sellerId = req.user.userId;
+    } else if (req.user && req.user.userType === "Admin") {
+      scopeQuery.sellerId = null;
+    }
+
+    const customer = await Customer.findOne(scopeQuery);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found or you don't have permission to edit it",
+      });
+    }
+
+    // Check for phone/email collisions with OTHER customers in the same context
+    if (phone || email) {
+      const orQuery: any[] = [];
+      if (phone) orQuery.push({ phone });
+      if (email) orQuery.push({ email });
+
+      const conflict = await Customer.findOne({
+        _id: { $ne: id },
+        sellerId: customer.sellerId,
+        $or: orQuery,
+      });
+
+      if (conflict) {
+        return res.status(400).json({
+          success: false,
+          message: conflict.phone === phone
+            ? "Another customer with this phone number already exists"
+            : "Another customer with this email already exists",
+        });
+      }
+    }
+
+    if (name !== undefined) customer.name = name;
+    if (email !== undefined) customer.email = email || undefined;
+    if (phone !== undefined) customer.phone = phone;
+    if (address !== undefined) customer.address = address;
+    if (city !== undefined) customer.city = city;
+    if (state !== undefined) customer.state = state;
+    if (pincode !== undefined) customer.pincode = pincode;
+    if (gst !== undefined) customer.gst = gst;
+    if (dateOfBirth !== undefined) customer.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : undefined;
+
+    try {
+      await customer.save();
+    } catch (error: any) {
+      if (error.code === 11000) {
+        return res.status(400).json({
+          success: false,
+          message: "This phone number or email is already registered to another customer",
+        });
+      }
+      throw error;
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Customer updated successfully",
+      data: customer,
+    });
+  }
+);
+
+/**
  * Delete a customer
  */
 export const deleteCustomer = asyncHandler(

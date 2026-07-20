@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { bannerService } from '../../../services/bannerService';
 import { getProducts } from '../../../services/api/admin/adminProductService';
+import { uploadImage } from '../../../services/api/uploadService';
 import { Product } from '../../../types/domain';
+import ImageCropperModal from '../../../components/ImageCropperModal';
 
 export default function AdminFlashDeal() {
   const [config, setConfig] = useState<any>({
@@ -13,6 +15,7 @@ export default function AdminFlashDeal() {
   const [message, setMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [cropperFile, setCropperFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Product Selection States
@@ -95,9 +98,15 @@ export default function AdminFlashDeal() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-          setSelectedFile(file);
-          setPreviewUrl(URL.createObjectURL(file));
+          setCropperFile(file);
       }
+  };
+
+  const handleCropped = (croppedFile: File) => {
+      setSelectedFile(croppedFile);
+      setPreviewUrl(URL.createObjectURL(croppedFile));
+      setCropperFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleAddProduct = (product: Product) => {
@@ -120,32 +129,30 @@ export default function AdminFlashDeal() {
 
   const handleSave = async () => {
     setLoading(true);
-    let imageUrl = config.flashDealImage;
+    try {
+        let imageUrl = config.flashDealImage;
 
-    if (selectedFile) {
-        // Convert to Base64
-        const reader = new FileReader();
-        reader.readAsDataURL(selectedFile);
-        await new Promise((resolve) => {
-            reader.onload = () => {
-                imageUrl = reader.result as string;
-                resolve(true);
-            };
+        if (selectedFile) {
+            const uploadRes = await uploadImage(selectedFile, 'flash-deals');
+            imageUrl = uploadRes.secureUrl || uploadRes.url;
+        }
+
+        await bannerService.updateDealsConfig({
+            flashDealTargetDate: config.flashDealTargetDate,
+            flashDealImage: imageUrl,
+            isActive: config.isActive,
+            flashDealProductIds: config.flashDealProductIds
         });
-    }
 
-    bannerService.updateDealsConfig({
-        flashDealTargetDate: config.flashDealTargetDate,
-        flashDealImage: imageUrl,
-        isActive: config.isActive,
-        flashDealProductIds: config.flashDealProductIds
-    });
-
-    setTimeout(() => {
-        setLoading(false);
         setMessage('Flash Deal settings updated successfully!');
         setTimeout(() => setMessage(''), 3000);
-    }, 500);
+    } catch (error) {
+        console.error('Error saving flash deal config:', error);
+        setMessage('Failed to save. Please try again.');
+        setTimeout(() => setMessage(''), 3000);
+    } finally {
+        setLoading(false);
+    }
   };
 
   return (
@@ -355,6 +362,16 @@ export default function AdminFlashDeal() {
               </div>
           </div>
       </div>
+
+      <ImageCropperModal
+        file={cropperFile}
+        open={!!cropperFile}
+        onClose={() => {
+          setCropperFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }}
+        onCropped={handleCropped}
+      />
     </div>
   );
 }

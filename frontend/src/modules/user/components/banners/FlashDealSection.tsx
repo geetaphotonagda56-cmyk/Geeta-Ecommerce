@@ -159,7 +159,6 @@ export default function FlashDealSection() {
                    aria-hidden
                  />
                )}
-               {config.flashDealImage && <div className="absolute inset-0 bg-black/35" />}
              </div>
 
              {/* Mobile Background Layer */}
@@ -179,7 +178,6 @@ export default function FlashDealSection() {
                     aria-hidden
                   />
                 )}
-                {config.flashDealImage && <div className="absolute inset-0 bg-black/45" />}
              </div>
 
              <div className="relative z-10 flex flex-col h-full md:justify-center">

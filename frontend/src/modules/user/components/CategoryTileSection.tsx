@@ -21,6 +21,7 @@ interface CategoryTileSectionProps {
   tiles: CategoryTile[];
   columns?: 2 | 3 | 4 | 6 | 8; // Support all column options
   showProductCount?: boolean; // Show product count only for bestsellers
+  viewAllLink?: string; // Optional "View All" navigation target shown next to the title
 }
 
 export default function CategoryTileSection({
@@ -28,6 +29,7 @@ export default function CategoryTileSection({
   tiles,
   columns = 4,
   showProductCount = false,
+  viewAllLink,
 }: CategoryTileSectionProps) {
   const navigate = useNavigate();
 
@@ -86,9 +88,24 @@ export default function CategoryTileSection({
 
   return (
     <div className="mb-6 md:mb-8 mt-0 overflow-visible">
-      <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight">
-        {title}
-      </h2>
+      {title && (
+        <div className="flex items-center justify-between mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
+          <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 tracking-tight">
+            {title}
+          </h2>
+          {viewAllLink && (
+            <Link
+              to={viewAllLink}
+              className="text-xs md:text-sm font-semibold flex items-center gap-1 text-[var(--customer-primary)] hover:opacity-80 transition-opacity flex-shrink-0"
+            >
+              View All
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          )}
+        </div>
+      )}
       <div className="px-4 md:px-6 lg:px-8 overflow-visible">
         <div className={`grid ${gridCols} ${gapClass} overflow-visible auto-rows-fr`}>
           {tiles.map((tile) => {
@@ -104,7 +121,7 @@ export default function CategoryTileSection({
                 transition={{ duration: 0.2 }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="flex flex-col">
+                className="flex flex-col h-full">
                 <Link
                   to={
                     tile.subcategoryId || tile.type === "subcategory"
@@ -140,12 +157,13 @@ export default function CategoryTileSection({
                       handleTileClick(tile);
                     }
                   }}
-                  className={`block bg-white rounded-xl shadow-sm border border-neutral-200 hover:shadow-md transition-shadow h-full ${showProductCount ? "px-2.5" : "px-1.5"
+                  className={`flex flex-col bg-white shadow-sm border border-neutral-200 hover:shadow-md transition-shadow ${showProductCount ? "px-2.5" : "px-1.5"
                     }`}>
                   {/* Image - Single image for non-bestsellers, 2x2 grid for bestsellers */}
                   <div
-                    className={`w-full rounded-lg overflow-hidden ${showProductCount ? "h-32 md:h-36 mb-2" : "aspect-square"
-                      } ${tile.bgColor || "bg-cyan-50"}`}>
+                    className={`w-full overflow-hidden flex items-center justify-center flex-shrink-0 ${showProductCount ? "h-32 md:h-36 mb-2" : "aspect-square"
+                      } ${tile.bgColor || "bg-cyan-50"}`}
+                    style={{ transform: 'scale(0.9)', transformOrigin: 'center' }}>
                     {hasImages ? (
                       showProductCount ? (
                         // Bestsellers: 2x2 grid
@@ -156,7 +174,7 @@ export default function CategoryTileSection({
                                 key={idx}
                                 src={img}
                                 alt=""
-                                className="w-full h-full object-contain bg-white rounded-sm"
+                                className="w-full h-full object-contain bg-white"
                                 onError={(e) => {
                                   // Hide broken image
                                   const target = e.target as HTMLImageElement;
@@ -166,7 +184,7 @@ export default function CategoryTileSection({
                             ) : (
                               <div
                                 key={idx}
-                                className="w-full h-full bg-neutral-200 rounded-sm flex items-center justify-center text-xs text-neutral-400">
+                                className="w-full h-full bg-neutral-200 flex items-center justify-center text-xs text-neutral-400">
                                 {idx + 1}
                               </div>
                             )
@@ -177,7 +195,7 @@ export default function CategoryTileSection({
                         <img
                           src={images[0]}
                           alt={tile.name}
-                          className="w-full h-full object-contain rounded-lg"
+                          className="w-full h-full object-contain"
                           onError={(e) => {
                             // Hide broken image and show fallback
                             const target = e.target as HTMLImageElement;
@@ -198,8 +216,8 @@ export default function CategoryTileSection({
 
                   {/* Product count - shown first (only for bestsellers) */}
                   {showProductCount && tile.productCount && (
-                    <div className="mb-1.5 flex justify-center">
-                      <span className="inline-block bg-neutral-100 text-neutral-600 text-[10px] font-medium px-2 py-0.5 rounded-full leading-tight">
+                    <div className="mb-1.5 flex justify-center flex-shrink-0">
+                      <span className="inline-block bg-neutral-100 text-neutral-600 text-[10px] font-medium px-2 py-0.5 leading-tight">
                         +{tile.productCount} more
                       </span>
                     </div>
@@ -207,7 +225,7 @@ export default function CategoryTileSection({
 
                   {/* Tile name - inside card only for bestsellers */}
                   {showProductCount && (
-                    <div className="text-[11px] font-semibold text-neutral-900 line-clamp-2 leading-tight text-center w-full block">
+                    <div className="text-[11px] font-semibold text-neutral-900 line-clamp-2 leading-tight text-center w-full block flex-shrink-0">
                       {tile.name}
                     </div>
                   )}

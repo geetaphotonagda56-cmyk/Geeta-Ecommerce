@@ -60,7 +60,7 @@ export default function BannerSlider({
       onMouseLeave={() => setIsPaused(false)}
     >
       <div
-        className={`w-full relative overflow-hidden ${roundedClass} ${aspectClass} bg-white/40`}
+        className={`w-full relative overflow-hidden ${roundedClass} ${aspectClass}`}
       >
         {banners.map((banner, index) => (
           <div
@@ -77,7 +77,7 @@ export default function BannerSlider({
               draggable={false}
             />
             {showTextOverlay && index === currentIndex && (
-              <div className="absolute inset-0 bg-black/25 flex flex-col justify-center px-6 md:px-12 text-white pointer-events-none">
+              <div className="absolute inset-0 flex flex-col justify-center px-6 md:px-12 text-white pointer-events-none">
                 {typeof banner.title === 'string' && banner.title && (
                   <h2
                     className="text-xl md:text-4xl font-bold mb-1 md:mb-2"

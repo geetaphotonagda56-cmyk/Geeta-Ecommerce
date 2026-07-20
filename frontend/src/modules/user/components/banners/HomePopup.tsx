@@ -39,7 +39,7 @@ export default function HomePopup() {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
+        className="absolute inset-0 bg-black/20 transition-opacity duration-300"
         onClick={handleClose}
       ></div>
       <div className="relative bg-white rounded-2xl overflow-hidden max-w-md w-full shadow-2xl transform transition-all duration-300 scale-100 animate-in zoom-in-95">
@@ -59,9 +59,6 @@ export default function HomePopup() {
                 alt={popupData.title || 'Offer'}
                 className="w-full h-auto max-h-[55vh] object-contain"
             />
-            {(popupData.title || popupData.subtitle) && (
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
-            )}
          </div>
 
          <div className="p-6 text-center relative -mt-6 bg-white rounded-t-3xl">

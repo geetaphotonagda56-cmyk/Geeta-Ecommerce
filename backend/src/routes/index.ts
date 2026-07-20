@@ -29,6 +29,7 @@ import customerCartRoutes from "./customerCartRoutes";
 import wishlistRoutes from "./wishlistRoutes";
 import productReviewRoutes from "./productReviewRoutes";
 import bannerRoutes from "./bannerRoutes";
+import rangeCardRoutes from "./rangeCardRoutes";
 import flashDealRoutes from "./flashDealRoutes";
 import adminRoutes from "./adminRoutes";
 import searchRoutes from "./searchRoutes";
@@ -214,6 +215,7 @@ router.use("/theme", themeRoutes);
 
 // Banner routes (public read, admin write)
 router.use("/banners", bannerRoutes);
+router.use("/range-cards", rangeCardRoutes);
 router.use("/flash-deals", flashDealRoutes);
 
 // Notification routes

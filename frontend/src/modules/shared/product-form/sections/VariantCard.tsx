@@ -9,6 +9,7 @@ import {
   normalizeBarcode,
 } from "../utils/variantBarcodeUtils";
 import api from "../../../../services/api/config";
+import ImageCropperModal from "../../../../components/ImageCropperModal";
 
 interface Props {
   index: number;
@@ -80,6 +81,10 @@ export default function VariantCard({
 }: Props) {
   const [uploadingMain, setUploadingMain] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [mainImageCropperFile, setMainImageCropperFile] = useState<File | null>(null);
+  // Serial crop queue for gallery images - multiple can be selected at once,
+  // so we crop them one at a time via the shared cropper modal.
+  const [galleryCropQueue, setGalleryCropQueue] = useState<File[]>([]);
   const [showScanner, setShowScanner] = useState(false);
   const [barcodeError, setBarcodeError] = useState("");
   const gradient = variantColors[index % variantColors.length];
@@ -408,20 +413,27 @@ export default function VariantCard({
     }
   };
 
+  const handleMainImageCropped = (croppedFile: File) => {
+    setMainImageCropperFile(null);
+    void handleMainImage(croppedFile);
+  };
+
   const handleGalleryImages = async (files: FileList | null) => {
     if (!files?.length) return;
+    setGalleryCropQueue(Array.from(files));
+  };
+
+  const handleGalleryImageCropped = async (croppedFile: File) => {
+    const remainingQueue = galleryCropQueue.slice(1);
+    setGalleryCropQueue(remainingQueue);
     setUploadingGallery(true);
     try {
-      const uploaded: string[] = [];
-      for (const file of Array.from(files)) {
-        const result = await uploadImage(file, "Geeta Stores/products");
-        uploaded.push(result.secureUrl);
-      }
+      const result = await uploadImage(croppedFile, "Geeta Stores/products");
       patch({
-        galleryImages: [...(variant.galleryImages || []), ...uploaded],
+        galleryImages: [...(variant.galleryImages || []), result.secureUrl],
       });
     } finally {
-      setUploadingGallery(false);
+      if (remainingQueue.length === 0) setUploadingGallery(false);
     }
   };
 
@@ -706,9 +718,10 @@ export default function VariantCard({
                 accept="image/*"
                 className="hidden"
                 disabled={uploadingMain}
-                onChange={(e) =>
-                  e.target.files?.[0] && handleMainImage(e.target.files[0])
-                }
+                onChange={(e) => {
+                  if (e.target.files?.[0]) setMainImageCropperFile(e.target.files[0]);
+                  e.target.value = "";
+                }}
               />
             </label>
           </div>
@@ -768,6 +781,20 @@ export default function VariantCard({
           onScanSuccess={handleScanSuccess}
         />
       )}
+
+      <ImageCropperModal
+        file={mainImageCropperFile}
+        open={!!mainImageCropperFile}
+        onClose={() => setMainImageCropperFile(null)}
+        onCropped={handleMainImageCropped}
+      />
+
+      <ImageCropperModal
+        file={galleryCropQueue[0] || null}
+        open={galleryCropQueue.length > 0}
+        onClose={() => setGalleryCropQueue([])}
+        onCropped={handleGalleryImageCropped}
+      />
     </article>
   );
 }

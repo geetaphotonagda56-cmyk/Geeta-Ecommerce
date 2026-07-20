@@ -5,6 +5,7 @@ import { getCategories, Category } from "../../../services/api/admin/adminProduc
 import { toast } from "react-hot-toast";
 import GoogleLocationPickerMap from "../components/GoogleLocationPickerMap";
 import GoogleMapsAutocomplete from "../../../components/GoogleMapsAutocomplete";
+import ImageCropperModal from "../../../components/ImageCropperModal";
 
 type CommissionSlabInput = {
   minPrice: string;
@@ -150,6 +151,18 @@ export default function AdminAddSeller() {
       ...prev,
       [fieldName]: file
     }));
+  };
+
+  const [profileCropperFile, setProfileCropperFile] = useState<File | null>(null);
+
+  const handleProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setProfileCropperFile(file);
+  };
+
+  const handleProfileImageCropped = (croppedFile: File) => {
+    setFormData(prev => ({ ...prev, profile: croppedFile }));
+    setProfileCropperFile(null);
   };
 
   const [loadingLocation, setLoadingLocation] = useState(false);
@@ -676,11 +689,14 @@ export default function AdminAddSeller() {
                 </label>
                 <input
                   type="file"
-                  onChange={(e) => handleFileChange(e, 'profile')}
+                  onChange={handleProfileImageSelect}
                   className="w-full px-4 py-2.5 bg-white border border-neutral-300 rounded outline-none text-sm"
                   accept="image/*"
                   required
                 />
+                {formData.profile && (
+                  <p className="mt-1 text-xs text-neutral-500">{formData.profile.name} (cropped)</p>
+                )}
               </div>
 
               <div>
@@ -908,6 +924,13 @@ export default function AdminAddSeller() {
           </button>
         </div>
       </form>
+
+      <ImageCropperModal
+        file={profileCropperFile}
+        open={!!profileCropperFile}
+        onClose={() => setProfileCropperFile(null)}
+        onCropped={handleProfileImageCropped}
+      />
     </div>
   );
 }

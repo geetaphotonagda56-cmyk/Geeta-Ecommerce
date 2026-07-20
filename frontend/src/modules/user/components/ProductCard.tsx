@@ -284,8 +284,8 @@ export default function ProductCard({
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.97 }}
       transition={{ duration: 0.2 }}
-      className={`${categoryStyle ? '' : 'bg-white'} rounded-lg shadow-sm overflow-hidden flex flex-col relative border border-neutral-100 hover:shadow-md transition-shadow`}
-      style={{ backgroundColor: '#ffffff' }} // Changed from orange tint to white
+      className="bg-white overflow-hidden flex flex-col relative border border-neutral-100 hover:shadow-md transition-shadow"
+      style={{ backgroundColor: '#ffffff' }}
     >
       <div
         onClick={handleCardClick}
@@ -320,8 +320,7 @@ export default function ProductCard({
 
           {categoryStyle && showBadge && discount > 0 && (
             <div
-                className="absolute top-0 left-0 z-10 text-white text-[10px] font-bold px-2 py-1 rounded-br-lg flex items-center gap-1 shadow-sm transition-transform hover:scale-105"
-                style={{ background: 'linear-gradient(135deg, var(--customer-primary) 0%, var(--customer-primary-dark) 100%)' }}
+                className="absolute top-0 left-0 z-10 text-neutral-900 text-[10px] font-bold px-2 py-1 flex items-center gap-1 shadow-sm transition-transform hover:scale-105 bg-neutral-200"
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                 <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
@@ -333,8 +332,7 @@ export default function ProductCard({
 
           {!categoryStyle && showBadge && (badgeText || discount > 0) && (
             <div
-              className="absolute top-0 left-0 z-10 text-white text-[10px] px-2.5 py-1 font-bold rounded-br-xl shadow-md flex items-center gap-1"
-              style={{ background: 'linear-gradient(135deg, var(--customer-primary) 0%, var(--customer-primary-dark) 100%)' }}
+              className="absolute top-0 left-0 z-10 text-neutral-900 text-[10px] px-2.5 py-1 font-bold shadow-md flex items-center gap-1 bg-neutral-200"
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                 <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
@@ -360,7 +358,7 @@ export default function ProductCard({
                 e.stopPropagation();
                 toggleWishlist(e);
               }}
-              className="absolute top-2 right-2 z-30 w-9 h-9 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-all shadow-md group/heart"
+              className="absolute top-2 right-2 z-30 w-9 h-9 bg-white/95 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-all shadow-md group/heart"
               aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
             >
               <svg
@@ -384,7 +382,7 @@ export default function ProductCard({
 
           {variantCount >= 2 && (
             <div className="absolute bottom-2 left-2 z-10">
-              <span className="text-[10px] font-bold text-neutral-700 bg-white/95 backdrop-blur-sm px-2 py-1 rounded shadow-sm border border-neutral-200">
+              <span className="text-[10px] font-bold text-neutral-700 bg-white/95 backdrop-blur-sm px-2 py-1 shadow-sm border border-neutral-200">
                 {variantCount} Options
               </span>
             </div>
@@ -405,16 +403,11 @@ export default function ProductCard({
                       e.stopPropagation();
                       handleAdd(e);
                     }}
-                    className={`w-full rounded-full font-bold text-[11px] h-8 px-4 flex items-center justify-center gap-1.5 uppercase tracking-wider transition-all duration-300 border shadow-sm ${
+                    className={`w-full font-bold text-[11px] h-8 px-4 flex items-center justify-center gap-1.5 uppercase tracking-wider transition-all duration-300 border shadow-sm ${
                       product.isAvailable === false
                       ? 'bg-neutral-100 text-neutral-400 border-neutral-200 cursor-not-allowed'
-                      : 'hover:bg-[var(--customer-primary-dark)] hover:text-white hover:border-[var(--customer-primary-dark)] hover:shadow-md active:scale-95'
+                      : 'bg-neutral-200 text-neutral-900 border-neutral-300 hover:bg-neutral-300 hover:text-neutral-900 hover:border-neutral-400 hover:shadow-md active:scale-95'
                     }`}
-                    style={product.isAvailable !== false ? {
-                        backgroundColor: 'var(--customer-primary-alpha-10)',
-                        borderColor: 'var(--customer-primary)',
-                        color: 'var(--customer-primary)'
-                    } : {}}
                   >
                     {product.isAvailable === false ? (
                        'Out of Range'
@@ -432,7 +425,7 @@ export default function ProductCard({
               </div>
             ) : (
               <div
-                className="flex items-center justify-center gap-1.5 bg-[var(--customer-primary-alpha-10)] rounded-full px-1 py-0.5 h-8 w-full border border-[var(--customer-primary-alpha-30)] shadow-sm"
+                className="flex items-center justify-center gap-1.5 bg-neutral-200 px-1 py-0.5 h-8 w-full border border-neutral-300 shadow-sm"
               >
                 <Button
                   variant="default"
@@ -441,14 +434,14 @@ export default function ProductCard({
                     e.stopPropagation();
                     handleDecrease(e);
                   }}
-                  className="w-6 h-6 p-0 bg-white hover:bg-[var(--customer-primary-alpha-20)] rounded-full shadow-sm text-[var(--customer-primary-dark)] transition-colors border border-[var(--customer-primary-alpha-20)]"
+                  className="w-6 h-6 p-0 bg-white hover:bg-neutral-100 shadow-sm text-neutral-900 transition-colors border border-neutral-300"
                   aria-label="Decrease quantity"
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
                 </Button>
-                <span className="text-xs font-black min-w-[1.25rem] text-center text-[var(--customer-primary-dark)]">
+                <span className="text-xs font-black min-w-[1.25rem] text-center text-neutral-900">
                   {inCartQty}
                 </span>
                 <Button
@@ -459,7 +452,7 @@ export default function ProductCard({
                     e.stopPropagation();
                     handleIncrease(e);
                   }}
-                  className={`w-6 h-6 p-0 bg-white hover:bg-[var(--customer-primary-alpha-20)] rounded-full shadow-sm text-[var(--customer-primary-dark)] transition-colors border border-[var(--customer-primary-alpha-20)] ${
+                  className={`w-6 h-6 p-0 bg-white hover:bg-neutral-100 shadow-sm text-neutral-900 transition-colors border border-neutral-300 ${
                     product.isAvailable === false ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                   aria-label="Increase quantity"
@@ -513,21 +506,21 @@ export default function ProductCard({
 
               {/* 4. Tiered Pricing Static Display (Multi-Row) */}
               {tieredPrices.length > 0 ? (
-                 <div className="flex flex-col gap-0 mb-1 mt-auto w-full border-t border-gray-100 pt-1">
+                 <div className="flex flex-col gap-0 mb-1 mt-auto w-full border-t border-neutral-200 pt-1">
                     {/* Line 1: Base Price */}
                     <div className="flex justify-between items-center text-[10px] leading-none py-0.5">
-                       <span className="text-gray-500 font-medium">1 unit</span>
+                       <span className="text-neutral-500 font-medium">1 unit</span>
                        <div className="flex items-center gap-1">
-                         <span className="font-semibold text-[var(--customer-primary-dark)]">₹{displayPrice}</span>
+                         <span className="font-semibold text-neutral-900">₹{displayPrice}</span>
                        </div>
                     </div>
                     {/* Additional Tiers */}
                     {tieredPrices.slice().sort((a: any, b: any) => a.minQty - b.minQty).map((tier: any, idx: number) => (
                         <div key={idx} className="flex justify-between items-center text-[10px] leading-none py-0.5">
-                           <span className="text-[var(--customer-primary)] font-bold">{tier.minQty}+ units</span>
+                           <span className="text-neutral-700 font-bold">{tier.minQty}+ units</span>
                            <div className="flex items-center gap-1">
-                             <span className="font-bold text-[var(--customer-primary-dark)]">₹{tier.price}</span>
-                              <span className="text-[var(--customer-primary)] font-bold bg-[var(--customer-primary-alpha-10)] px-1 rounded-sm">
+                             <span className="font-bold text-neutral-900">₹{tier.price}</span>
+                              <span className="text-neutral-600 font-bold bg-neutral-100 px-1">
                                {Math.round(((mrp - tier.price) / mrp) * 100)}% OFF
                              </span>
                            </div>
@@ -536,7 +529,7 @@ export default function ProductCard({
                  </div>
               ) : (
                  discount > 0 && (
-                   <p className="text-[10px] font-semibold text-[var(--customer-primary)] mb-0.5 leading-tight">
+                   <p className="text-[10px] font-semibold text-neutral-700 mb-0.5 leading-tight">
                     {discount}% OFF
                   </p>
                  )
@@ -545,11 +538,11 @@ export default function ProductCard({
               {/* 5. Price with discount */}
               <div className="mt-auto pt-0.5">
                 <div className="flex items-baseline gap-1 flex-wrap">
-                  <span className="text-sm md:text-base font-bold text-[var(--customer-primary)] leading-tight">
+                  <span className="text-sm md:text-base font-bold text-neutral-900 leading-tight">
                     ₹{currentUnitPrice.toLocaleString('en-IN')}
                   </span>
                   {mrp && mrp > displayPrice && (
-                    <span className="text-[10px] text-red-400 line-through leading-tight">
+                    <span className="text-[10px] text-neutral-500 line-through leading-tight">
                       ₹{mrp.toLocaleString('en-IN')}
                     </span>
                   )}
@@ -583,21 +576,21 @@ export default function ProductCard({
               {tieredPrices.length > 0 && (
                   <div className="mb-2 space-y-1">
                       {/* Base Price Tier */}
-                      <div className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded text-[10px]">
-                          <span className="font-medium text-gray-600">Buy 1</span>
+                      <div className="flex justify-between items-center bg-neutral-100 px-2 py-1 text-[10px]">
+                          <span className="font-medium text-neutral-600">Buy 1</span>
                           <div className="flex items-center gap-1">
-                              <span className="font-bold text-[var(--customer-primary-dark)]">₹{displayPrice}</span>
+                              <span className="font-bold text-neutral-900">₹{displayPrice}</span>
                           </div>
                       </div>
                       {/* Additional Tiers */}
                       {tieredPrices.map((tier: any, idx: number) => {
                           const tierDiscount = mrp ? Math.round(((mrp - tier.price) / mrp) * 100) : 0;
                           return (
-                               <div key={idx} className="flex justify-between items-center bg-[var(--customer-primary-alpha-10)] px-2 py-1 rounded text-[10px] border border-[var(--customer-primary-alpha-20)]">
-                                  <span className="font-bold text-red-800">Buy {tier.minQty}+</span>
+                               <div key={idx} className="flex justify-between items-center bg-neutral-100 px-2 py-1 text-[10px] border border-neutral-200">
+                                  <span className="font-bold text-neutral-700">Buy {tier.minQty}+</span>
                                   <div className="flex items-center gap-1">
-                                      <span className="font-bold text-red-700">₹{tier.price}</span>
-                                      {tierDiscount > 0 && <span className="text-[9px] text-[var(--customer-primary)] font-bold">({tierDiscount}% OFF)</span>}
+                                      <span className="font-bold text-neutral-900">₹{tier.price}</span>
+                                      {tierDiscount > 0 && <span className="text-[9px] text-neutral-600 font-bold">({tierDiscount}% OFF)</span>}
                                   </div>
                               </div>
                           );
@@ -613,8 +606,8 @@ export default function ProductCard({
 
               {showVegetarianIcon && (
                 <div className="flex items-center gap-1 mb-2">
-                  <div className="w-4 h-4 bg-[var(--customer-primary)] rounded-full flex items-center justify-center">
-                    <div className="w-2 h-2 bg-white rounded-full"></div>
+                  <div className="w-4 h-4 bg-neutral-400 flex items-center justify-center">
+                    <div className="w-2 h-2 bg-white"></div>
                   </div>
                   <span className="text-xs text-neutral-600">Vegetarian</span>
                 </div>
@@ -622,11 +615,11 @@ export default function ProductCard({
 
               <div className="mt-auto mb-2">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-base font-bold text-[var(--customer-primary)]">
+                  <span className="text-base font-bold text-neutral-900">
                     ₹{displayPrice}
                   </span>
                   {mrp && mrp > displayPrice && (
-                    <span className="text-xs text-red-400 line-through">
+                    <span className="text-xs text-neutral-500 line-through">
                       ₹{mrp}
                     </span>
                   )}
@@ -648,16 +641,11 @@ export default function ProductCard({
                   size="sm"
                   disabled={product.isAvailable === false}
                   onClick={handleAdd}
-                  className={`w-full border h-9 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all duration-300 shadow-sm ${
+                  className={`w-full border h-9 text-[11px] font-bold uppercase tracking-wider transition-all duration-300 shadow-sm ${
                     product.isAvailable === false
                     ? 'border-neutral-200 text-neutral-400 bg-neutral-50 cursor-not-allowed'
-                    : 'hover:bg-[var(--customer-primary-dark)] hover:text-white hover:border-[var(--customer-primary-dark)] hover:shadow-md active:scale-95'
+                    : 'bg-neutral-200 text-neutral-900 border-neutral-300 hover:bg-neutral-300 hover:text-neutral-900 hover:border-neutral-400 hover:shadow-md active:scale-95'
                   }`}
-                  style={product.isAvailable !== false ? {
-                      backgroundColor: 'var(--customer-primary-alpha-10)',
-                      borderColor: 'var(--customer-primary)',
-                      color: 'var(--customer-primary)'
-                  } : {}}
                 >
                   {product.isAvailable === false ? (
                     'Out of Range'
@@ -676,20 +664,20 @@ export default function ProductCard({
               </div>
             ) : (
               <div
-                className="flex items-center justify-center gap-2 bg-[var(--customer-primary-alpha-10)] rounded-full px-2 py-1 h-9 border border-[var(--customer-primary-alpha-30)] shadow-sm"
+                className="flex items-center justify-center gap-2 bg-neutral-200 px-2 py-1 h-9 border border-neutral-300 shadow-sm"
               >
                 <Button
                   variant="default"
                   size="icon"
                   onClick={handleDecrease}
-                  className="w-7 h-7 p-0 bg-white hover:bg-[var(--customer-primary-alpha-20)] rounded-full shadow-sm text-[var(--customer-primary-dark)] transition-colors border border-[var(--customer-primary-alpha-20)]"
+                  className="w-7 h-7 p-0 bg-white hover:bg-neutral-100 shadow-sm text-neutral-900 transition-colors border border-neutral-300"
                   aria-label="Decrease quantity"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
                 </Button>
-                <span className="text-xs font-black min-w-[1.5rem] text-center text-[var(--customer-primary-dark)]">
+                <span className="text-xs font-black min-w-[1.5rem] text-center text-neutral-900">
                   {inCartQty}
                 </span>
                 <Button
@@ -697,7 +685,7 @@ export default function ProductCard({
                   size="icon"
                   disabled={product.isAvailable === false}
                   onClick={handleIncrease}
-                  className={`w-7 h-7 p-0 bg-white hover:bg-[var(--customer-primary-alpha-20)] rounded-full shadow-sm text-[var(--customer-primary-dark)] transition-colors border border-[var(--customer-primary-alpha-20)] ${
+                  className={`w-7 h-7 p-0 bg-white hover:bg-neutral-100 shadow-sm text-neutral-900 transition-colors border border-neutral-300 ${
                     product.isAvailable === false ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                   aria-label="Increase quantity"

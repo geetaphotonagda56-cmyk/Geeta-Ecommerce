@@ -79,8 +79,9 @@ interface ProductVariation {
   subSubCategory: string; // 3
   // name is 4
   sku: string; // 5
-  rackNumber: string; // 6
-  description: string; // 7
+  blockNumber: string; // 6
+  rackNumber: string; // 7
+  description: string; // 8
   barcode: string; // 8
   hsnCode: string; // 9
   unit: string; // 10 (Pack)
@@ -870,7 +871,8 @@ export default function AdminStockManagement() {
         subCategory: subCategoryName,
         subSubCategory: subSubCategoryName,
         sku: p.itemCode || p.sku || "", // Item Code (5) (Note: variation might allow specific SKU)
-        rackNumber: p.rackNumber || "-",
+        blockNumber: p.variations?.[0]?.blockNumber || p.blockNumber || "-",
+        rackNumber: p.variations?.[0]?.rackNumber || p.rackNumber || "-",
         description: p.smallDescription || p.description || "-",
         barcode: Array.isArray(p.barcode) ? p.barcode.join(', ') : (p.barcode || "-"),
         hsnCode: p.hsnCode || "-",
@@ -1161,6 +1163,7 @@ export default function AdminStockManagement() {
       "Sub Sub Cat",
       "Product Name",
       "SKU",
+      "Block/Room No.",
       "Rack",
       "Desc",
       "Barcode",
@@ -1204,6 +1207,7 @@ export default function AdminStockManagement() {
           escapeCsv(product.subSubCategory),
           escapeCsv(product.name),
           escapeCsv(product.sku),
+          escapeCsv(product.blockNumber),
           escapeCsv(product.rackNumber),
           escapeCsv(product.description),
           escapeCsv(product.barcode),
@@ -1527,27 +1531,28 @@ export default function AdminStockManagement() {
                     <th className="p-4 whitespace-nowrap">3. Sub Sub Cat</th>
                     <th className="p-4 whitespace-nowrap">4. Product Name</th>
                     <th className="p-4 whitespace-nowrap">5. SKU</th>
-                    <th className="p-4 whitespace-nowrap">6. Rack</th>
-                    <th className="p-4 whitespace-nowrap">7. Desc</th>
-                    <th className="p-4 whitespace-nowrap">8. Barcode</th>
-                    <th className="p-4 whitespace-nowrap">9. HSN</th>
-                    <th className="p-4 whitespace-nowrap">10. Unit</th>
-                    <th className="p-4 whitespace-nowrap">11. Size</th>
-                    <th className="p-4 whitespace-nowrap">12. Color</th>
+                    <th className="p-4 whitespace-nowrap">6. Block/Room No.</th>
+                    <th className="p-4 whitespace-nowrap">7. Rack</th>
+                    <th className="p-4 whitespace-nowrap">8. Desc</th>
+                    <th className="p-4 whitespace-nowrap">9. Barcode</th>
+                    <th className="p-4 whitespace-nowrap">10. HSN</th>
+                    <th className="p-4 whitespace-nowrap">11. Unit</th>
+                    <th className="p-4 whitespace-nowrap">12. Size</th>
+                    <th className="p-4 whitespace-nowrap">13. Color</th>
                     <th className="p-4 whitespace-nowrap">Variations</th>
-                    <th className="p-4 whitespace-nowrap">13. Tax Cat</th>
-                    <th className="p-4 whitespace-nowrap">14. GST</th>
-                    <th className="p-4 whitespace-nowrap">15. Pur. Price</th>
-                    <th className="p-4 whitespace-nowrap">16. MRP</th>
-                    <th className="p-4 whitespace-nowrap">17. Sell Price</th>
-                    <th className="p-4 whitespace-nowrap">18. Del. Time</th>
-                    <th className="p-4 whitespace-nowrap">19. Stock</th>
-                    <th className="p-4 whitespace-nowrap">20. Offer Price</th>
+                    <th className="p-4 whitespace-nowrap">14. Tax Cat</th>
+                    <th className="p-4 whitespace-nowrap">15. GST</th>
+                    <th className="p-4 whitespace-nowrap">16. Pur. Price</th>
+                    <th className="p-4 whitespace-nowrap">17. MRP</th>
+                    <th className="p-4 whitespace-nowrap">18. Sell Price</th>
+                    <th className="p-4 whitespace-nowrap">19. Del. Time</th>
+                    <th className="p-4 whitespace-nowrap">20. Stock</th>
+                    <th className="p-4 whitespace-nowrap">21. Offer Price</th>
                     <th className="p-4 whitespace-nowrap">Wholesale Price</th>
-                    <th className="p-4 whitespace-nowrap">21. Low Stock</th>
-                    <th className="p-4 whitespace-nowrap">22. Brand</th>
-                    <th className="p-4 whitespace-nowrap">23. Val (MRP)</th>
-                    <th className="p-4 whitespace-nowrap">24. Val (Pur)</th>
+                    <th className="p-4 whitespace-nowrap">22. Low Stock</th>
+                    <th className="p-4 whitespace-nowrap">23. Brand</th>
+                    <th className="p-4 whitespace-nowrap">24. Val (MRP)</th>
+                    <th className="p-4 whitespace-nowrap">25. Val (Pur)</th>
                     <th className="p-4 whitespace-nowrap">Status</th>
                     <th className="p-4 whitespace-nowrap">Action</th>
                   </tr>
@@ -1588,6 +1593,7 @@ export default function AdminStockManagement() {
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.subSubCategory}</td>
                       <td className="p-4 align-middle text-sm font-medium text-neutral-800">{product.name}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.sku}</td>
+                      <td className="p-4 align-middle text-sm text-neutral-600">{product.blockNumber}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.rackNumber}</td>
                       <td
                         className="p-4 align-middle text-sm text-neutral-600 max-w-xs truncate"
@@ -2157,6 +2163,7 @@ export default function AdminStockManagement() {
                     })) 
                   },
                   { label: "Brand", value: selectedProductDetails.brand, key: 'brand', type: 'select', options: brands.map(b => b.name) },
+                  { label: "Block/Room No.", value: selectedProductDetails.blockNumber, key: 'blockNumber' },
                   { label: "Rack Number", value: selectedProductDetails.rackNumber, key: 'rackNumber' },
                   { label: "Barcode", value: selectedProductDetails.barcode, key: 'barcode' },
                   { label: "HSN Code", value: selectedProductDetails.hsnCode, key: 'hsnCode' },
@@ -2252,7 +2259,18 @@ export default function AdminStockManagement() {
                      if (!product) return;
                      
                      const variations = Array.isArray(product.variations) ? [...product.variations] : [];
-                     
+                     // Block/Room No. and Rack live on the variation subdocument, not the
+                     // product root - patch the first variation here so edits from this
+                     // modal actually persist (the top-level fields below are otherwise
+                     // silently ignored by the backend once a variations array is present).
+                     if (variations.length > 0) {
+                       variations[0] = {
+                         ...variations[0],
+                         blockNumber: selectedProductDetails.blockNumber,
+                         rackNumber: selectedProductDetails.rackNumber,
+                       };
+                     }
+
                      const updateData: any = {
                         productName: selectedProductDetails.name,
                         price: Number(selectedProductDetails.price),
@@ -2263,6 +2281,7 @@ export default function AdminStockManagement() {
                         subcategory: subCategories.find(s => s.name === selectedProductDetails.subCategory)?._id || undefined,
                         brand: brands.find(b => b.name === selectedProductDetails.brand)?._id || undefined,
                         sku: selectedProductDetails.sku,
+                        blockNumber: selectedProductDetails.blockNumber,
                         rackNumber: selectedProductDetails.rackNumber,
                         hsnCode: selectedProductDetails.hsnCode,
                         pack: selectedProductDetails.unit,
@@ -2289,6 +2308,8 @@ export default function AdminStockManagement() {
                               compareAtPrice: Number(selectedProductDetails.compareAtPrice),
                               sku: selectedProductDetails.sku,
                               discPrice: Number(selectedProductDetails.offerPrice),
+                              blockNumber: selectedProductDetails.blockNumber,
+                              rackNumber: selectedProductDetails.rackNumber,
                            };
                            updateData.variations = newVariations;
                         }

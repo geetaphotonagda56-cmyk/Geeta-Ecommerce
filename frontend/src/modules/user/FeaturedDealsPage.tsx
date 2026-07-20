@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import ProductCard from "./components/ProductCard";
 import { getProductById } from "../../services/api/customerProductService";
 import { bannerService } from "../../services/bannerService";
+import ShareButton from "../../components/ShareButton";
 
 const BRAND_GRADIENT =
   "linear-gradient(135deg, var(--customer-primary) 0%, var(--customer-primary-light) 100%)";
@@ -76,6 +77,12 @@ export default function FeaturedDealsPage() {
               See the latest deals and exciting new offers!
             </p>
           </div>
+          <ShareButton
+            iconOnly
+            title="Featured Deals on Geeta Stores"
+            text="Check out these Featured Deals on Geeta Stores"
+            className="ml-auto w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors flex-shrink-0"
+          />
         </div>
       </div>
 

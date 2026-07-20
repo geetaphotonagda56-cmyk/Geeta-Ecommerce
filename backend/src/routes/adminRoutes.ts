@@ -258,6 +258,7 @@ router.post("/customers", customerController.createCustomer);
 router.get("/customers/abandoned-carts", abandonedCartController.getAbandonedCarts);
 router.get("/customers", customerController.getAllCustomers);
 router.get("/customers/:id", customerController.getCustomerById);
+router.put("/customers/:id", customerController.updateCustomer);
 router.patch("/customers/:id/status", customerController.updateCustomerStatus);
 router.get("/customers/:id/orders", customerController.getCustomerOrders);
 router.delete("/customers/:id", customerController.deleteCustomer);
@@ -436,20 +437,23 @@ router.delete("/home-sections/:id", homeSectionController.deleteHomeSection);
 router.put("/home-sections/reorder", homeSectionController.reorderHomeSections);
 
 // ==================== Bestseller Card Routes ====================
+// NOTE: /reorder must be registered before the /:id route, otherwise Express
+// matches "reorder" as an :id value first and the reorder endpoint never fires.
 router.get("/bestseller-cards", bestsellerCardController.getBestsellerCards);
+router.put("/bestseller-cards/reorder", bestsellerCardController.reorderBestsellerCards);
 router.get("/bestseller-cards/:id", bestsellerCardController.getBestsellerCardById);
 router.post("/bestseller-cards", bestsellerCardController.createBestsellerCard);
 router.put("/bestseller-cards/:id", bestsellerCardController.updateBestsellerCard);
 router.delete("/bestseller-cards/:id", bestsellerCardController.deleteBestsellerCard);
-router.put("/bestseller-cards/reorder", bestsellerCardController.reorderBestsellerCards);
 
 // ==================== Lowest Prices Product Routes ====================
+// Same ordering fix as above: /reorder before /:id.
 router.get("/lowest-prices-products", lowestPricesController.getLowestPricesProducts);
+router.put("/lowest-prices-products/reorder", lowestPricesController.reorderLowestPricesProducts);
 router.get("/lowest-prices-products/:id", lowestPricesController.getLowestPricesProductById);
 router.post("/lowest-prices-products", lowestPricesController.createLowestPricesProduct);
 router.put("/lowest-prices-products/:id", lowestPricesController.updateLowestPricesProduct);
 router.delete("/lowest-prices-products/:id", lowestPricesController.deleteLowestPricesProduct);
-router.put("/lowest-prices-products/reorder", lowestPricesController.reorderLowestPricesProducts);
 
 // ==================== PromoStrip Routes ====================
 router.get("/promo-strips", promoStripController.getAllPromoStrips);

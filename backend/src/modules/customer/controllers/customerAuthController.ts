@@ -137,9 +137,14 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
+  // Normalize email the same way the schema does (lowercase) so this check
+  // actually matches what's stored in the DB - schema setters don't run on
+  // query filters, only on document save.
+  const normalizedEmail = email ? String(email).trim().toLowerCase() : undefined;
+
   // Check if customer already exists - Only check within Global customers
   const orQuery: any[] = [{ phone: mobile }];
-  if (email) orQuery.push({ email });
+  if (normalizedEmail) orQuery.push({ email: normalizedEmail });
 
   const existingCustomer = await Customer.findOne({
     $or: orQuery,
@@ -147,24 +152,53 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   });
 
   if (existingCustomer) {
+    const field = existingCustomer.phone === mobile ? "mobile number" : "email";
     return res.status(409).json({
       success: false,
-      message: "Customer already exists with this mobile or email",
+      message: `An account already exists with this ${field}`,
     });
   }
 
-  // Create new customer
-  const customer = await Customer.create({
-    name,
-    phone: mobile,
-    email: email || undefined,
-    dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
-    status: "Active",
-    walletAmount: 0,
-    totalOrders: 0,
-    totalSpent: 0,
-    sellerId: null,
-  });
+  // Create new customer. refCode is auto-generated with random suffix on save,
+  // so on the rare chance of a collision we just retry with a fresh doc rather
+  // than surfacing that as a phone/email conflict to the user.
+  let customer;
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      customer = await Customer.create({
+        name,
+        phone: mobile,
+        email: normalizedEmail,
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+        status: "Active",
+        walletAmount: 0,
+        totalOrders: 0,
+        totalSpent: 0,
+        sellerId: null,
+      });
+      break;
+    } catch (err: any) {
+      if (err?.code === 11000) {
+        if (err.keyPattern?.refCode && attempt < maxAttempts) {
+          continue; // regenerate refCode on next attempt
+        }
+        if (err.keyPattern?.phone) {
+          return res.status(409).json({
+            success: false,
+            message: "An account already exists with this mobile number",
+          });
+        }
+        if (err.keyPattern?.email) {
+          return res.status(409).json({
+            success: false,
+            message: "An account already exists with this email",
+          });
+        }
+      }
+      throw err;
+    }
+  }
 
   // Generate token
   const token = generateToken(customer._id.toString(), "Customer");

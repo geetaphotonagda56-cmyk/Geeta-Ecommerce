@@ -4,6 +4,7 @@ import { createDeliveryBoy } from "../../../services/api/admin/adminDeliveryServ
 import { toast } from "react-hot-toast";
 import GoogleLocationPickerMap from "../components/GoogleLocationPickerMap";
 import GoogleMapsAutocomplete from "../../../components/GoogleMapsAutocomplete";
+import ImageCropperModal from "../../../components/ImageCropperModal";
 
 interface DeliveryBoyFormData {
   name: string;
@@ -71,6 +72,7 @@ export default function AdminAddDeliveryBoy() {
   });
 
   const [loadingLocation, setLoadingLocation] = useState(false);
+  const [profileCropperFile, setProfileCropperFile] = useState<File | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -87,6 +89,16 @@ export default function AdminAddDeliveryBoy() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof DeliveryBoyFormData) => {
     const file = e.target.files?.[0] || null;
     setFormData(prev => ({ ...prev, [fieldName]: file }));
+  };
+
+  const handleProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setProfileCropperFile(file);
+  };
+
+  const handleProfileImageCropped = (croppedFile: File) => {
+    setFormData(prev => ({ ...prev, profileImage: croppedFile }));
+    setProfileCropperFile(null);
   };
 
   const handleLocationSelect = async (lat: number, lng: number) => {
@@ -309,7 +321,10 @@ export default function AdminAddDeliveryBoy() {
            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-bold text-neutral-800 mb-2">Profile Image</label>
-                <input type="file" onChange={(e) => handleFileChange(e, 'profileImage')} accept="image/*" className="w-full px-4 py-2.5 bg-white border border-neutral-300 rounded outline-none text-sm" />
+                <input type="file" onChange={handleProfileImageSelect} accept="image/*" className="w-full px-4 py-2.5 bg-white border border-neutral-300 rounded outline-none text-sm" />
+                {formData.profileImage && (
+                  <p className="mt-1 text-xs text-neutral-500">{formData.profileImage.name} (cropped)</p>
+                )}
               </div>
                <div>
                 <label className="block text-sm font-bold text-neutral-800 mb-2">Driving License</label>
@@ -337,6 +352,13 @@ export default function AdminAddDeliveryBoy() {
         </div>
 
       </form>
+
+      <ImageCropperModal
+        file={profileCropperFile}
+        open={!!profileCropperFile}
+        onClose={() => setProfileCropperFile(null)}
+        onCropped={handleProfileImageCropped}
+      />
     </div>
   );
 }

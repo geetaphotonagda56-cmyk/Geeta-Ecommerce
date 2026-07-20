@@ -319,6 +319,7 @@ const SellerSchema = new Schema<ISeller>(
       shopName: { type: String, trim: true, default: "" },
       address: { type: String, trim: true, default: "" },
       phone: { type: String, trim: true, default: "" },
+      invoiceFormat: { type: String, enum: ["simple", "gst"], default: "simple" },
       notes: {
         text: { type: String, trim: true, default: "Thank you for your business" },
         enabled: { type: Boolean, default: true },

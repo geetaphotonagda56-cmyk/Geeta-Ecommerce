@@ -8,6 +8,7 @@ import { getTheme } from '../../../utils/themes';
 import { useLocation } from '../../../hooks/useLocation';
 import { getCategories } from '../../../services/api/customerProductService';
 import { Category } from '../../../types/domain';
+import ShareButton from '../../../components/ShareButton';
 import { getCachedHeaderCategoriesPublic, getHeaderCategoriesPublic } from '../../../services/api/headerCategoryService';
 import { getIconByName } from '../../../utils/iconLibrary';
 import { useThemeContext } from '../../../context/ThemeContext';
@@ -563,6 +564,12 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                 </svg>
               </div>
             )}
+            <ShareButton
+              iconOnly
+              title={config?.appName || "Geeta Stores"}
+              text={`Check out ${config?.appName || "Geeta Stores"} - fast grocery delivery!`}
+              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-neutral-700 hover:bg-black/5 transition-colors"
+            />
           </div>
         </div>
       </div>

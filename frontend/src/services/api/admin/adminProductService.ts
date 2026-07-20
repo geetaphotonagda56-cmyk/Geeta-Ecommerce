@@ -120,6 +120,7 @@ export interface Product {
   sku?: string;
   itemCode?: string; // mapped to sku
   barcode?: string[];
+  blockNumber?: string;
   rackNumber?: string;
   hsnCode?: string;
   gst?: number;
@@ -139,6 +140,8 @@ export interface Product {
     sku?: string;
     status?: string;
     barcode?: string[];
+    blockNumber?: string;
+    rackNumber?: string;
   }>;
   variationName?: string;
   publish: boolean;
@@ -202,6 +205,7 @@ export interface CreateProductData {
   sku?: string;
   itemCode?: string; // Alias for sku input
   barcode?: string[];
+  blockNumber?: string;
   rackNumber?: string;
   hsnCode?: string;
   gst?: number;
@@ -220,6 +224,8 @@ export interface CreateProductData {
     sku?: string;
     status?: string;
     barcode?: string[];
+    blockNumber?: string;
+    rackNumber?: string;
   }>;
   variationName?: string;
   publish?: boolean;

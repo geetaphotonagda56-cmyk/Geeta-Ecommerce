@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Phone, ShoppingBag, Sparkles, ArrowLeft } from 'lucide-react';
 import { sendOTP, verifyOTP } from '../../services/api/auth/customerAuthService';
 import { useAuth } from '../../context/AuthContext';
 import OTPInput from '../../components/OTPInput';
@@ -13,8 +15,6 @@ export default function Login() {
   const [sessionId, setSessionId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const videoRef = useRef<HTMLVideoElement>(null);
 
   const handleContinue = async () => {
     if (mobileNumber.length !== 10) return;
@@ -42,7 +42,6 @@ export default function Login() {
     try {
       const response = await verifyOTP(mobileNumber, otp, sessionId);
       if (response.success && response.data) {
-        // Update auth context with user data
         login(response.data.token, {
           id: response.data.user.id,
           name: response.data.user.name,
@@ -53,7 +52,6 @@ export default function Login() {
           status: response.data.user.status,
         });
 
-        // Request notification permission
         await requestNotificationPermission('customer', response.data.token);
 
         navigate('/');
@@ -65,178 +63,225 @@ export default function Login() {
     }
   };
 
-  const handleZomatoLogin = () => {
-    // Handle Zomato login logic here
-    navigate('/');
-  };
-
-
-
   return (
-    <div className="h-screen bg-white flex flex-col" style={{ overflow: 'hidden', backgroundColor: '#ffffff', width: '100%', margin: 0, padding: 0, boxSizing: 'border-box' }}>
-      {/* Back Button */}
-      <button
-        onClick={() => navigate(-1)}
-        className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white shadow-md flex items-center justify-center hover:bg-neutral-50 transition-colors"
-        aria-label="Back"
-      >
-        <svg width="18" height="18" className="sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-
-      {/* Video Section */}
+    <div className="h-screen w-full bg-white flex flex-col overflow-hidden">
+      {/* Hero */}
       <div
-        className="overflow-hidden relative flex-1"
-        style={{ minHeight: 0, border: 'none', borderBottom: 'none', padding: 0, margin: 0, marginLeft: '2px', backgroundColor: '#ffffff', zIndex: 0, width: 'calc(100% - 2px)', boxSizing: 'border-box', position: 'relative' }}
+        className="relative flex flex-col items-center justify-center overflow-hidden flex-shrink-0"
+        style={{
+          height: '38%',
+          background: `linear-gradient(135deg, var(--customer-primary) 0%, var(--customer-primary-dark) 100%)`,
+        }}
       >
-        <video
-          ref={videoRef}
-          src="/assets/login/loginvideo.mp4?v=2"
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="w-full h-full object-cover"
-          key="login-video-v2"
-          onLoadedMetadata={() => {
-            if (videoRef.current) {
-              videoRef.current.playbackRate = 1.5;
-            }
-          }}
-          style={{
-            display: 'block',
-            width: '100%',
-            height: '100%',
-            margin: 0,
-            padding: 0,
-            border: 'none',
-            outline: 'none',
-            boxShadow: 'none',
-            verticalAlign: 'top',
-            objectFit: 'cover',
-            objectPosition: 'center top',
-            background: 'transparent',
-            position: 'relative',
-            zIndex: 0,
-            borderBottomLeftRadius: 0,
-            borderBottomRightRadius: 0,
-            transform: 'translateY(-60px)',
-            marginTop: '-60px'
-          }}
+        {/* Decorative animated blobs */}
+        <motion.div
+          className="absolute rounded-full"
+          style={{ width: 180, height: 180, background: 'rgba(255,255,255,0.12)', top: -60, left: -50 }}
+          animate={{ scale: [1, 1.15, 1], rotate: [0, 30, 0] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
         />
+        <motion.div
+          className="absolute rounded-full"
+          style={{ width: 140, height: 140, background: 'rgba(255,255,255,0.1)', bottom: -40, right: -30 }}
+          animate={{ scale: [1, 1.2, 1], rotate: [0, -20, 0] }}
+          transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+        />
+        <motion.div
+          className="absolute"
+          style={{ top: '18%', right: '14%' }}
+          animate={{ y: [0, -8, 0], rotate: [0, 8, 0] }}
+          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <Sparkles className="w-5 h-5 text-white/60" />
+        </motion.div>
+        <motion.div
+          className="absolute"
+          style={{ bottom: '20%', left: '12%' }}
+          animate={{ y: [0, 8, 0], rotate: [0, -8, 0] }}
+          transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+        >
+          <ShoppingBag className="w-6 h-6 text-white/50" />
+        </motion.div>
+
+        {/* Back button */}
+        <button
+          onClick={() => navigate(-1)}
+          className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors"
+          aria-label="Back"
+        >
+          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+        </button>
+
+        {/* Logo + tagline */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="relative z-10 flex flex-col items-center gap-3 px-6"
+        >
+          <motion.div
+            animate={{ y: [0, -6, 0] }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+            className="bg-white rounded-2xl p-3 shadow-lg"
+          >
+            <img
+              src="/assets/geetastoreslogo.png"
+              alt="Geeta Stores"
+              className="h-10 sm:h-12 w-auto object-contain"
+            />
+          </motion.div>
+          <div className="text-center">
+            <h1 className="text-white font-bold text-lg sm:text-xl tracking-tight">Welcome back</h1>
+            <p className="text-white/80 text-xs sm:text-sm mt-0.5">Groceries delivered in 10–15 mins</p>
+          </div>
+        </motion.div>
       </div>
 
-
-
-      {/* Login Section */}
-      <div
-        className="bg-white flex flex-col items-center flex-shrink-0 relative"
-        style={{ border: 'none', borderTop: 'none', margin: 0, marginTop: '-100px', marginLeft: '-2px', boxShadow: 'none', outline: 'none', backgroundColor: '#ffffff', zIndex: 1, padding: '4px 0px 12px', paddingTop: '6px', width: 'calc(100% + 4px)', boxSizing: 'border-box', position: 'relative' }}
+      {/* Form Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, delay: 0.1, ease: 'easeOut' }}
+        className="flex-1 bg-white rounded-t-3xl -mt-6 relative z-10 flex flex-col shadow-[0_-8px_24px_rgba(0,0,0,0.06)] overflow-y-auto"
       >
-        {!showOTP ? (
-          <>
-            {/* Mobile Number Input */}
-            <div className="w-full mb-1.5 sm:mb-2.5 px-4 relative z-10" style={{ maxWidth: '100%' }}>
-              <div className="flex items-center bg-white border border-neutral-300 rounded-lg overflow-hidden focus-within:border-neutral-400 transition-colors">
-                <div className="px-3 py-2 sm:py-2.5 text-sm font-medium text-neutral-400 border-r border-neutral-300 bg-white">
-                  +91
+        <div className="w-full max-w-sm mx-auto px-5 sm:px-6 pt-7 pb-4 flex-1 flex flex-col">
+          <AnimatePresence mode="wait">
+            {!showOTP ? (
+              <motion.div
+                key="mobile-step"
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 12 }}
+                transition={{ duration: 0.25 }}
+              >
+                <h2 className="text-base sm:text-lg font-bold text-neutral-900 mb-1">Login to continue</h2>
+                <p className="text-xs sm:text-sm text-neutral-500 mb-5">
+                  We'll call you with a 4-digit verification code
+                </p>
+
+                <div className="mb-3">
+                  <div className="flex items-center bg-neutral-50 border border-neutral-200 rounded-xl overflow-hidden focus-within:border-[var(--customer-primary)] focus-within:ring-2 focus-within:ring-[var(--customer-primary-alpha-10)] transition-all">
+                    <div className="flex items-center gap-1.5 px-3 py-3 text-sm font-semibold text-neutral-500 border-r border-neutral-200">
+                      <Phone className="w-4 h-4" />
+                      +91
+                    </div>
+                    <input
+                      type="tel"
+                      value={mobileNumber}
+                      onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder="Enter mobile number"
+                      className="flex-1 px-3 py-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none bg-transparent"
+                      maxLength={10}
+                      disabled={loading}
+                      autoFocus
+                    />
+                  </div>
                 </div>
-                <input
-                  type="tel"
-                  value={mobileNumber}
-                  onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder="Enter mobile number"
-                  className="flex-1 px-3 py-2 sm:py-2.5 text-sm placeholder:text-neutral-400 focus:outline-none bg-white"
-                  style={{ color: '#9ca3af', backgroundColor: '#ffffff' }}
-                  maxLength={10}
-                  disabled={loading}
-                />
-              </div>
-            </div>
 
-            {error && (
-              <div className="w-full mb-1 px-4 relative z-10 text-xs text-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)] p-2 rounded">
-                {error}
-              </div>
-            )}
+                <AnimatePresence>
+                  {error && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mb-3 text-xs text-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)] px-3 py-2 rounded-lg overflow-hidden"
+                    >
+                      {error}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-            {/* Continue Button */}
-            <div className="w-full mb-1 px-4 relative z-10" style={{ maxWidth: '100%' }}>
-              <button
-                onClick={handleContinue}
-                disabled={mobileNumber.length !== 10 || loading}
-                className={`w-full py-2 sm:py-2.5 rounded-lg font-semibold text-sm transition-colors border px-3 ${mobileNumber.length === 10 && !loading
-                  ? 'bg-[var(--customer-primary-alpha-10)] text-[var(--customer-primary-dark)] border-[var(--customer-primary)] hover:bg-[var(--customer-primary-alpha-20)]'
-                  : 'bg-neutral-300 text-neutral-500 cursor-not-allowed border-neutral-300'
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleContinue}
+                  disabled={mobileNumber.length !== 10 || loading}
+                  className={`w-full py-3 rounded-xl font-bold text-sm transition-colors shadow-sm ${
+                    mobileNumber.length === 10 && !loading
+                      ? 'text-white shadow-md'
+                      : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                   }`}
+                  style={
+                    mobileNumber.length === 10 && !loading
+                      ? { background: `linear-gradient(135deg, var(--customer-primary) 0%, var(--customer-primary-dark) 100%)` }
+                      : undefined
+                  }
+                >
+                  {loading ? 'Calling...' : 'Continue'}
+                </motion.button>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="otp-step"
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.25 }}
+                className="text-center"
               >
-                {loading ? 'Calling...' : 'Continue'}
-              </button>
-            </div>
+                <h2 className="text-base sm:text-lg font-bold text-neutral-900 mb-1">Verify your number</h2>
+                <p className="text-xs sm:text-sm text-neutral-500 mb-1">
+                  Enter the 4-digit OTP sent via voice call to
+                </p>
+                <p className="text-sm font-bold text-neutral-800 mb-5">+91 {mobileNumber}</p>
 
+                <div className="flex justify-center mb-4">
+                  <OTPInput onComplete={handleOTPComplete} disabled={loading} />
+                </div>
 
-          </>
-        ) : (
-          <>
-            {/* OTP Verification */}
-            <div className="w-full mb-2 px-4 relative z-10 text-center">
-              <p className="text-xs text-neutral-600 mb-2">
-                Enter the 4-digit OTP sent via voice call to
-              </p>
-              <p className="text-xs font-semibold text-neutral-800">+91 {mobileNumber}</p>
-            </div>
-            <div className="w-full mb-2 px-4 relative z-10 flex justify-center">
-              <OTPInput onComplete={handleOTPComplete} disabled={loading} />
-            </div>
-            {error && (
-              <div className="w-full mb-1 px-4 relative z-10 text-xs text-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)] p-2 rounded text-center">
-                {error}
-              </div>
+                <AnimatePresence>
+                  {error && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mb-4 text-xs text-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)] px-3 py-2 rounded-lg overflow-hidden"
+                    >
+                      {error}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div className="flex gap-2">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => {
+                      setShowOTP(false);
+                      setError('');
+                    }}
+                    disabled={loading}
+                    className="flex-1 py-3 rounded-xl font-bold text-xs sm:text-sm bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition-colors"
+                  >
+                    Change Number
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={handleContinue}
+                    disabled={loading}
+                    className="flex-1 py-3 rounded-xl font-bold text-xs sm:text-sm text-[var(--customer-primary-dark)] border-2 border-[var(--customer-primary)] hover:bg-[var(--customer-primary-alpha-10)] transition-colors"
+                  >
+                    {loading ? 'Verifying...' : 'Resend OTP'}
+                  </motion.button>
+                </div>
+              </motion.div>
             )}
-            <div className="w-full mb-1 px-4 relative z-10 flex gap-2">
-              <button
-                onClick={() => {
-                  setShowOTP(false);
-                  setError('');
-                }}
-                disabled={loading}
-                className="flex-1 py-2 rounded-lg font-semibold text-xs bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition-colors border border-neutral-300"
-              >
-                Change Number
-              </button>
-              <button
-                onClick={handleContinue}
-                disabled={loading}
-                className="flex-1 py-2 rounded-lg font-semibold text-xs bg-[var(--customer-primary-alpha-10)] text-[var(--customer-primary-dark)] border border-[var(--customer-primary)] hover:bg-[var(--customer-primary-alpha-20)] transition-colors"
-              >
-                {loading ? 'Verifying...' : 'Resend OTP'}
-              </button>
-            </div>
-          </>
-        )}
+          </AnimatePresence>
 
-        {/* Sign Up Link */}
-        {!showOTP && (
-          <div className="text-center pt-2 px-4 relative z-10">
-            <p className="text-xs text-neutral-600">
+          <div className="mt-auto pt-6 text-center space-y-2">
+            <p className="text-[10px] sm:text-[11px] text-neutral-400">
+              Access your saved addresses from Geeta Stores automatically!
+            </p>
+            <p className="text-xs sm:text-sm text-neutral-600">
               Don't have an account?{' '}
               <button
                 onClick={() => navigate('/signup')}
-                className="text-[var(--customer-primary-dark)] hover:text-[var(--customer-primary-dark)] font-semibold"
+                className="text-[var(--customer-primary-dark)] font-bold hover:underline"
               >
                 Sign Up
               </button>
             </p>
           </div>
-        )}
-
-        {/* Privacy Text */}
-        <p className="text-[9px] sm:text-[10px] text-neutral-500 text-center max-w-sm leading-tight px-4 relative z-10 pb-1">
-          Access your saved addresses from Geeta Stores automatically!
-        </p>
-      </div>
+        </div>
+      </motion.div>
     </div>
   );
 }
-

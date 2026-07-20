@@ -1,9 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
 import {
   getAllCustomers,
+  getCustomerById,
+  updateCustomer,
   type Customer,
 } from "../../../services/api/admin/adminCustomerService";
 import { useAuth } from "../../../context/AuthContext";
+import { useToast } from "../../../context/ToastContext";
 
 type SortField =
   | "id"
@@ -18,7 +21,10 @@ type SortDirection = "asc" | "desc";
 
 export default function AdminManageCustomer() {
   const { isAuthenticated, token } = useAuth();
+  const { showToast } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [totalCustomers, setTotalCustomers] = useState(0);
+  const [totalServerPages, setTotalServerPages] = useState(1);
   const [dateRange, setDateRange] = useState("");
   const [statusFilter, setStatusFilter] = useState<"Active" | "Inactive" | undefined>(
     undefined
@@ -30,6 +36,15 @@ export default function AdminManageCustomer() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [viewCustomer, setViewCustomer] = useState<Customer | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "", email: "", phone: "", address: "", city: "", state: "", pincode: "", gst: "",
+  });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Fetch customers on component mount
   useEffect(() => {
@@ -64,6 +79,8 @@ export default function AdminManageCustomer() {
         const response = await getAllCustomers(params);
         if (response.success) {
           setCustomers(response.data);
+          setTotalCustomers(response.pagination?.total ?? response.data.length);
+          setTotalServerPages(response.pagination?.pages ?? 1);
         }
       } catch (err) {
         console.error("Error fetching customers:", err);
@@ -165,15 +182,13 @@ export default function AdminManageCustomer() {
     return filtered;
   }, [customers, sortField, sortDirection]);
 
-  const totalPages = Math.ceil(
-    filteredAndSortedCustomers.length / Number(entriesPerPage)
-  );
+  // The server already returns one page of results (see fetchCustomers),
+  // so `customers` IS the current page - only sort client-side here, don't
+  // re-slice/re-paginate an already-paginated batch.
+  const totalPages = totalServerPages;
   const startIndex = (currentPage - 1) * Number(entriesPerPage);
-  const endIndex = startIndex + Number(entriesPerPage);
-  const displayedCustomers = filteredAndSortedCustomers.slice(
-    startIndex,
-    endIndex
-  );
+  const endIndex = startIndex + filteredAndSortedCustomers.length;
+  const displayedCustomers = filteredAndSortedCustomers;
 
   const handleExport = () => {
     const headers = [
@@ -226,6 +241,72 @@ export default function AdminManageCustomer() {
       {sortField === field ? (sortDirection === "asc" ? "↑" : "↓") : "⇅"}
     </span>
   );
+
+  const handleViewCustomer = async (id: string) => {
+    setViewLoading(true);
+    setViewCustomer(null);
+    try {
+      const response = await getCustomerById(id);
+      if (response.success) {
+        setViewCustomer(response.data);
+      } else {
+        showToast(response.message || "Failed to load customer", "error");
+      }
+    } catch (err) {
+      console.error("Error fetching customer:", err);
+      showToast("Failed to load customer details", "error");
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  const handleOpenEdit = (customer: Customer) => {
+    setEditError(null);
+    setEditCustomer(customer);
+    setEditForm({
+      name: customer.name || "",
+      email: customer.email || "",
+      phone: customer.phone || "",
+      address: customer.address || "",
+      city: customer.city || "",
+      state: customer.state || "",
+      pincode: customer.pincode || "",
+      gst: customer.gst || "",
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editCustomer) return;
+    if (!editForm.name.trim() || !editForm.phone.trim()) {
+      setEditError("Name and phone are required");
+      return;
+    }
+
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const response = await updateCustomer(editCustomer._id, editForm);
+      if (response.success) {
+        showToast("Customer updated successfully", "success");
+        setCustomers((prev) =>
+          prev.map((c) => (c._id === editCustomer._id ? response.data : c))
+        );
+        setEditCustomer(null);
+      } else {
+        setEditError(response.message || "Failed to update customer");
+      }
+    } catch (err) {
+      console.error("Error updating customer:", err);
+      if (err && typeof err === "object" && "response" in err) {
+        const axiosError = err as { response?: { data?: { message?: string } } };
+        setEditError(axiosError.response?.data?.message || "Failed to update customer");
+      } else {
+        setEditError("Failed to update customer");
+      }
+    } finally {
+      setEditSaving(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -467,6 +548,7 @@ export default function AdminManageCustomer() {
                       <td className="p-4 border border-neutral-200">
                         <div className="flex items-center gap-2">
                           <button
+                            onClick={() => handleViewCustomer(customer._id)}
                             className="p-1.5 bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)] text-white rounded transition-colors"
                             title="View Details">
                             <svg
@@ -481,6 +563,7 @@ export default function AdminManageCustomer() {
                             </svg>
                           </button>
                           <button
+                            onClick={() => handleOpenEdit(customer)}
                             className="p-1.5 bg-[var(--primary-color)] hover:bg-[#e076a4] text-white rounded transition-colors"
                             title="Edit">
                             <svg
@@ -506,9 +589,9 @@ export default function AdminManageCustomer() {
           {/* Pagination */}
           <div className="px-4 sm:px-6 py-3 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
             <div className="text-xs sm:text-sm text-neutral-700">
-              Showing {startIndex + 1} to{" "}
-              {Math.min(endIndex, filteredAndSortedCustomers.length)} of{" "}
-              {filteredAndSortedCustomers.length} entries
+              Showing {displayedCustomers.length === 0 ? 0 : startIndex + 1} to{" "}
+              {Math.min(endIndex, totalCustomers)} of{" "}
+              {totalCustomers} entries
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -554,6 +637,176 @@ export default function AdminManageCustomer() {
           </div>
         </div>
       </div>
+
+      {/* View Details Modal */}
+      {(viewLoading || viewCustomer) && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-neutral-900">Customer Details</h2>
+              <button
+                onClick={() => setViewCustomer(null)}
+                className="text-neutral-400 hover:text-neutral-600 text-xl leading-none"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="p-6">
+              {viewLoading ? (
+                <div className="py-8 text-center text-neutral-400 text-sm">Loading...</div>
+              ) : viewCustomer ? (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                  <div className="text-neutral-500">Name</div>
+                  <div className="font-medium text-neutral-900">{viewCustomer.name}</div>
+                  <div className="text-neutral-500">Email</div>
+                  <div className="font-medium text-neutral-900">{viewCustomer.email || "-"}</div>
+                  <div className="text-neutral-500">Phone</div>
+                  <div className="font-medium text-neutral-900">{viewCustomer.phone}</div>
+                  <div className="text-neutral-500">Status</div>
+                  <div className="font-medium text-neutral-900">{viewCustomer.status}</div>
+                  <div className="text-neutral-500">Ref Code</div>
+                  <div className="font-medium text-neutral-900">{viewCustomer.refCode}</div>
+                  <div className="text-neutral-500">Wallet Amount</div>
+                  <div className="font-medium text-neutral-900">₹{(viewCustomer.walletAmount ?? 0).toFixed(2)}</div>
+                  <div className="text-neutral-500">Total Orders</div>
+                  <div className="font-medium text-neutral-900">{viewCustomer.totalOrders}</div>
+                  <div className="text-neutral-500">Total Spent</div>
+                  <div className="font-medium text-neutral-900">₹{viewCustomer.totalSpent.toFixed(2)}</div>
+                  <div className="text-neutral-500">Address</div>
+                  <div className="font-medium text-neutral-900">{viewCustomer.address || "-"}</div>
+                  <div className="text-neutral-500">City</div>
+                  <div className="font-medium text-neutral-900">{viewCustomer.city || "-"}</div>
+                  <div className="text-neutral-500">State</div>
+                  <div className="font-medium text-neutral-900">{viewCustomer.state || "-"}</div>
+                  <div className="text-neutral-500">Pincode</div>
+                  <div className="font-medium text-neutral-900">{viewCustomer.pincode || "-"}</div>
+                  <div className="text-neutral-500">GST</div>
+                  <div className="font-medium text-neutral-900">{viewCustomer.gst || "-"}</div>
+                  <div className="text-neutral-500">Registered</div>
+                  <div className="font-medium text-neutral-900">
+                    {viewCustomer.registrationDate
+                      ? new Date(viewCustomer.registrationDate).toLocaleString()
+                      : "-"}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Customer Modal */}
+      {editCustomer && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-neutral-900">Edit Customer</h2>
+              <button
+                onClick={() => setEditCustomer(null)}
+                className="text-neutral-400 hover:text-neutral-600 text-xl leading-none"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              {editError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded p-2">
+                  {editError}
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">Name</label>
+                  <input
+                    type="text"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">Phone</label>
+                  <input
+                    type="text"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">Address</label>
+                  <input
+                    type="text"
+                    value={editForm.address}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, address: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={editForm.city}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, city: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">State</label>
+                  <input
+                    type="text"
+                    value={editForm.state}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, state: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">Pincode</label>
+                  <input
+                    type="text"
+                    value={editForm.pincode}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, pincode: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">GST</label>
+                  <input
+                    type="text"
+                    value={editForm.gst}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, gst: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-neutral-200 flex justify-end gap-2">
+              <button
+                onClick={() => setEditCustomer(null)}
+                className="px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={editSaving}
+                className="px-4 py-2 text-sm font-medium text-white bg-[var(--primary-color)] hover:bg-[#e076a4] rounded transition-colors disabled:opacity-50"
+              >
+                {editSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

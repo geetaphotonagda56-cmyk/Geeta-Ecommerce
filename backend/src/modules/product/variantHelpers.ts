@@ -50,6 +50,7 @@ export function normalizeVariant(v: any): ProductVariant {
   if (v.purchasePrice != null) cleaned.purchasePrice = Number(v.purchasePrice) || 0;
   if (v.tieredPrices?.length) cleaned.tieredPrices = v.tieredPrices;
   if (v.sku && String(v.sku).trim()) cleaned.sku = String(v.sku).trim();
+  if (v.blockNumber) cleaned.blockNumber = String(v.blockNumber).trim();
   if (v.rackNumber) cleaned.rackNumber = String(v.rackNumber).trim();
 
   if (!cleaned.discPrice || cleaned.discPrice === 0) {
@@ -282,6 +283,7 @@ export function variantToMongooseSubdoc(v: ProductVariant): Record<string, unkno
   if (v.purchasePrice != null) doc.purchasePrice = v.purchasePrice;
   if (v.tieredPrices?.length) doc.tieredPrices = v.tieredPrices;
   if (v.sku) doc.sku = v.sku;
+  if (v.blockNumber) doc.blockNumber = v.blockNumber;
   if (v.rackNumber) doc.rackNumber = v.rackNumber;
   if (v.mainImage) {
     doc.mainImage = v.mainImage;

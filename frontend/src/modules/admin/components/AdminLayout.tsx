@@ -11,9 +11,20 @@ interface AdminLayoutProps {
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default to open on desktop
   const [, setStaffSyncTick] = useState(0);
+  const [isDarkMode, setIsDarkMode] = useState(
+    () => localStorage.getItem('admin-theme') === 'dark'
+  );
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const toggleDarkMode = () => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      localStorage.setItem('admin-theme', next ? 'dark' : 'light');
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -62,7 +73,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }, []);
 
   return (
-    <div className="relative h-screen overflow-hidden bg-neutral-50">
+    <div className={`relative h-screen overflow-hidden bg-neutral-50 ${isDarkMode ? 'admin-dark' : ''}`}>
       {/* Overlay for mobile */}
       {isSidebarOpen && (
         <div
@@ -85,7 +96,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         isSidebarOpen ? 'lg:ml-64' : 'lg:ml-0'
       }`}>
         {/* Header */}
-        <AdminHeader onMenuClick={toggleSidebar} isSidebarOpen={isSidebarOpen} />
+        <AdminHeader
+          onMenuClick={toggleSidebar}
+          isSidebarOpen={isSidebarOpen}
+          isDarkMode={isDarkMode}
+          onToggleDarkMode={toggleDarkMode}
+        />
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-4 bg-neutral-50 w-full overflow-x-hidden">{children}</main>

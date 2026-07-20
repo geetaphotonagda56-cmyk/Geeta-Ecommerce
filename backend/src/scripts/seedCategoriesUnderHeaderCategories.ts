@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
-import { v2 as cloudinary } from "cloudinary";
+import { uploadImage as uploadToS3 } from "../services/s3Service";
 import Category from "../models/Category";
 import HeaderCategory from "../models/HeaderCategory";
 
@@ -27,20 +27,13 @@ log("Starting Categories Under Header Categories Seed Script");
 log(`MONGO_URI: ${MONGO_URI}`);
 log(`FRONTEND_ASSETS_PATH: ${FRONTEND_ASSETS_PATH}`);
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// Helper to upload to Cloudinary
+// Helper to upload to S3
 async function uploadToCloudinary(
   localPath: string,
   folder: string = "categories"
 ): Promise<string | null> {
-  if (!process.env.CLOUDINARY_CLOUD_NAME) {
-    log("Cloudinary not configured, using local path");
+  if (!process.env.AWS_S3_BUCKET_NAME) {
+    log("S3 not configured, using local path");
     return localPath.startsWith("http")
       ? localPath
       : `/assets/${path.basename(localPath)}`;
@@ -57,14 +50,14 @@ async function uploadToCloudinary(
   }
 
   try {
-    const result = await cloudinary.uploader.upload(fullPath, {
+    const result = await uploadToS3(fullPath, {
       folder: folder,
-      resource_type: "image",
+      resourceType: "image",
     });
-    log(`Uploaded to Cloudinary: ${result.secure_url}`);
-    return result.secure_url;
+    log(`Uploaded to S3: ${result.secureUrl}`);
+    return result.secureUrl;
   } catch (error: any) {
-    log(`Cloudinary upload failed: ${error.message}, using placeholder`);
+    log(`S3 upload failed: ${error.message}, using placeholder`);
     return "https://placehold.co/300x300/f5f5f5/737373?text=Category";
   }
 }

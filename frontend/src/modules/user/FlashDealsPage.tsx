@@ -5,6 +5,7 @@ import { getProductById } from "../../services/api/customerProductService";
 import { bannerService } from "../../services/bannerService";
 import BannerSlider from "./components/banners/BannerSlider";
 import { useLocation } from "../../hooks/useLocation";
+import ShareButton from "../../components/ShareButton";
 
 // Use the admin-managed Customer App Theme so the hero band reflects the brand
 // color, not the (per-tab) header-category palette.
@@ -67,6 +68,12 @@ export default function FlashDealsPage() {
             <h1 className="text-base md:text-xl font-bold text-neutral-900 leading-tight">Flash Deals</h1>
             <p className="text-[10px] md:text-xs text-neutral-500 font-medium tracking-tight">Limited time offers you can't miss</p>
           </div>
+          <ShareButton
+            iconOnly
+            title="Flash Deals on Geeta Stores"
+            text="Check out these Flash Deals on Geeta Stores"
+            className="ml-auto w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors flex-shrink-0"
+          />
         </div>
       </div>
 

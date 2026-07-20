@@ -15,9 +15,11 @@ import Badge from '../../components/ui/badge';
 import { getProductById, getProducts } from '../../services/api/customerProductService';
 import { getSimilarProducts as getSemanticSimilarProducts } from '../../services/api/searchService';
 import WishlistButton from '../../components/WishlistButton';
+import ShareButton from '../../components/ShareButton';
 import StarRating from "../../components/ui/StarRating";
 import ProductCard from "./components/ProductCard";
-import DealOfTheDay from "./components/banners/DealOfTheDay";
+// import DealOfTheDay from "./components/banners/DealOfTheDay";
+import ExploreOurRange from "./components/banners/ExploreOurRange";
 import FeaturedDeal from "./components/banners/FeaturedDeal";
 import FlashDealSection from "./components/banners/FlashDealSection";
 import { calculateProductPrice, getApplicableUnitPrice } from '../../utils/priceUtils';
@@ -537,6 +539,14 @@ export default function ProductDetail() {
 
           {/* Action icons */}
           <div className="flex items-center gap-1 flex-shrink-0">
+            {product?.id && (
+              <ShareButton
+                iconOnly
+                title={product.name || product.productName}
+                text={`Check out ${product.name || product.productName} on Geeta Stores`}
+                className="!bg-transparent !shadow-none !rounded-full text-neutral-600 hover:bg-neutral-100 p-2 flex items-center justify-center"
+              />
+            )}
             {/* Heart icon */}
             {product?.id && (
               <WishlistButton
@@ -1391,7 +1401,8 @@ export default function ProductDetail() {
             inventory before falling back to algorithmic similars. Each component already
             self-hides when the admin hasn't configured products for it. */}
         <div className="mt-2">
-          <DealOfTheDay />
+          {/* <DealOfTheDay /> */}
+          <ExploreOurRange />
           <FeaturedDeal />
           <FlashDealSection />
         </div>

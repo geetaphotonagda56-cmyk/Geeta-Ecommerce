@@ -468,6 +468,7 @@ export default function CheckoutAddress() {
               const prodId = prod.id || prod._id || '';
               const prodName = prod.name || (prod as any).productName;
               const prodPack = prod.pack;
+              const itemPrice = item.isFreeGift ? 0 : displayPrice * qty;
 
               return (
                 <div key={prodId} className="flex items-center justify-between text-xs">
@@ -477,8 +478,16 @@ export default function CheckoutAddress() {
                       {prodPack} × {qty}
                     </div>
                   </div>
-                  <div className="font-semibold text-neutral-900 ml-2 flex-shrink-0">
-                    ₹{(displayPrice * qty).toFixed(2)}
+                  <div className="ml-2 flex-shrink-0 flex items-center gap-1.5">
+                    {item.isFreeGift && (
+                      <>
+                        <span className="font-semibold text-[var(--customer-primary-dark)]">Free</span>
+                        <span className="line-through text-neutral-500 text-[11px]">₹{(displayPrice * qty).toFixed(2)}</span>
+                      </>
+                    )}
+                    {!item.isFreeGift && (
+                      <span className="font-semibold text-neutral-900">₹{itemPrice.toFixed(2)}</span>
+                    )}
                   </div>
                 </div>
               );
