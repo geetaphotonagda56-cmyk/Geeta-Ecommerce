@@ -21,6 +21,7 @@ import { uploadImage } from '../../../services/api/uploadService';
 import { useAppContext } from '../../../context/AppContext';
 import { formatAmount } from '../../../utils/priceUtils';
 import { appendPOSStaffBill, getStaffSession } from '../../../utils/staffSession';
+import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
 
 import { expandProductsForPOS } from '../../../utils/posProductExpansion';
 import {
@@ -74,6 +75,51 @@ interface Bill {
   paymentMethod: string;
   orderType: 'Retail' | 'Wholesale';
   createdAt: number;
+}
+
+// Draft of all open POS bill tabs, restored on mount so a refresh/crash doesn't lose
+// in-progress billing. Excludes 'edit_'-prefixed bills, which are re-fetched from the
+// server via the ?edit= URL flow instead.
+const ADMIN_POS_BILLS_DRAFT_KEY = 'admin_pos_bills_draft_v1';
+
+// Fills defaults for any missing/invalid field rather than rejecting the whole bill, and
+// spreads unknown fields through first so older/newer schema shapes degrade gracefully
+// instead of crashing the restore.
+function sanitizeBill(raw: any): Bill | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const id = typeof raw.id === 'string' && raw.id
+    ? raw.id
+    : Date.now().toString() + Math.floor(Math.random() * 1000).toString();
+  return {
+    ...raw,
+    id,
+    name: typeof raw.name === 'string' && raw.name ? raw.name : 'Bill 1',
+    cart: Array.isArray(raw.cart) ? raw.cart : [],
+    selectedCustomer: raw.selectedCustomer ?? null,
+    customerSearch: typeof raw.customerSearch === 'string' ? raw.customerSearch : '',
+    paymentMethod: typeof raw.paymentMethod === 'string' && raw.paymentMethod ? raw.paymentMethod : 'Cash',
+    orderType: raw.orderType === 'Wholesale' ? 'Wholesale' : 'Retail',
+    createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
+  };
+}
+
+function loadPersistedBills(): { bills: Bill[]; activeBillId: string } | null {
+  try {
+    const raw = localStorage.getItem(ADMIN_POS_BILLS_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const rawBills = Array.isArray(parsed?.bills) ? parsed.bills : null;
+    if (!rawBills) return null;
+    const bills = rawBills
+      .map(sanitizeBill)
+      .filter((b: Bill | null): b is Bill => b !== null && !b.id.startsWith('edit_'));
+    if (bills.length === 0) return null;
+    const activeBillId = bills.some((b: Bill) => b.id === parsed.activeBillId) ? parsed.activeBillId : bills[0].id;
+    return { bills, activeBillId };
+  } catch (e) {
+    console.error('Failed to load persisted POS bills', e);
+    return null;
+  }
 }
 
 interface PurchaseSupplier {
@@ -193,8 +239,8 @@ const AdminPOSOrders = () => {
     };
   }, []);
 
-  // Multi-Bill State
-  const [bills, setBills] = useState<Bill[]>([{
+  // Multi-Bill State (restored from localStorage if a draft exists, see loadPersistedBills)
+  const [bills, setBills] = useState<Bill[]>(() => loadPersistedBills()?.bills ?? [{
     id: '1',
     name: 'Bill 1',
     cart: [],
@@ -205,7 +251,7 @@ const AdminPOSOrders = () => {
     createdAt: Date.now()
   }]);
 
-  const [activeBillId, setActiveBillId] = useState<string>('1');
+  const [activeBillId, setActiveBillId] = useState<string>(() => loadPersistedBills()?.activeBillId ?? '1');
 
   // Ensure we find the correct bill, or default safely (though createNewBill sets ID correctly)
   const activeBill = bills.find(b => b.id === activeBillId) || {
@@ -358,6 +404,42 @@ const AdminPOSOrders = () => {
     if (bills.length > 0 && !bills.some(b => b.id === activeBillId)) {
         setActiveBillId(bills[0].id);
     }
+  }, [bills, activeBillId]);
+
+  // Persist all open bill tabs to localStorage so a refresh/crash doesn't lose in-progress
+  // billing. Debounced since `bills` embeds full product objects per cart line and can
+  // change on every keystroke (customer search, qty/price edits).
+  const debouncedBillsForPersist = useDebouncedValue(bills, 300);
+
+  const persistBills = (billsToSave: Bill[], activeId: string) => {
+    try {
+      const persistable = billsToSave.filter(b => !b.id.startsWith('edit_'));
+      if (persistable.length === 0) return; // don't overwrite a valid draft with an all-edit-mode snapshot
+      localStorage.setItem(ADMIN_POS_BILLS_DRAFT_KEY, JSON.stringify({
+        version: 1,
+        savedAt: Date.now(),
+        bills: persistable,
+        activeBillId: persistable.some(b => b.id === activeId) ? activeId : persistable[0].id,
+      }));
+    } catch (e) {
+      console.error('Failed to persist POS bills draft', e);
+    }
+  };
+
+  useEffect(() => {
+    persistBills(debouncedBillsForPersist, activeBillId);
+  }, [debouncedBillsForPersist, activeBillId]);
+
+  // Flush immediately (bypassing the debounce) on tab close/refresh/backgrounding so the
+  // last in-flight edit isn't lost to the debounce window.
+  useEffect(() => {
+    const flush = () => persistBills(bills, activeBillId);
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', flush);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', flush);
+    };
   }, [bills, activeBillId]);
 
   // Sync URL with active bill tab
@@ -1711,6 +1793,22 @@ const AdminPOSOrders = () => {
     }));
   };
 
+  const handleAddCartRow = () => {
+    const newItem: CartItem = {
+        _id: 'temp_' + Date.now(),
+        productId: 'temp_' + Date.now(),
+        productName: '',
+        price: 0,
+        qty: 1,
+        compareAtPrice: 0,
+        customPrice: undefined,
+        mainImage: '',
+        purchasePrice: 0,
+        wholesalePrice: 0
+    };
+    setCart(prev => [newItem, ...prev]);
+  };
+
   const preventNumberScrollChange = (e: React.WheelEvent<HTMLInputElement>) => {
     e.preventDefault();
   };
@@ -1723,6 +1821,9 @@ const AdminPOSOrders = () => {
 
   // Cart Table: Sr.no / Edit / Image / Name / MRP(0) / Qty(1) / Retail Price(2) / Sub Total / Delete
   const cartTableCellRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  // Raw in-progress text for decimal cells (MRP/Rate), so a trailing "." or "12.50" isn't
+  // collapsed back to its numeric form (e.g. "12") on every keystroke while typing.
+  const [cartCellDrafts, setCartCellDrafts] = useState<Record<string, string>>({});
 
   const focusCartTableCell = (row: number, col: 0 | 1 | 2) => {
     requestAnimationFrame(() => {
@@ -1752,17 +1853,12 @@ const AdminPOSOrders = () => {
       return;
     }
 
-    if (e.key === 'Backspace') {
+    if (e.key === 'Backspace' && val === '') {
       e.preventDefault();
-      if (val === '') {
-        if (col > -1) {
-          focusCartTableCell(row, ((col - 1) as any) as 0 | 1 | 2);
-        } else if (row > 0) {
-          focusCartTableCell(row - 1, 2);
-        }
-      } else {
-        input.value = val.slice(0, -1);
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+      if (col > -1) {
+        focusCartTableCell(row, ((col - 1) as any) as 0 | 1 | 2);
+      } else if (row > 0) {
+        focusCartTableCell(row - 1, 2);
       }
       return;
     }
@@ -3751,7 +3847,7 @@ const AdminPOSOrders = () => {
           <div className="flex-none flex justify-between items-center px-3 pt-1 pb-1 md:hidden">
           <div className="hidden">
              <h1 className="text-sm md:text-base font-bold text-gray-800">POS System</h1>
-             <div className="text-[10px] md:text-[11px] text-gray-500">
+             <div className="text-[10px] md:text-xs text-gray-500">
               <span className="text-[var(--primary-dark)]">Dashboard</span> / POS
              </div>
           </div>
@@ -3768,7 +3864,7 @@ const AdminPOSOrders = () => {
                         }
                         setShowPaymentDropdown(!showPaymentDropdown);
                     }}
-                    className="w-full h-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2 text-[11px] text-gray-700 shadow-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]/30 transition-colors"
+                    className="w-full h-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2 text-[11px] md:text-base text-gray-700 shadow-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]/30 transition-colors"
                 >
                     <span className="font-semibold truncate text-[10.5px]">{paymentMethod || 'Cash'}</span>
                     <svg className={`w-3 h-3 text-gray-400 transition-transform flex-shrink-0 ${showPaymentDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -3785,9 +3881,9 @@ const AdminPOSOrders = () => {
                                 <div
                                     key={method}
                                     onClick={() => { setPaymentMethod(method); setShowPaymentDropdown(false); }}
-                                    className="flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 text-xs"
+                                    className="flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 text-xs md:text-base"
                                 >
-                                    <span className="text-xs font-medium text-gray-700">{method === 'Credit' ? 'Credit (Udhaar)' : method}</span>
+                                    <span className="text-xs md:text-base font-medium text-gray-700">{method === 'Credit' ? 'Credit (Udhaar)' : method}</span>
                                     <span className="text-gray-300">→</span>
                                 </div>
                             ))}
@@ -3806,13 +3902,13 @@ const AdminPOSOrders = () => {
 
                  <button
                      onClick={() => setOrderType('Retail')}
-                     className={`flex-1 relative z-10 text-center whitespace-nowrap px-1.5 text-[10px] font-bold transition-colors duration-300 ${orderType === 'Retail' ? 'text-white' : 'text-gray-500 hover:text-gray-700'}`}
+                     className={`flex-1 relative z-10 text-center whitespace-nowrap px-1.5 text-[10px] md:text-sm font-bold transition-colors duration-300 ${orderType === 'Retail' ? 'text-white' : 'text-gray-500 hover:text-gray-700'}`}
                  >
                      Retail
                  </button>
                  <button
                      onClick={() => setOrderType('Wholesale')}
-                     className={`flex-1 relative z-10 text-center whitespace-nowrap px-1.5 text-[10px] font-bold transition-colors duration-300 ${orderType === 'Wholesale' ? 'text-white' : 'text-gray-500 hover:text-gray-700'}`}
+                     className={`flex-1 relative z-10 text-center whitespace-nowrap px-1.5 text-[10px] md:text-sm font-bold transition-colors duration-300 ${orderType === 'Wholesale' ? 'text-white' : 'text-gray-500 hover:text-gray-700'}`}
                  >
                      Wholesale
                  </button>
@@ -3854,7 +3950,7 @@ const AdminPOSOrders = () => {
             <div className="w-px h-5 bg-gray-200 shrink-0"></div>
 
             <div className="flex items-center gap-1.5 bg-gray-50 h-7 px-2 rounded-lg border border-gray-200 shrink-0">
-                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">Profit</span>
+                <span className="text-[9px] md:text-sm font-bold text-gray-500 uppercase tracking-wide">Profit</span>
                 <button
                   onClick={() => setShowProfit(!showProfit)}
                   className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors focus:outline-none ${showProfit ? 'bg-[var(--primary-color)]' : 'bg-gray-300'}`}
@@ -3874,7 +3970,7 @@ const AdminPOSOrders = () => {
              <div className="flex items-center gap-2.5 md:gap-4">
                  <h2 className="hidden md:block text-base md:text-lg font-bold text-gray-800 tracking-tight">Billing & POS</h2>
                 <div className="hidden md:flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200">
-                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Profit</span>
+                    <span className="text-[9px] md:text-sm font-bold text-gray-500 uppercase tracking-wider">Profit</span>
                     <button
                       onClick={() => setShowProfit(!showProfit)}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${showProfit ? 'bg-[var(--primary-color)]' : 'bg-gray-300'}`}
@@ -3884,7 +3980,7 @@ const AdminPOSOrders = () => {
                  </div>
                 <button
                   onClick={() => setShowPurchaseSheet(true)}
-                  className="hidden md:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--primary-color)]/30 bg-[var(--primary-color)]/10 text-[var(--primary-color)] text-xs font-bold hover:bg-[var(--primary-color)]/20 transition-colors"
+                  className="hidden md:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--primary-color)]/30 bg-[var(--primary-color)]/10 text-[var(--primary-color)] text-xs md:text-base font-bold hover:bg-[var(--primary-color)]/20 transition-colors"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13l-1 5h12M9 21a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z" />
@@ -3896,7 +3992,7 @@ const AdminPOSOrders = () => {
              <div className="hidden">
                  <button
                     onClick={() => setShowPurchaseSheet(true)}
-                    className="flex-1 md:flex-none bg-white border border-[var(--primary-color)]/40 text-[var(--primary-color)] text-[11px] px-2.5 py-1.5 rounded-lg font-bold hover:bg-[var(--primary-alpha-10)] transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                    className="flex-1 md:flex-none bg-white border border-[var(--primary-color)]/40 text-[var(--primary-color)] text-[11px] md:text-base px-2.5 py-1.5 rounded-lg font-bold hover:bg-[var(--primary-alpha-10)] transition-all active:scale-95 flex items-center justify-center gap-1.5"
                  >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13l-1 5h12M9 21a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z" />
@@ -3975,11 +4071,11 @@ const AdminPOSOrders = () => {
                                              {product.mainImage ? (
                                                  <img src={product.mainImage} alt="" className="w-full h-full object-cover" />
                                              ) : (
-                                                 <span className="text-[10px] text-gray-400 font-bold">IMG</span>
+                                                 <span className="text-[10px] md:text-sm text-gray-400 font-bold">IMG</span>
                                              )}
                                              {qtyInCart > 0 && (
                                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                                    <span className="text-white font-bold text-xs">x{qtyInCart}</span>
+                                                    <span className="text-white font-bold text-xs md:text-base">x{qtyInCart}</span>
                                                 </div>
                                              )}
                                          </div>
@@ -3987,24 +4083,24 @@ const AdminPOSOrders = () => {
                                              <div className="flex justify-between items-start mb-1">
                                                  <div className="flex items-center gap-2 pr-2">
                                                      <h4 className="text-sm font-bold text-gray-800 truncate group-hover:text-[var(--primary-color)] transition-colors">{product.productName}</h4>
-                                                     {qtyInCart > 0 && <span className="text-[10px] bg-[var(--primary-color)] text-white px-1.5 py-0.5 rounded-full font-bold">In Cart</span>}
+                                                     {qtyInCart > 0 && <span className="text-[10px] md:text-sm bg-[var(--primary-color)] text-white px-1.5 py-0.5 rounded-full font-bold">In Cart</span>}
                                                  </div>
                                                  <div className="text-right flex-shrink-0">
                                                      <span className="block text-sm font-bold text-[var(--primary-color)]">₹{orderType === 'Wholesale' && product.wholesalePrice ? product.wholesalePrice : product.price}</span>
                                                      {(product.compareAtPrice || 0) > (orderType === 'Wholesale' && product.wholesalePrice ? product.wholesalePrice : product.price) && (
-                                                         <span className="block text-[10px] text-gray-400 line-through">₹{product.compareAtPrice}</span>
+                                                         <span className="block text-[10px] md:text-sm text-gray-400 line-through">₹{product.compareAtPrice}</span>
                                                      )}
                                                  </div>
                                              </div>
                                              <div className="flex justify-between items-center">
-                                                 <div className="flex items-center gap-3 text-xs text-gray-500">
-                                                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${product.stock > 0 ? 'bg-[var(--primary-alpha-10)] text-[var(--primary-darker)] border border-teal-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+                                                 <div className="flex items-center gap-3 text-xs md:text-base text-gray-500">
+                                                     <span className={`px-2 py-0.5 rounded-md text-[10px] md:text-sm font-bold ${product.stock > 0 ? 'bg-[var(--primary-alpha-10)] text-[var(--primary-darker)] border border-teal-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
                                                          {product.stock > 0 ? `Stock: ${product.stock}` : 'Out of Stock'}
                                                      </span>
                                                      {product.sku && <span className="hidden sm:inline bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">SKU: {product.sku}</span>}
-                                                     {orderType === 'Wholesale' && product.wholesalePrice && <span className="text-xs text-[var(--primary-dark)] font-medium">Wholesale</span>}
+                                                     {orderType === 'Wholesale' && product.wholesalePrice && <span className="text-xs md:text-base text-[var(--primary-dark)] font-medium">Wholesale</span>}
                                                  </div>
-                                                 <button className="text-xs bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all font-bold shadow-sm transform translate-x-2 group-hover:translate-x-0">
+                                                 <button className="text-xs md:text-base bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all font-bold shadow-sm transform translate-x-2 group-hover:translate-x-0">
                                                      Add +
                                                  </button>
                                              </div>
@@ -4018,7 +4114,7 @@ const AdminPOSOrders = () => {
                                      <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                  </div>
                                  <p className="text-gray-600 font-medium">No products found</p>
-                                 <p className="text-xs text-gray-400 mt-1">Try searching with a different name</p>
+                                 <p className="text-xs md:text-base text-gray-400 mt-1">Try searching with a different name</p>
                              </div>
                         )}
                      </div>
@@ -4034,7 +4130,7 @@ const AdminPOSOrders = () => {
                   key={bill.id}
                   onClick={() => setActiveBillId(bill.id)}
                   className={`
-                    flex items-center gap-1.5 px-2 py-1 rounded-t-lg cursor-pointer border-t border-l border-r transition-all min-w-[72px] justify-between select-none text-[11px] font-medium
+                    flex items-center gap-1.5 px-2 py-1 rounded-t-lg cursor-pointer border-t border-l border-r transition-all min-w-[72px] justify-between select-none text-[11px] md:text-base font-medium
                     ${activeBillId === bill.id
                       ? 'bg-[#0d055a] border-[#0d055a] border-b-transparent text-white relative -mb-[1px] z-10 shadow-[0_-2px_4px_rgba(0,0,0,0.02)]'
                       : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200/50'}
@@ -4073,7 +4169,7 @@ const AdminPOSOrders = () => {
                       <input
                         type="text"
                         placeholder="Search Customer / Mobile..."
-                        className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)] bg-gray-50 focus:bg-white transition-colors"
+                        className="w-full border border-gray-300 rounded px-2 py-1 text-xs md:text-base focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)] bg-gray-50 focus:bg-white transition-colors"
                         value={customerSearch}
                         onChange={(e) => {
                             setCustomerSearch(e.target.value);
@@ -4110,7 +4206,7 @@ const AdminPOSOrders = () => {
                                      className="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0"
                                    >
                                       <div className="font-medium text-sm text-gray-800">{c.name}</div>
-                                      <div className="text-xs text-gray-500">{c.phone} | {c.email}</div>
+                                      <div className="text-xs md:text-base text-gray-500">{c.phone} | {c.email}</div>
                                   </div>
                               ))}
                           </div>
@@ -4153,13 +4249,13 @@ const AdminPOSOrders = () => {
                           </colgroup>
                           <thead>
                               <tr className="bg-[var(--primary-color)] text-white sticky top-0 z-10 h-4">
-                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">Edit</th>
-                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">Item Name</th>
-                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">MRP</th>
-                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">Qty</th>
-                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">Rate</th>
-                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">Total</th>
-                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">Delete</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">Edit</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">Item Name</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">MRP</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">Qty</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">Rate</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">Total</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">Delete</th>
                               </tr>
                           </thead>
                           <tbody>
@@ -4213,7 +4309,7 @@ const AdminPOSOrders = () => {
                                                       }
                                                   }}
                                                   onKeyDown={(e) => handleCartCellKeyDown(e, index, -1, Math.max(8, cart.length))}
-                                                  className="w-full border-0 bg-white text-xs font-bold outline-none px-0.5 py-0.5 focus:bg-yellow-50 cursor-text resize-none overflow-hidden" style={{minHeight: '20px', height: 'auto', lineHeight: '1.3'}}
+                                                  className="w-full border-0 bg-white text-xs md:text-base font-bold outline-none px-0.5 py-0.5 focus:bg-yellow-50 cursor-text resize-none overflow-hidden" style={{minHeight: '20px', height: 'auto', lineHeight: '1.3'}}
                                                   placeholder="Enter item name"
                                               />
                                           </td>
@@ -4223,9 +4319,16 @@ const AdminPOSOrders = () => {
                                                   ref={(el) => { cartTableCellRefs.current[`${index}-0`] = el; }}
                                                   type="text"
                                                   inputMode="decimal"
-                                                  value={mrp || ''}
+                                                  value={cartCellDrafts[`${index}-0`] ?? (mrp || '')}
+                                                  onBlur={() => setCartCellDrafts(prev => {
+                                                      if (!(`${index}-0` in prev)) return prev;
+                                                      const next = { ...prev };
+                                                      delete next[`${index}-0`];
+                                                      return next;
+                                                  })}
                                                   onChange={(e) => {
                                                       const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                      setCartCellDrafts(prev => ({ ...prev, [`${index}-0`]: val }));
                                                       if (!item) {
                                                           const newItem: CartItem = {
                                                               _id: `temp_${index}_${Date.now()}`,
@@ -4247,7 +4350,7 @@ const AdminPOSOrders = () => {
                                                       }
                                                   }}
                                                   onKeyDown={(e) => handleCartCellKeyDown(e, index, 0, Math.max(8, cart.length))}
-                                                  className="w-full border-0 bg-white text-right text-xs outline-none px-0.5 py-0.5 focus:bg-yellow-50 cursor-text"
+                                                  className="w-full border-0 bg-white text-right text-xs md:text-base outline-none px-0.5 py-0.5 focus:bg-yellow-50 cursor-text"
                                               />
                                           </td>
 
@@ -4293,7 +4396,7 @@ const AdminPOSOrders = () => {
                                                           }
                                                       }}
                                                       onKeyDown={(e) => handleCartCellKeyDown(e, index, 1, Math.max(8, cart.length))}
-                                                      className="w-8 shrink-0 border-0 bg-white text-center text-xs outline-none px-0 py-0.5 focus:bg-yellow-50 cursor-text"
+                                                      className="w-8 shrink-0 border-0 bg-white text-center text-xs md:text-base outline-none px-0 py-0.5 focus:bg-yellow-50 cursor-text"
                                                   />
                                                   <button
                                                       type="button"
@@ -4311,10 +4414,17 @@ const AdminPOSOrders = () => {
                                               <input
                                                   ref={(el) => { cartTableCellRefs.current[`${index}-2`] = el; }}
                                                   type="text"
-                                                  inputMode="numeric"
-                                                  value={sp || ''}
+                                                  inputMode="decimal"
+                                                  value={cartCellDrafts[`${index}-2`] ?? (sp || '')}
+                                                  onBlur={() => setCartCellDrafts(prev => {
+                                                      if (!(`${index}-2` in prev)) return prev;
+                                                      const next = { ...prev };
+                                                      delete next[`${index}-2`];
+                                                      return next;
+                                                  })}
                                                   onChange={(e) => {
                                                       const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                      setCartCellDrafts(prev => ({ ...prev, [`${index}-2`]: val }));
                                                       if (!item) {
                                                           const newItem: CartItem = {
                                                               _id: `temp_${index}_${Date.now()}`,
@@ -4336,11 +4446,11 @@ const AdminPOSOrders = () => {
                                                       }
                                                   }}
                                                   onKeyDown={(e) => handleCartCellKeyDown(e, index, 2, Math.max(8, cart.length))}
-                                                  className="w-full border-0 bg-white text-right text-xs outline-none px-0.5 py-0.5 focus:bg-yellow-50 cursor-text"
+                                                  className="w-full border-0 bg-white text-right text-xs md:text-base outline-none px-0.5 py-0.5 focus:bg-yellow-50 cursor-text"
                                               />
                                           </td>
 
-                                          <td className="border border-gray-300 px-0.5 py-0 text-right text-xs font-bold align-top">
+                                          <td className="border border-gray-300 px-0.5 py-0 text-right text-xs md:text-base font-bold align-top">
                                               {item ? `₹${(sp * item.qty).toFixed(2)}` : ''}
                                           </td>
 
@@ -4349,7 +4459,7 @@ const AdminPOSOrders = () => {
                                                   <button
                                                       type="button"
                                                       onClick={() => removeFromCart(lineId)}
-                                                      className="text-red-500 hover:text-red-700 text-xs font-bold"
+                                                      className="text-red-500 hover:text-red-700 text-xs md:text-base font-bold"
                                                       title="Delete"
                                                   >
                                                       ✕
@@ -4363,24 +4473,22 @@ const AdminPOSOrders = () => {
                       </table>
                       <button
                           type="button"
-                          onClick={() => {
-                              const newItem: CartItem = {
-                                  _id: 'temp_' + Date.now(),
-                                  productId: 'temp_' + Date.now(),
-                                  productName: '',
-                                  price: 0,
-                                  qty: 1,
-                                  compareAtPrice: 0,
-                                  customPrice: undefined,
-                                  mainImage: '',
-                                  purchasePrice: 0,
-                                  wholesalePrice: 0
-                              };
-                              setCart([...cart, newItem]);
-                          }}
-                          className="w-full bg-green-500 hover:bg-green-600 text-white py-1.5 rounded font-bold text-xs"
+                          onClick={handleAddCartRow}
+                          className="hidden md:block w-full bg-green-500 hover:bg-green-600 text-white py-1.5 rounded font-bold text-xs md:text-base"
                       >
                           + Add Row
+                      </button>
+
+                      {/* Mobile: floating Add Row button, parked above the fixed footer */}
+                      <button
+                          type="button"
+                          onClick={handleAddCartRow}
+                          title="Add Row"
+                          aria-label="Add Row"
+                          className="md:hidden fixed right-4 z-40 w-12 h-12 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-600/30 flex items-center justify-center active:scale-95 transition-transform"
+                          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 116px)' }}
+                      >
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"></path></svg>
                       </button>
                   </div>
                   </div>
@@ -4393,7 +4501,7 @@ const AdminPOSOrders = () => {
 
                       {/* --- QUICK ACTIONS --- */}
                         <div className="mb-3">
-                            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-2">Quick Actions</h3>
+                            <h3 className="text-[10px] md:text-sm font-bold text-gray-400 uppercase tracking-[0.2em] mb-2">Quick Actions</h3>
                             <div className="grid grid-cols-2 gap-1.5">
                                 <button
                                   onClick={() => setShowQuickAdd(true)}
@@ -4403,7 +4511,7 @@ const AdminPOSOrders = () => {
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
                                     </div>
                                     <div className="text-left">
-                                        <p className="text-[11px] font-bold text-white">Quick Add</p>
+                                        <p className="text-[11px] md:text-base font-bold text-white">Quick Add</p>
                                     </div>
                                 </button>
 
@@ -4415,7 +4523,7 @@ const AdminPOSOrders = () => {
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
                                     </div>
                                     <div className="text-left">
-                                        <p className="text-[11px] font-bold text-white">Add Cust.</p>
+                                        <p className="text-[11px] md:text-base font-bold text-white">Add Cust.</p>
                                     </div>
                                 </button>
 
@@ -4427,7 +4535,7 @@ const AdminPOSOrders = () => {
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                                     </div>
                                     <div className="text-left">
-                                        <p className="text-[11px] font-bold text-gray-800">Customer Credit (Udhaar)</p>
+                                        <p className="text-[11px] md:text-base font-bold text-gray-800">Customer Credit (Udhaar)</p>
                                     </div>
                                 </button>
                             </div>
@@ -4435,12 +4543,12 @@ const AdminPOSOrders = () => {
 
                       {/* --- CUSTOMER SELECTION --- */}
                         <div className="mb-3 p-2.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-1.5">Customer Selection</label>
+                            <label className="block text-[10px] md:text-sm font-bold text-gray-400 uppercase tracking-[0.2em] mb-1.5">Customer Selection</label>
                             <div className="relative">
                                 <input
                                     type="text"
                                     placeholder="Search Customer..."
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]/20 focus:border-[var(--primary-color)] transition-all"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs md:text-base focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]/20 focus:border-[var(--primary-color)] transition-all"
                                     value={customerSearch}
                                     onChange={(e) => {
                                       setCustomerSearch(e.target.value);
@@ -4463,8 +4571,8 @@ const AdminPOSOrders = () => {
                                               onMouseDown={(e) => { e.preventDefault(); selectCustomer(c); }}
                                               className="p-2 hover:bg-gray-50 cursor-pointer rounded-lg border-b border-gray-50 last:border-0"
                                           >
-                                              <div className="font-bold text-[11px] text-gray-800">{c.name}</div>
-                                              <div className="text-[10px] text-gray-500">{c.phone}</div>
+                                              <div className="font-bold text-[11px] md:text-base text-gray-800">{c.name}</div>
+                                              <div className="text-[10px] md:text-sm text-gray-500">{c.phone}</div>
                                           </div>
                                       ))}
                                   </div>
@@ -4474,23 +4582,23 @@ const AdminPOSOrders = () => {
 
                       {/* --- ORDER TYPE --- */}
                          <div className="mb-2">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Order Type</label>
+                            <label className="block text-[10px] md:text-sm font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Order Type</label>
                              <div className="bg-gray-200 p-1 rounded-xl flex relative h-7">
                                 <div
                                     className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-[#0d055a] rounded-lg transition-all duration-300 ease-in-out shadow-sm ${orderType === 'Wholesale' ? 'left-[calc(50%+2px)]' : 'left-1'}`}
                                 ></div>
-                               <button onClick={() => setOrderType('Retail')} className={`flex-1 relative z-10 text-center text-[11px] font-bold transition-colors ${orderType === 'Retail' ? 'text-white' : 'text-gray-500'}`}>Retail</button>
-                               <button onClick={() => setOrderType('Wholesale')} className={`flex-1 relative z-10 text-center text-[11px] font-bold transition-colors ${orderType === 'Wholesale' ? 'text-white' : 'text-gray-500'}`}>Wholesale</button>
+                               <button onClick={() => setOrderType('Retail')} className={`flex-1 relative z-10 text-center text-[11px] md:text-base font-bold transition-colors ${orderType === 'Retail' ? 'text-white' : 'text-gray-500'}`}>Retail</button>
+                               <button onClick={() => setOrderType('Wholesale')} className={`flex-1 relative z-10 text-center text-[11px] md:text-base font-bold transition-colors ${orderType === 'Wholesale' ? 'text-white' : 'text-gray-500'}`}>Wholesale</button>
                            </div>
                        </div>
 
                       {/* --- PAYMENT METHOD --- */}
                          <div className="mb-2">
-                             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Payment Method</label>
+                             <label className="block text-[10px] md:text-sm font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Payment Method</label>
                              <div className="relative">
                                  <button
                                      onClick={() => setShowPaymentDropdown(!showPaymentDropdown)}
-                                     className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-2.5 py-1 text-[11px] font-bold text-gray-700 hover:border-[var(--primary-color)] transition-all shadow-sm"
+                                     className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-2.5 py-1 text-[11px] md:text-base font-bold text-gray-700 hover:border-[var(--primary-color)] transition-all shadow-sm"
                                >
                                    <span>{paymentMethod || 'Cash'}</span>
                                    <svg className={`w-3 h-3 text-gray-400 transition-transform ${showPaymentDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -4501,10 +4609,10 @@ const AdminPOSOrders = () => {
                                           <div
                                               key={method}
                                               onClick={() => { setPaymentMethod(method); setShowPaymentDropdown(false); }}
-                                              className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 cursor-pointer rounded-lg text-[11px] font-medium text-gray-700"
+                                              className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 cursor-pointer rounded-lg text-[11px] md:text-base font-medium text-gray-700"
                                           >
                                               <span>{method === 'Credit' ? 'Credit (Udhaar)' : method}</span>
-                                              <span className="text-gray-300 text-[10px]">→</span>
+                                              <span className="text-gray-300 text-[10px] md:text-sm">→</span>
                                           </div>
                                       ))}
                                   </div>
@@ -4518,16 +4626,16 @@ const AdminPOSOrders = () => {
                         <div className="flex-none space-y-1.5 pt-2 border-t border-gray-200 bg-gray-50">
                              <div className="bg-[#0d055a] text-white p-2 rounded-[1rem] shadow-lg">
                               <div className="flex justify-between items-center mb-0.5">
-                                 <span className="text-white text-[8px] uppercase tracking-widest">Subtotal</span>
+                                 <span className="text-white text-[8px] md:text-xs uppercase tracking-widest">Subtotal</span>
                                  <span className="font-bold text-[12px]">₹{calculateTotal().toLocaleString()}</span>
                               </div>
                               <div className="flex justify-between items-center mb-1">
-                                 <span className="text-white text-[8px] uppercase tracking-widest">Qty. Items</span>
+                                 <span className="text-white text-[8px] md:text-xs uppercase tracking-widest">Qty. Items</span>
                                  <span className="font-bold text-[12px]">{cart.reduce((a, c) => a + c.qty, 0)}</span>
                               </div>
                               <div className="border-t border-white/10 pt-2 flex justify-between items-center">
                                  <div className="flex flex-col">
-                                      <span className="text-white text-[7px] font-bold uppercase tracking-widest">Total Payable</span>
+                                      <span className="text-white text-[7px] md:text-xs font-bold uppercase tracking-widest">Total Payable</span>
                                      <span className="text-base font-black">₹{calculateTotal().toLocaleString()}</span>
                                  </div>
                               </div>
@@ -4538,7 +4646,7 @@ const AdminPOSOrders = () => {
                                   <button
                                      onClick={handleGenerateBill}
                                      disabled={loading || cart.length === 0}
-                                     className="w-full bg-[#0d055a] border-2 border-[#0d055a] text-white hover:bg-[#0d055a] hover:text-white font-black py-2 md:py-0 md:min-h-[88px] px-4 rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group text-xs"
+                                     className="w-full bg-[#0d055a] border-2 border-[#0d055a] text-white hover:bg-[#0d055a] hover:text-white font-black py-2 md:py-0 md:min-h-[88px] px-4 rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group text-xs md:text-base"
                                    >
                                     <svg className="w-4 h-4 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                     <span>GENERATE BILL</span>
@@ -4548,7 +4656,7 @@ const AdminPOSOrders = () => {
                                <button
                                   onClick={activeBillId.startsWith('edit_') ? handleUpdateOrder : handleAccessPayment}
                                   disabled={loading || cart.length === 0}
-                                     className={`w-full ${activeBillId.startsWith('edit_') ? 'bg-[#0d055a] hover:bg-[#0d055a]' : 'bg-[#0d055a] hover:bg-[#0d055a]'} text-white font-black py-2.5 px-4 rounded-xl shadow-lg shadow-[#0d055a]/30 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed text-xs`}
+                                     className={`w-full ${activeBillId.startsWith('edit_') ? 'bg-[#0d055a] hover:bg-[#0d055a]' : 'bg-[#0d055a] hover:bg-[#0d055a]'} text-white font-black py-2.5 px-4 rounded-xl shadow-lg shadow-[#0d055a]/30 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed text-xs md:text-base`}
                                 >
                                   {loading ? (
                                      <>
@@ -4613,14 +4721,14 @@ const AdminPOSOrders = () => {
                   {/* Mobile Footer Actions - POS */}
                   <div className="lg:hidden space-y-1 mt-1">
                       <div className="flex justify-between items-center px-1 py-1">
-                          <span className="text-gray-600 font-medium text-xs">Subtotal</span>
+                          <span className="text-gray-600 font-medium text-xs md:text-base">Subtotal</span>
                           <span className="text-sm font-bold text-gray-900">₹{calculateTotal().toLocaleString()}</span>
                       </div>
 
                       <div className={`grid gap-1 ${activeBillId.startsWith('edit_') ? 'grid-cols-2' : 'grid-cols-[0.75fr_0.75fr_1.3fr]'}`}>
                           <button
                             onClick={() => setShowQuickAdd(true)}
-                            className="rounded-lg bg-[#f7d8e7] text-[#b34f7e] py-1 text-[11px] font-semibold border border-[var(--primary-alpha-20)] active:scale-[0.98]"
+                            className="rounded-lg bg-[#f7d8e7] text-[#b34f7e] py-1 text-[11px] md:text-base font-semibold border border-[var(--primary-alpha-20)] active:scale-[0.98]"
                           >
                             Quick add +
                           </button>
@@ -4628,7 +4736,7 @@ const AdminPOSOrders = () => {
                           <button
                             onClick={activeBillId.startsWith('edit_') ? handleUpdateOrder : handleAccessPayment}
                             disabled={loading || cart.length === 0}
-                            className="rounded-lg bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-1 text-[11px] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="rounded-lg bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-1 text-[11px] md:text-base transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                           >
                             {loading ? (activeBillId.startsWith('edit_') ? 'Updating...' : 'Paying...') : (activeBillId.startsWith('edit_') ? 'Update' : 'Pay')}
                           </button>
@@ -4652,7 +4760,7 @@ const AdminPOSOrders = () => {
                           <svg className="w-4 h-4 text-[var(--primary-color)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                           </svg>
-                          <span className="font-semibold text-xs truncate">Search</span>
+                          <span className="font-semibold text-xs md:text-base truncate">Search</span>
                         </button>
                         <button
                           onClick={() => { setScanTarget('inventory'); openBarcodeScanner(() => setShowScanner(true)); }}
@@ -4679,7 +4787,7 @@ const AdminPOSOrders = () => {
             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-1"></div>
             <div className="text-center pb-1">
               <h3 className="text-base md:text-lg font-bold text-gray-800">Purchase Options</h3>
-              <p className="text-xs text-gray-500 mt-1">Start a new purchase entry</p>
+              <p className="text-xs md:text-base text-gray-500 mt-1">Start a new purchase entry</p>
             </div>
             <button
               onClick={() => {
@@ -4746,7 +4854,7 @@ const AdminPOSOrders = () => {
               </button>
             </div>
             <div className="mb-2">
-              <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold ${
+              <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] md:text-sm font-bold ${
                 purchaseMode === 'Purchase' ? 'bg-[var(--primary-alpha-10)] text-[var(--primary-color)]' : 'bg-[var(--primary-alpha-10)] text-[var(--primary-color)]'
               }`}>
                 {purchaseMode === 'Purchase' ? 'PURCHASE MODE' : 'QUOTATION MODE'}
@@ -4855,12 +4963,12 @@ const AdminPOSOrders = () => {
           <div className="flex-1 overflow-y-auto p-4 pb-5 md:max-w-[1450px] md:mx-auto md:w-full md:p-2">
             {purchaseMode === 'Purchase' && (
               <div className="bg-gradient-to-r from-[var(--primary-color)] to-[var(--primary-dark)] text-white rounded-xl p-3 md:p-3 mb-3 md:mb-2 md:shadow-sm">
-                <div className="text-xs text-white/80">Tap to add discount.</div>
+                <div className="text-xs md:text-base text-white/80">Tap to add discount.</div>
                 <div className="mt-1 flex items-center justify-between">
                   <span className="text-sm text-white/80">Total</span>
                   <span className="text-2xl md:text-xl font-black">₹{calculatePurchaseTotal().toFixed(2)}</span>
                 </div>
-                <div className="text-[11px] text-white/70 mt-1">Date: {formatPurchaseDate(purchaseDate)}</div>
+                <div className="text-[11px] md:text-base text-white/70 mt-1">Date: {formatPurchaseDate(purchaseDate)}</div>
               </div>
             )}
 
@@ -5168,7 +5276,7 @@ const AdminPOSOrders = () => {
                       className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-0"
                     >
                       <div className="font-semibold text-gray-800">{s.name}</div>
-                      <div className="text-xs text-gray-500">{s.phone} {s.gstNumber ? `| GST: ${s.gstNumber}` : ''}</div>
+                      <div className="text-xs md:text-base text-gray-500">{s.phone} {s.gstNumber ? `| GST: ${s.gstNumber}` : ''}</div>
                     </button>
                   ))}
                 </div>
@@ -5331,7 +5439,7 @@ const AdminPOSOrders = () => {
                       <div key={product._id} className="bg-white border border-gray-200 rounded-2xl p-3">
                         <div className="flex gap-3">
                           <div className="w-14 h-14 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center">
-                            {product.mainImage ? <img src={product.mainImage} alt="" className="w-full h-full object-contain" /> : <span className="text-xs text-gray-400">IMG</span>}
+                            {product.mainImage ? <img src={product.mainImage} alt="" className="w-full h-full object-contain" /> : <span className="text-xs md:text-base text-gray-400">IMG</span>}
                           </div>
                           <div className="flex-1 min-w-0">
                             <h4 className="font-semibold text-gray-800 leading-tight">{product.productName}</h4>
@@ -5406,7 +5514,7 @@ const AdminPOSOrders = () => {
                     <div key={variationId} className="border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-semibold text-gray-800 truncate">{variantLabel}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs md:text-base text-gray-500">
                           MRP: ₹{variation?.compareAtPrice ?? variantPickerItem.mrp} | Price: ₹{variation?.price ?? variantPickerItem.retailPrice} | Qty: {variation?.stock ?? 0}
                         </p>
                       </div>
@@ -5849,7 +5957,7 @@ const AdminPOSOrders = () => {
                             <div className="flex flex-col items-start">
                                 <span className="font-semibold text-gray-700 group-hover:text-red-700">Credit (Udhaar)</span>
                                 {selectedCustomer && (
-                                    <span className="text-xs text-red-500 font-medium">Due: ₹{selectedCustomer.creditBalance?.toLocaleString() || '0'}</span>
+                                    <span className="text-xs md:text-base text-red-500 font-medium">Due: ₹{selectedCustomer.creditBalance?.toLocaleString() || '0'}</span>
                                 )}
                             </div>
                             <span className="text-gray-300 group-hover:text-red-500">→</span>
@@ -5875,7 +5983,7 @@ const AdminPOSOrders = () => {
                 <div className="bg-[#f3f4f6] px-5 pt-5 pb-2">
                    <div className="flex justify-between items-center mb-4">
                        <h2 className="text-lg font-bold tracking-widest text-slate-800 uppercase">{posBillSettings?.shopName || 'Geeta Store'}</h2>
-                       <button onClick={() => setShowSuccessModal(false)} className="bg-black text-white px-3 py-1 rounded-full text-[10px] font-bold">Close</button>
+                       <button onClick={() => setShowSuccessModal(false)} className="bg-black text-white px-3 py-1 rounded-full text-[10px] md:text-sm font-bold">Close</button>
                    </div>
 
                    <div className="flex justify-center mb-4">
@@ -5888,19 +5996,19 @@ const AdminPOSOrders = () => {
                        <h3 className="font-bold text-slate-800 tracking-wider mb-1 text-sm">
                            {lastBillDetails.isQuotation ? 'QUOTATION COMPLETED' : (lastBillDetails.isPaid ? 'ORDER COMPLETED' : 'BILL ESTIMATE')}
                        </h3>
-                       <p className="text-gray-400 text-[10px]">{new Date().toLocaleString()}</p>
+                       <p className="text-gray-400 text-[10px] md:text-sm">{new Date().toLocaleString()}</p>
                    </div>
 
                    <div className="text-center mb-5">
-                       <p className="text-gray-500 text-[10px] font-bold tracking-widest mb-1">TOTAL AMOUNT</p>
+                       <p className="text-gray-500 text-[10px] md:text-sm font-bold tracking-widest mb-1">TOTAL AMOUNT</p>
                        <h1 className="text-4xl font-bold text-slate-900">₹{lastBillDetails.total}</h1>
-                       <p className="text-gray-400 text-[10px] mt-1">Bill No: {lastBillDetails.invoiceNum}</p>
+                       <p className="text-gray-400 text-[10px] md:text-sm mt-1">Bill No: {lastBillDetails.invoiceNum}</p>
                    </div>
 
                    <div className="flex justify-center mb-2">
                        <button
                          onClick={() => setShowModalBreakdown(!showModalBreakdown)}
-                         className="bg-white border border-gray-200 rounded-full px-4 py-1.5 text-[10px] font-bold text-gray-500 tracking-wider shadow-sm hover:bg-gray-50 mb-1"
+                         className="bg-white border border-gray-200 rounded-full px-4 py-1.5 text-[10px] md:text-sm font-bold text-gray-500 tracking-wider shadow-sm hover:bg-gray-50 mb-1"
                        >
                            [ {showModalBreakdown ? 'HIDE BREAKDOWN' : 'TAP FOR BREAKDOWN'} ]
                        </button>
@@ -5909,7 +6017,7 @@ const AdminPOSOrders = () => {
                    {/* Breakdown List */}
                    {showModalBreakdown && (
                      <div className="mb-4 bg-white rounded-xl p-3 shadow-inner text-left max-h-32 overflow-y-auto">
-                        <div className="grid grid-cols-4 gap-2 text-[10px] font-bold text-gray-400 mb-2 border-b border-gray-100 pb-1">
+                        <div className="grid grid-cols-4 gap-2 text-[10px] md:text-sm font-bold text-gray-400 mb-2 border-b border-gray-100 pb-1">
                             <div className="col-span-2">Item</div>
                             <div className="text-right">Qty</div>
                             <div className="text-right">Price</div>
@@ -5918,7 +6026,7 @@ const AdminPOSOrders = () => {
                             {(lastBillDetails?.cart || cart).map((item, idx) => {
                                 const sp = getEffectivePrice(item);
                                 return (
-                                    <div key={idx} className="grid grid-cols-4 gap-2 text-[10px] text-gray-700">
+                                    <div key={idx} className="grid grid-cols-4 gap-2 text-[10px] md:text-sm text-gray-700">
                                         <div className="col-span-2 truncate font-medium">{item.productName}</div>
                                         <div className="text-right text-gray-500">{item.qty}</div>
                                         <div className="text-right font-bold">₹{sp * item.qty}</div>
@@ -5926,7 +6034,7 @@ const AdminPOSOrders = () => {
                                 )
                             })}
                         </div>
-                        <div className="border-t border-gray-100 mt-2 pt-2 flex justify-between text-xs font-bold text-slate-800">
+                        <div className="border-t border-gray-100 mt-2 pt-2 flex justify-between text-xs md:text-base font-bold text-slate-800">
                             <span>Total</span>
                             <span>₹{lastBillDetails.total}</span>
                         </div>
@@ -5934,7 +6042,7 @@ const AdminPOSOrders = () => {
                    )}
 
                    <div className="text-center mb-4">
-                        <button className="bg-[#f3f4f6] border border-gray-300 rounded-full px-4 py-1.5 text-[9px] font-bold text-gray-500 tracking-wider shadow-sm uppercase">
+                        <button className="bg-[#f3f4f6] border border-gray-300 rounded-full px-4 py-1.5 text-[9px] md:text-sm font-bold text-gray-500 tracking-wider shadow-sm uppercase">
                            [ STATUS: {lastBillDetails.isQuotation ? 'QUOTATION' : (lastBillDetails.isPaid ? 'PAID' : 'PENDING')} - {lastBillDetails.paymentMethod || paymentMethod} ]
                        </button>
                    </div>
@@ -5943,7 +6051,7 @@ const AdminPOSOrders = () => {
                 {/* Footer Actions */}
                 <div className="bg-[#f3f4f6] px-4 pb-5 space-y-2">
                     <div className="grid grid-cols-2 gap-2">
-                        <button onClick={downloadPDF} className="bg-white border border-black text-black font-bold py-2 text-[10px] tracking-widest hover:bg-gray-50 uppercase rounded">
+                        <button onClick={downloadPDF} className="bg-white border border-black text-black font-bold py-2 text-[10px] md:text-sm tracking-widest hover:bg-gray-50 uppercase rounded">
                             [ Share ]
                         </button>
                         <button
@@ -5954,7 +6062,7 @@ const AdminPOSOrders = () => {
                                     handlePrintBill();
                                 }
                             }}
-                            className="bg-black text-white font-bold py-2 text-[10px] tracking-widest hover:bg-gray-900 uppercase rounded"
+                            className="bg-black text-white font-bold py-2 text-[10px] md:text-sm tracking-widest hover:bg-gray-900 uppercase rounded"
                         >
                             [ Print ]
                         </button>
@@ -5967,7 +6075,7 @@ const AdminPOSOrders = () => {
                                     setShowSuccessModal(false);
                                     setShowPaymentModal(true);
                                 }}
-                                className="w-full bg-[var(--primary-color)] text-white font-bold py-3 text-[10px] tracking-widest hover:bg-[var(--primary-dark)] uppercase rounded shadow-lg animate-pulse"
+                                className="w-full bg-[var(--primary-color)] text-white font-bold py-3 text-[10px] md:text-sm tracking-widest hover:bg-[var(--primary-dark)] uppercase rounded shadow-lg animate-pulse"
                             >
                                 [ PROCEED TO PAY ]
                             </button>
@@ -5990,7 +6098,7 @@ const AdminPOSOrders = () => {
                                 }
                                 setShowSuccessModal(false);
                             }}
-                            className="bg-white border border-gray-200 text-gray-500 font-bold py-2 text-[10px] tracking-widest uppercase rounded"
+                            className="bg-white border border-gray-200 text-gray-500 font-bold py-2 text-[10px] md:text-sm tracking-widest uppercase rounded"
                          >
                             [ Edit ]
                         </button>
@@ -6004,7 +6112,7 @@ const AdminPOSOrders = () => {
                                     setEditingQuotationId(null);
                                 }
                             }}
-                            className="bg-white border border-gray-200 text-gray-500 font-bold py-2 text-[10px] tracking-widest uppercase rounded"
+                            className="bg-white border border-gray-200 text-gray-500 font-bold py-2 text-[10px] md:text-sm tracking-widest uppercase rounded"
                         >
                             [ Home ]
                         </button>
@@ -6029,7 +6137,7 @@ const AdminPOSOrders = () => {
                                 }
                                 setShowSuccessModal(false);
                             }}
-                            className="w-full bg-black text-white font-bold py-3 text-[10px] tracking-widest hover:bg-gray-900 uppercase mt-1 rounded"
+                            className="w-full bg-black text-white font-bold py-3 text-[10px] md:text-sm tracking-widest hover:bg-gray-900 uppercase mt-1 rounded"
                         >
                             [ + NEW BILL ]
                         </button>
@@ -6224,7 +6332,7 @@ const AdminPOSOrders = () => {
                            
                            {/* Warranty / Extra info if exists */}
                            {(item as any).warrantyType && (item as any).warrantyType !== 'None' && (
-                               <div className="col-span-12 text-[10px] text-gray-600 pl-4">
+                               <div className="col-span-12 text-[10px] md:text-sm text-gray-600 pl-4">
                                    {(item as any).warrantyType}: {(item as any).warrantyDuration}
                                </div>
                            )}
@@ -6282,7 +6390,7 @@ const AdminPOSOrders = () => {
                   <p className="text-sm font-bold">।। आपका विश्वास हमारी ताकत ।।</p>
                   
                   {((posBillSettings?.notes?.enabled && posBillSettings?.notes?.text) || (config?.invoiceSettings?.notes?.enabled && config?.invoiceSettings?.notes?.text)) && (
-                      <p className="text-[10px] whitespace-pre-wrap">{posBillSettings?.notes?.enabled ? posBillSettings?.notes?.text : config?.invoiceSettings?.notes?.text}</p>
+                      <p className="text-[10px] md:text-sm whitespace-pre-wrap">{posBillSettings?.notes?.enabled ? posBillSettings?.notes?.text : config?.invoiceSettings?.notes?.text}</p>
                   )}
 
                   {posBillSettings?.qrCode && (
@@ -6312,7 +6420,7 @@ const AdminPOSOrders = () => {
                 <form onSubmit={submitAddCustomer} className="p-6">
                     <div className="space-y-4">
                         <div className="relative">
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Search Customer</label>
+                            <label className="block text-xs md:text-base font-semibold text-gray-500 uppercase tracking-wider mb-1">Search Customer</label>
                             <input
                                 type="text"
                                 value={modalCustomerSearch}
@@ -6351,7 +6459,7 @@ const AdminPOSOrders = () => {
                                         className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors"
                                       >
                                         <div className="text-sm font-semibold text-gray-800">{c.name}</div>
-                                        <div className="text-xs text-gray-500 font-mono">{c.phone}{c.email ? ` • ${c.email}` : ''}</div>
+                                        <div className="text-xs md:text-base text-gray-500 font-mono">{c.phone}{c.email ? ` • ${c.email}` : ''}</div>
                                       </button>
                                     ))}
                                   </div>
@@ -6362,7 +6470,7 @@ const AdminPOSOrders = () => {
                             )}
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Full Name *</label>
+                            <label className="block text-xs md:text-base font-semibold text-gray-500 uppercase tracking-wider mb-1">Full Name *</label>
                             <input
                                 type="text"
                                 required
@@ -6378,7 +6486,7 @@ const AdminPOSOrders = () => {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone Number *</label>
+                                <label className="block text-xs md:text-base font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone Number *</label>
                                 <input
                                     type="tel"
                                     required
@@ -6397,7 +6505,7 @@ const AdminPOSOrders = () => {
                                  />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email (Optional)</label>
+                                <label className="block text-xs md:text-base font-semibold text-gray-500 uppercase tracking-wider mb-1">Email (Optional)</label>
                                 <input
                                      type="email"
                                      value={newCustomer.email}
@@ -6412,7 +6520,7 @@ const AdminPOSOrders = () => {
                          </div>
 
                         <div>
-                             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Address</label>
+                             <label className="block text-xs md:text-base font-semibold text-gray-500 uppercase tracking-wider mb-1">Address</label>
                              <textarea
                                  value={newCustomer.address}
                                  onChange={(e) => {
@@ -6426,7 +6534,7 @@ const AdminPOSOrders = () => {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">City</label>
+                                <label className="block text-xs md:text-base font-semibold text-gray-500 uppercase tracking-wider mb-1">City</label>
                                      <input
                                          type="text"
                                          value={newCustomer.city}
@@ -6439,7 +6547,7 @@ const AdminPOSOrders = () => {
                                      />
                                  </div>
                             <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Pincode</label>
+                                <label className="block text-xs md:text-base font-semibold text-gray-500 uppercase tracking-wider mb-1">Pincode</label>
                                      <input
                                          type="text"
                                          value={newCustomer.pincode}
@@ -6454,7 +6562,7 @@ const AdminPOSOrders = () => {
                              </div>
 
                         <div>
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">GST Number (Optional)</label>
+                            <label className="block text-xs md:text-base font-semibold text-gray-500 uppercase tracking-wider mb-1">GST Number (Optional)</label>
                             <input
                                 type="text"
                                 value={newCustomer.gst}
@@ -6597,7 +6705,7 @@ const AdminPOSOrders = () => {
                             <h4 className="font-semibold text-gray-800 text-sm line-clamp-2 mb-1">
                               {product.productName}
                             </h4>
-                            <div className="flex items-center gap-2 text-xs mb-2">
+                            <div className="flex items-center gap-2 text-xs md:text-base mb-2">
                               <span className="text-gray-500">
                                 MRP: <span className="line-through">₹{product.compareAtPrice || 0}</span>
                               </span>
@@ -6607,7 +6715,7 @@ const AdminPOSOrders = () => {
                                   : `SP: ₹${product.price}`}
                               </span>
                             </div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs md:text-base text-gray-500">
                               Quantity: {product.stock} Piece
                             </div>
                           </div>
