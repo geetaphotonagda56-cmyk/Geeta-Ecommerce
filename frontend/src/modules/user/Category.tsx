@@ -562,7 +562,7 @@ export default function CategoryPage() {
             {/* Products Grid */}
             {loading ? (
               <div className="px-3 md:px-6 lg:px-8 py-4 md:py-6">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
                   {Array.from({ length: 10 }).map((_, i) => (
                     <div
                       key={i}
@@ -578,7 +578,7 @@ export default function CategoryPage() {
               </div>
             ) : categoryProducts.length > 0 ? (
               <div className="px-3 md:px-6 lg:px-8 py-4 md:py-6">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
                   {categoryProducts.map((product) => (
                     <ProductCard
                       key={product.id}

@@ -403,11 +403,21 @@ export default function ProductCard({
                       e.stopPropagation();
                       handleAdd(e);
                     }}
-                    className={`w-full font-bold text-[11px] h-8 px-4 flex items-center justify-center gap-1.5 uppercase tracking-wider transition-all duration-300 border shadow-sm ${
+                    className={`w-full font-bold text-[11px] h-8 px-4 flex items-center justify-center gap-1.5 uppercase tracking-wider transition-all duration-300 border-0 ${
                       product.isAvailable === false
-                      ? 'bg-neutral-100 text-neutral-400 border-neutral-200 cursor-not-allowed'
-                      : 'bg-neutral-200 text-neutral-900 border-neutral-300 hover:bg-neutral-300 hover:text-neutral-900 hover:border-neutral-400 hover:shadow-md active:scale-95'
+                      ? 'bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed shadow-none'
+                      : 'text-white shadow-md hover:shadow-lg hover:scale-[1.04] active:scale-95 animate-gradient-flow'
                     }`}
+                    style={
+                      product.isAvailable === false
+                        ? undefined
+                        : {
+                            backgroundImage:
+                              'linear-gradient(135deg, var(--customer-primary), var(--customer-accent), var(--customer-secondary))',
+                            boxShadow:
+                              '0 4px 10px -2px var(--customer-primary-alpha-40, rgba(0,0,0,0.25)), inset 0 1px 0 rgba(255,255,255,0.25)',
+                          }
+                    }
                   >
                     {product.isAvailable === false ? (
                        'Out of Range'
@@ -511,7 +521,7 @@ export default function ProductCard({
                     <div className="flex justify-between items-center text-[10px] leading-none py-0.5">
                        <span className="text-neutral-500 font-medium">1 unit</span>
                        <div className="flex items-center gap-1">
-                         <span className="font-semibold text-neutral-900">₹{displayPrice}</span>
+                         <span className="text-xs font-bold text-red-600">₹{displayPrice}</span>
                        </div>
                     </div>
                     {/* Additional Tiers */}
@@ -519,7 +529,7 @@ export default function ProductCard({
                         <div key={idx} className="flex justify-between items-center text-[10px] leading-none py-0.5">
                            <span className="text-neutral-700 font-bold">{tier.minQty}+ units</span>
                            <div className="flex items-center gap-1">
-                             <span className="font-bold text-neutral-900">₹{tier.price}</span>
+                             <span className="text-xs font-bold text-red-600">₹{tier.price}</span>
                               <span className="text-neutral-600 font-bold bg-neutral-100 px-1">
                                {Math.round(((mrp - tier.price) / mrp) * 100)}% OFF
                              </span>
@@ -538,7 +548,7 @@ export default function ProductCard({
               {/* 5. Price with discount */}
               <div className="mt-auto pt-0.5">
                 <div className="flex items-baseline gap-1 flex-wrap">
-                  <span className="text-sm md:text-base font-bold text-neutral-900 leading-tight">
+                  <span className="text-base md:text-lg font-bold text-red-600 leading-tight">
                     ₹{currentUnitPrice.toLocaleString('en-IN')}
                   </span>
                   {mrp && mrp > displayPrice && (
@@ -579,7 +589,7 @@ export default function ProductCard({
                       <div className="flex justify-between items-center bg-neutral-100 px-2 py-1 text-[10px]">
                           <span className="font-medium text-neutral-600">Buy 1</span>
                           <div className="flex items-center gap-1">
-                              <span className="font-bold text-neutral-900">₹{displayPrice}</span>
+                              <span className="text-xs font-bold text-red-600">₹{displayPrice}</span>
                           </div>
                       </div>
                       {/* Additional Tiers */}
@@ -589,7 +599,7 @@ export default function ProductCard({
                                <div key={idx} className="flex justify-between items-center bg-neutral-100 px-2 py-1 text-[10px] border border-neutral-200">
                                   <span className="font-bold text-neutral-700">Buy {tier.minQty}+</span>
                                   <div className="flex items-center gap-1">
-                                      <span className="font-bold text-neutral-900">₹{tier.price}</span>
+                                      <span className="text-xs font-bold text-red-600">₹{tier.price}</span>
                                       {tierDiscount > 0 && <span className="text-[9px] text-neutral-600 font-bold">({tierDiscount}% OFF)</span>}
                                   </div>
                               </div>
@@ -615,7 +625,7 @@ export default function ProductCard({
 
               <div className="mt-auto mb-2">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-base font-bold text-neutral-900">
+                  <span className="text-lg font-bold text-red-600">
                     ₹{displayPrice}
                   </span>
                   {mrp && mrp > displayPrice && (
@@ -641,11 +651,21 @@ export default function ProductCard({
                   size="sm"
                   disabled={product.isAvailable === false}
                   onClick={handleAdd}
-                  className={`w-full border h-9 text-[11px] font-bold uppercase tracking-wider transition-all duration-300 shadow-sm ${
+                  className={`w-full border-0 h-9 text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${
                     product.isAvailable === false
-                    ? 'border-neutral-200 text-neutral-400 bg-neutral-50 cursor-not-allowed'
-                    : 'bg-neutral-200 text-neutral-900 border-neutral-300 hover:bg-neutral-300 hover:text-neutral-900 hover:border-neutral-400 hover:shadow-md active:scale-95'
+                    ? 'border border-neutral-200 text-neutral-400 bg-neutral-50 cursor-not-allowed shadow-none'
+                    : 'text-white shadow-md hover:shadow-lg hover:scale-[1.03] active:scale-95 animate-gradient-flow'
                   }`}
+                  style={
+                    product.isAvailable === false
+                      ? undefined
+                      : {
+                          backgroundImage:
+                            'linear-gradient(135deg, var(--customer-primary), var(--customer-accent), var(--customer-secondary))',
+                          boxShadow:
+                            '0 4px 10px -2px var(--customer-primary-alpha-40, rgba(0,0,0,0.25)), inset 0 1px 0 rgba(255,255,255,0.25)',
+                        }
+                  }
                 >
                   {product.isAvailable === false ? (
                     'Out of Range'

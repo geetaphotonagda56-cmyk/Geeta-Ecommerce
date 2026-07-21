@@ -104,11 +104,16 @@ export default function Search() {
   const activeQuery = selectedQuery || debouncedQuery;
   const suggestionBoxRef = useRef<HTMLDivElement>(null);
   const inputValueRef = useRef(inputValue);
+  const inputRef = useRef<HTMLInputElement>(null);
   const limit = 20;
 
   useEffect(() => {
     inputValueRef.current = inputValue;
   }, [inputValue]);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const query = searchParams.get("q") || "";
@@ -400,6 +405,7 @@ export default function Search() {
             <div className="flex h-12 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 shadow-sm">
               <SearchIcon className="h-5 w-5 text-neutral-500" aria-hidden="true" />
               <input
+                ref={inputRef}
                 value={inputValue}
                 onChange={(event) => {
                   setInputValue(event.target.value);
@@ -412,6 +418,7 @@ export default function Search() {
                 placeholder="Search for atta, dal, coke and more"
                 className="h-full min-w-0 flex-1 bg-transparent text-sm font-medium text-neutral-900 outline-none placeholder:text-neutral-400 md:text-base"
                 aria-label="Search products"
+                autoFocus
               />
               {suggestionsLoading && <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />}
               {inputValue && (

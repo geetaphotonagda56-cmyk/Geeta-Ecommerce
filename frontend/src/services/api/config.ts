@@ -37,11 +37,16 @@ const buildApiBaseCandidates = (): string[] => {
       ? withApiVersionPath(window.location.origin)
       : "";
 
+  // The site's own origin (e.g. www.geeta.today) never actually serves the
+  // API - it's a static SPA host whose catch-all rewrite returns index.html
+  // for any path, including /api/*. That's a 200 response, not a network
+  // error, so the axios failover below never catches it. Keep the real API
+  // host ahead of the origin so we don't silently hit the SPA fallback.
   return unique([
     fromEnvBase,
     fromEnvRoot,
-    originCandidate,
     "https://api.geeta.today/api/v1",
+    originCandidate,
     "https://www.geeta.today/api/v1",
     "https://geeta.today/api/v1",
     "/api/v1",

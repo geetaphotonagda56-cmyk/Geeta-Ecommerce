@@ -65,26 +65,21 @@ export default function CategoryTileSection({
     console.log("Clicked tile", tile.id);
   };
 
-  // Dynamic grid classes based on column count
+  // Dynamic grid classes based on column count, capped at 3 columns
+  const cappedColumns = Math.min(columns, 3);
   const getGridCols = () => {
-    switch (columns) {
+    switch (cappedColumns) {
       case 2:
         return "grid-cols-2";
       case 3:
         return "grid-cols-3";
-      case 4:
-        return "grid-cols-4";
-      case 6:
-        return "grid-cols-6";
-      case 8:
-        return "grid-cols-8";
       default:
-        return "grid-cols-4";
+        return "grid-cols-3";
     }
   };
 
   const gridCols = getGridCols();
-  const gapClass = columns >= 6 ? "gap-1.5 md:gap-2.5" : "gap-2.5 md:gap-4";
+  const gapClass = "gap-2.5 md:gap-4";
 
   return (
     <div className="mb-6 md:mb-8 mt-0 overflow-visible">

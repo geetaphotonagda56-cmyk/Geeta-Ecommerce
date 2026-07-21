@@ -158,6 +158,21 @@ video {
   animation: shimmer 2s infinite;
 }
 
+@keyframes gradient-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient-flow {
+  background-size: 300% auto;
+  animation: gradient-flow 4s ease-in-out infinite;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

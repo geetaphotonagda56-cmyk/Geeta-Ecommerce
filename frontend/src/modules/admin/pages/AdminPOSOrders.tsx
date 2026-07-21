@@ -194,43 +194,18 @@ const AdminPOSOrders = () => {
   }, []);
 
   // Multi-Bill State
-  const [bills, setBills] = useState<Bill[]>(() => {
-    try {
-      const savedBills = localStorage.getItem('admin_pos_bills');
-      if (savedBills) {
-        const parsed = JSON.parse(savedBills);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const normalized = parsed.map((bill: Bill) => ({
-            ...bill,
-            cart: Array.isArray(bill.cart)
-              ? bill.cart.map((item) => normalizePosCartItem(item as CartItem))
-              : [],
-          }));
-          if (normalized.length === 1) {
-             // Normalize single remaining bill's name to "Bill 1"
-             normalized[0] = { ...normalized[0], name: 'Bill 1' };
-          }
-          return normalized;
-        }
-      }
-    } catch (e) {
-      console.error("Failed to load bills", e);
-    }
-    return [{
-      id: '1',
-      name: 'Bill 1',
-      cart: [],
-      selectedCustomer: null,
-      customerSearch: '',
-      paymentMethod: 'Cash',
-      orderType: 'Retail',
-      createdAt: Date.now()
-    }];
-  });
+  const [bills, setBills] = useState<Bill[]>([{
+    id: '1',
+    name: 'Bill 1',
+    cart: [],
+    selectedCustomer: null,
+    customerSearch: '',
+    paymentMethod: 'Cash',
+    orderType: 'Retail',
+    createdAt: Date.now()
+  }]);
 
-  const [activeBillId, setActiveBillId] = useState<string>(() => {
-    return localStorage.getItem('admin_pos_active_bill') || '1';
-  });
+  const [activeBillId, setActiveBillId] = useState<string>('1');
 
   // Ensure we find the correct bill, or default safely (though createNewBill sets ID correctly)
   const activeBill = bills.find(b => b.id === activeBillId) || {
@@ -248,7 +223,6 @@ const AdminPOSOrders = () => {
   const updateActiveBill = (updates: Partial<Bill>) => {
     setBills(prev => {
       const newBills = prev.map(b => b.id === activeBillId ? { ...b, ...updates } : b);
-      localStorage.setItem('admin_pos_bills', JSON.stringify(newBills));
       return newBills;
     });
   };
@@ -297,13 +271,10 @@ const AdminPOSOrders = () => {
           updated = [...prev, { ...newBill }];
       }
 
-      localStorage.setItem('admin_pos_bills', JSON.stringify(updated));
       return updated;
     });
 
-    // Slight delay to ensure state propagation? No, React batches updates.
     setActiveBillId(newId);
-    localStorage.setItem('admin_pos_active_bill', newId);
   };
 
   const closeBill = (billId: string, e: React.MouseEvent) => {
@@ -326,13 +297,11 @@ const AdminPOSOrders = () => {
       if (updated.length === 1) {
         updated = [{ ...updated[0], name: 'Bill 1' }];
       }
-      localStorage.setItem('admin_pos_bills', JSON.stringify(updated));
 
       // If closing active bill, switch to the last available one
       if (billId === activeBillId) {
         const nextBill = updated[updated.length - 1];
         setActiveBillId(nextBill.id);
-        localStorage.setItem('admin_pos_active_bill', nextBill.id);
       }
       return updated;
     });
@@ -360,7 +329,6 @@ const AdminPOSOrders = () => {
 
         const updated = [...prev];
         updated[index] = { ...updated[index], cart: newCart };
-        localStorage.setItem('admin_pos_bills', JSON.stringify(updated));
         return updated;
     });
   };
@@ -384,10 +352,6 @@ const AdminPOSOrders = () => {
 
   // Derived state for new controls
   const orderType = activeBill.orderType || 'Retail';
-
-  useEffect(() => {
-    localStorage.setItem('admin_pos_active_bill', activeBillId);
-  }, [activeBillId]);
 
   // Sync activeBillId if it refers to a non-existent bill (e.g. stale state)
   useEffect(() => {
@@ -427,7 +391,6 @@ const AdminPOSOrders = () => {
       if (unchanged) return prev;
       const updated = [...prev];
       updated[index] = { ...bill, cart: normalizedCart };
-      localStorage.setItem('admin_pos_bills', JSON.stringify(updated));
       return updated;
     });
   }, [activeBillId]);
@@ -454,7 +417,6 @@ const AdminPOSOrders = () => {
             const updated = prev.map((b) =>
               b.id === billId ? { ...b, cart: normalizedCart } : b
             );
-            localStorage.setItem('admin_pos_bills', JSON.stringify(updated));
             return updated;
           });
         }
@@ -576,7 +538,6 @@ const AdminPOSOrders = () => {
              // Prevent duplicate tabs for same order
              if (prev.some(b => b.id === billId)) return prev;
              const updated = [...prev, newBill];
-             localStorage.setItem('admin_pos_bills', JSON.stringify(updated));
              return updated;
           });
           setActiveBillId(billId);
@@ -621,6 +582,8 @@ const AdminPOSOrders = () => {
 
   // New UI States
   const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
+  const [paymentDropdownPos, setPaymentDropdownPos] = useState<{ top: number; left: number } | null>(null);
+  const mobilePaymentBtnRef = useRef<HTMLButtonElement>(null);
   const [showProfit, setShowProfit] = useState(false);
 
   // Customer Search State
@@ -3793,44 +3756,112 @@ const AdminPOSOrders = () => {
              </div>
           </div>
 
-        <div className="flex items-center gap-1.5 md:hidden flex-nowrap overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-2 md:hidden flex-nowrap overflow-x-auto no-scrollbar py-0.5">
+            {/* Payment Method Dropdown */}
+            <div className="relative shrink-0 w-[78px] h-7">
+                <button
+                    ref={mobilePaymentBtnRef}
+                    onClick={() => {
+                        if (!showPaymentDropdown && mobilePaymentBtnRef.current) {
+                            const rect = mobilePaymentBtnRef.current.getBoundingClientRect();
+                            setPaymentDropdownPos({ top: rect.bottom + 6, left: rect.left });
+                        }
+                        setShowPaymentDropdown(!showPaymentDropdown);
+                    }}
+                    className="w-full h-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2 text-[11px] text-gray-700 shadow-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]/30 transition-colors"
+                >
+                    <span className="font-semibold truncate text-[10.5px]">{paymentMethod || 'Cash'}</span>
+                    <svg className={`w-3 h-3 text-gray-400 transition-transform flex-shrink-0 ${showPaymentDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+
+                {showPaymentDropdown && paymentDropdownPos && createPortal(
+                    <>
+                        <div className="fixed inset-0 z-[59]" onClick={() => setShowPaymentDropdown(false)}></div>
+                        <div
+                            className="fixed bg-white border border-gray-200 rounded-xl shadow-xl z-[60] overflow-hidden w-32"
+                            style={{ top: paymentDropdownPos.top, left: paymentDropdownPos.left }}
+                        >
+                            {['Cash', 'PhonePe', 'Credit'].map((method) => (
+                                <div
+                                    key={method}
+                                    onClick={() => { setPaymentMethod(method); setShowPaymentDropdown(false); }}
+                                    className="flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 text-xs"
+                                >
+                                    <span className="text-xs font-medium text-gray-700">{method === 'Credit' ? 'Credit (Udhaar)' : method}</span>
+                                    <span className="text-gray-300">→</span>
+                                </div>
+                            ))}
+                        </div>
+                    </>,
+                    document.body
+                )}
+            </div>
+
+            {/* Retail / Wholesale Toggle */}
+            <div className="bg-gray-100 p-0.5 rounded-lg flex relative shrink-0 w-[132px] h-7 shadow-inner">
+                 {/* Sliding Background */}
+                 <div
+                     className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] bg-[var(--primary-color)] rounded-md transition-all duration-300 ease-in-out shadow-sm ${orderType === 'Wholesale' ? 'left-[calc(50%+1px)]' : 'left-0.5'}`}
+                 ></div>
+
+                 <button
+                     onClick={() => setOrderType('Retail')}
+                     className={`flex-1 relative z-10 text-center whitespace-nowrap px-1.5 text-[10px] font-bold transition-colors duration-300 ${orderType === 'Retail' ? 'text-white' : 'text-gray-500 hover:text-gray-700'}`}
+                 >
+                     Retail
+                 </button>
+                 <button
+                     onClick={() => setOrderType('Wholesale')}
+                     className={`flex-1 relative z-10 text-center whitespace-nowrap px-1.5 text-[10px] font-bold transition-colors duration-300 ${orderType === 'Wholesale' ? 'text-white' : 'text-gray-500 hover:text-gray-700'}`}
+                 >
+                     Wholesale
+                 </button>
+            </div>
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-gray-200 shrink-0"></div>
+
             <button
               onClick={() => setShowAddCustomerModal(true)}
-              className="px-2.5 py-1.5 bg-[var(--primary-color)] text-white rounded-lg text-[11px] font-bold hover:bg-[var(--primary-dark)] transition-colors flex items-center gap-1 border border-[var(--primary-color)] shrink-0"
+              className="h-7 px-2.5 bg-[var(--primary-color)] text-white rounded-lg text-[10.5px] font-bold hover:bg-[var(--primary-dark)] transition-all flex items-center gap-1 shadow-sm active:scale-95 shrink-0"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
               </svg>
-              Add Cust.
+              Add
             </button>
 
             <button
               onClick={() => navigate('/admin/pos/customers')}
-              className="px-2.5 py-1.5 bg-[var(--primary-color)] text-white border border-[var(--primary-color)] rounded-lg text-[11px] font-bold hover:bg-[var(--primary-dark)] transition-colors flex items-center gap-1 shrink-0"
+              className="h-7 px-2.5 bg-[var(--primary-color)] text-white rounded-lg text-[10.5px] font-bold hover:bg-[var(--primary-dark)] transition-all flex items-center gap-1 shadow-sm active:scale-95 shrink-0"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
               </svg>
               Credit
             </button>
-            <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200 shrink-0">
-                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Profit</span>
-                <button
-                  onClick={() => setShowProfit(!showProfit)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${showProfit ? 'bg-[var(--primary-color)]' : 'bg-gray-300'}`}
-                >
-                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm ${showProfit ? 'translate-x-4.5' : 'translate-x-1'}`} />
-                </button>
-            </div>
             <button
               onClick={() => setShowPurchaseSheet(true)}
-              className="px-2.5 py-1.5 bg-white border border-[var(--primary-color)]/40 text-[var(--primary-color)] rounded-lg text-[11px] font-bold hover:bg-[var(--primary-alpha-10)] transition-colors flex items-center gap-1 shrink-0"
+              className="h-7 px-2.5 bg-white border border-[var(--primary-color)]/40 text-[var(--primary-color)] rounded-lg text-[10.5px] font-bold hover:bg-[var(--primary-alpha-10)] transition-all flex items-center gap-1 shadow-sm active:scale-95 shrink-0"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13l-1 5h12M9 21a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z" />
               </svg>
-              Purchase
+              Buy
             </button>
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-gray-200 shrink-0"></div>
+
+            <div className="flex items-center gap-1.5 bg-gray-50 h-7 px-2 rounded-lg border border-gray-200 shrink-0">
+                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">Profit</span>
+                <button
+                  onClick={() => setShowProfit(!showProfit)}
+                  className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors focus:outline-none ${showProfit ? 'bg-[var(--primary-color)]' : 'bg-gray-300'}`}
+                >
+                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform shadow-sm ${showProfit ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                </button>
+            </div>
         </div>
       </div>
 
@@ -3839,7 +3870,7 @@ const AdminPOSOrders = () => {
         <div className="bg-white flex flex-col flex-1 h-full min-h-0 w-full relative transition-all duration-300 md:rounded-2xl md:shadow-xl md:border md:border-gray-200 md:h-[90vh] md:overflow-hidden">
 
           {/* Top Header Section */}
-          <div className="flex-none px-3 py-1.5 md:px-6 md:py-2 border-b border-gray-100 md:border-[#0d055a] flex flex-col md:flex-row justify-between items-center bg-white md:rounded-t-2xl gap-2 md:gap-4">
+          <div className="hidden md:flex flex-none px-3 py-1.5 md:px-6 md:py-2 border-b border-gray-100 md:border-[#0d055a] flex-col md:flex-row justify-between items-center bg-white md:rounded-t-2xl gap-2 md:gap-4">
              <div className="flex items-center gap-2.5 md:gap-4">
                  <h2 className="hidden md:block text-base md:text-lg font-bold text-gray-800 tracking-tight">Billing & POS</h2>
                 <div className="hidden md:flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200">
@@ -3997,19 +4028,19 @@ const AdminPOSOrders = () => {
 
           {/* Bill Tabs */}
 
-            <div className="flex-none flex items-center gap-2 px-2 pt-2 overflow-x-auto border-b border-gray-200 bg-gray-50">
+            <div className="flex-none flex items-center gap-1.5 px-2 pt-1.5 overflow-x-auto border-b border-gray-200 bg-gray-50">
               {bills.map(bill => (
                 <div
                   key={bill.id}
                   onClick={() => setActiveBillId(bill.id)}
                   className={`
-                    flex items-center gap-2 px-3 py-2 rounded-t-lg cursor-pointer border-t border-l border-r transition-all min-w-[100px] justify-between select-none text-xs font-medium
+                    flex items-center gap-1.5 px-2 py-1 rounded-t-lg cursor-pointer border-t border-l border-r transition-all min-w-[72px] justify-between select-none text-[11px] font-medium
                     ${activeBillId === bill.id
                       ? 'bg-[#0d055a] border-[#0d055a] border-b-transparent text-white relative -mb-[1px] z-10 shadow-[0_-2px_4px_rgba(0,0,0,0.02)]'
                       : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200/50'}
                   `}
                 >
-                  <span className="truncate max-w-[80px]">{bill.name}</span>
+                  <span className="truncate max-w-[60px]">{bill.name}</span>
                   <button
                     onClick={(e) => closeBill(bill.id, e)}
                     className={`rounded-full p-0.5 transition-colors ${
@@ -4019,82 +4050,30 @@ const AdminPOSOrders = () => {
                     }`}
                     title="Close Bill"
                   >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                   </button>
                 </div>
               ))}
 
               <button
                 onClick={() => createNewBill()}
-                className="flex items-center justify-center w-6 h-6 rounded-full bg-[#0d055a]/10 text-[#0d055a] hover:bg-[#0d055a]/20 transition-colors ml-1 flex-shrink-0"
+                className="flex items-center justify-center w-5 h-5 rounded-full bg-[#0d055a]/10 text-[#0d055a] hover:bg-[#0d055a]/20 transition-colors ml-1 flex-shrink-0"
                 title="New Bill"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
               </button>
             </div>
 
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden md:overflow-visible md:h-auto md:min-h-0">
 
-              {/* Payment Method & Order Type Controls */}
-              <div className="flex-none px-4 pt-2 pb-1 md:hidden">
-                   {/* Payment Method (Mobile Row) */}
-                   <div className="flex items-center gap-2 mb-2">
-                       <div className="relative flex-1">
-                           <button
-                               onClick={() => setShowPaymentDropdown(!showPaymentDropdown)}
-                               className="w-full flex items-center justify-between bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)]"
-                           >
-                               <span className="font-medium truncate">{paymentMethod || 'Cash'}</span>
-                               <svg className={`w-4 h-4 text-gray-400 transition-transform ${showPaymentDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                           </button>
-
-                           {showPaymentDropdown && (
-                               <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
-                                   {['Cash', 'PhonePe', 'Credit'].map((method) => (
-                                       <div
-                                           key={method}
-                                           onClick={() => setPaymentMethod(method)}
-                                           className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0"
-                                       >
-                                           <span className="text-sm font-medium text-gray-700">{method === 'Credit' ? 'Credit (Udhaar)' : method}</span>
-                                           <span className="text-gray-300">→</span>
-                                       </div>
-                                   ))}
-                               </div>
-                           )}
-                       </div>
-                   </div>
-
-                   {/* Retail / Wholesale Toggle */}
-                   <div className="bg-gray-100 p-1 rounded-lg flex relative">
-                        {/* Sliding Background */}
-                        <div
-                            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-[var(--primary-color)] rounded-md transition-all duration-300 ease-in-out shadow-sm ${orderType === 'Wholesale' ? 'left-[calc(50%+2px)]' : 'left-1'}`}
-                        ></div>
-
-                        <button
-                            onClick={() => setOrderType('Retail')}
-                            className={`flex-1 relative z-10 text-center text-xs font-medium py-1 transition-colors duration-300 ${orderType === 'Retail' ? 'text-white' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Retail
-                        </button>
-                        <button
-                            onClick={() => setOrderType('Wholesale')}
-                            className={`flex-1 relative z-10 text-center text-xs font-medium py-1 transition-colors duration-300 ${orderType === 'Wholesale' ? 'text-white' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Wholesale
-                        </button>
-                   </div>
-              </div>
-
               {/* Customer Selection */}
-              <div className="flex-none px-4 pb-2 border-b border-gray-100 md:hidden">
-                <div className="flex gap-2">
+              <div className="flex-none px-3 py-1 border-b border-gray-100 md:hidden">
+                <div className="flex gap-1">
                   <div className="relative flex-1">
                       <input
                         type="text"
                         placeholder="Search Customer / Mobile..."
-                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)] bg-gray-50 focus:bg-white transition-colors"
+                        className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)] bg-gray-50 focus:bg-white transition-colors"
                         value={customerSearch}
                         onChange={(e) => {
                             setCustomerSearch(e.target.value);
@@ -4139,18 +4118,18 @@ const AdminPOSOrders = () => {
                   </div>
                   <button
                     onClick={() => setShowAddCustomerModal(true)}
-                    className="bg-[var(--primary-color)] text-white px-2.5 rounded hover:bg-[var(--primary-dark)] transition-colors flex items-center justify-center shadow-sm active:scale-95 transform transition-transform"
+                    className="bg-[var(--primary-color)] text-white px-2 py-1 rounded hover:bg-[var(--primary-dark)] transition-colors flex items-center justify-center shadow-sm active:scale-95 transform transition-transform"
                     title="Add New Customer"
                   >
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
                   </button>
 
                   <button
                     onClick={() => openBarcodeScanner(() => setShowScanner(true))}
-                    className="bg-[var(--primary-color)] text-white px-2.5 rounded hover:bg-[var(--primary-dark)] transition-colors flex items-center justify-center shadow-sm active:scale-95 transform transition-transform"
+                    className="bg-[var(--primary-color)] text-white px-2 py-1 rounded hover:bg-[var(--primary-dark)] transition-colors flex items-center justify-center shadow-sm active:scale-95 transform transition-transform"
                     title="Scan Product"
                   >
-                    <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 5v2a2 2 0 002 2h2m10 0h2a2 2 0 002-2V5M3 19v-2a2 2 0 012-2h2m10 0h2a2 2 0 012 2v2m-6-13h-4m4 4h-4m4 4h-4m4 4h-4"/>
                     </svg>
                   </button>
@@ -4162,25 +4141,25 @@ const AdminPOSOrders = () => {
                   {/* Cart Items Table */}
                   <div className="flex-1 min-h-0 overflow-hidden w-full flex flex-col">
                   <div className="flex-1 min-h-0 overflow-auto pb-40 md:pb-0 custom-pos-scroll">
-                      <table className="w-full border-collapse mb-2 table-fixed">
+                      <table className="w-full border-collapse mb-2" style={{tableLayout: 'auto'}}>
                           <colgroup>
-                              <col style={{width: '8%'}} />
-                              <col style={{width: '30%'}} />
-                              <col style={{width: '15%'}} />
-                              <col style={{width: '12%'}} />
-                              <col style={{width: '15%'}} />
-                              <col style={{width: '15%'}} />
-                              <col style={{width: '5%'}} />
+                              <col style={{width: '5%', minWidth: '35px'}} />
+                              <col style={{width: '32%', minWidth: '100px'}} />
+                              <col style={{width: '10%', minWidth: '55px'}} />
+                              <col style={{width: '21%', minWidth: '95px'}} />
+                              <col style={{width: '10%', minWidth: '55px'}} />
+                              <col style={{width: '14%', minWidth: '60px'}} />
+                              <col style={{width: '8%', minWidth: '45px'}} />
                           </colgroup>
                           <thead>
-                              <tr className="bg-[var(--primary-color)] text-white sticky top-0 z-10">
-                                  <th className="border border-gray-400 px-2 py-3 font-bold">Sr</th>
-                                  <th className="border border-gray-400 px-2 py-3 font-bold">Item Name</th>
-                                  <th className="border border-gray-400 px-2 py-3 font-bold">MRP</th>
-                                  <th className="border border-gray-400 px-2 py-3 font-bold">Qty</th>
-                                  <th className="border border-gray-400 px-2 py-3 font-bold">Rate</th>
-                                  <th className="border border-gray-400 px-2 py-3 font-bold">Total</th>
-                                  <th className="border border-gray-400 px-2 py-3 font-bold">Delete</th>
+                              <tr className="bg-[var(--primary-color)] text-white sticky top-0 z-10 h-4">
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">Edit</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">Item Name</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">MRP</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">Qty</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">Rate</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">Total</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs">Delete</th>
                               </tr>
                           </thead>
                           <tbody>
@@ -4192,13 +4171,25 @@ const AdminPOSOrders = () => {
                                   const lineId = item ? getCartLineId(item) : `temp_${index}`;
 
                                   return (
-                                      <tr key={`row_${index}`} className="border-b border-gray-300">
-                                          <td className="border border-gray-300 px-3 py-4 text-center text-sm font-bold bg-gray-100">{item ? index + 1 : ''}</td>
+                                      <tr key={`row_${index}`} className="border-b border-gray-300 align-top">
+                                          <td className="border border-gray-300 px-0.5 py-0.5 text-center bg-gray-100 align-top">
+                                              {item && (
+                                                  <button
+                                                      type="button"
+                                                      onClick={() => openEditModal(item)}
+                                                      className="w-6 h-6 flex items-center justify-center rounded text-[var(--primary-color)] hover:bg-[var(--primary-alpha-10)] transition-colors mx-auto"
+                                                      title="Edit"
+                                                  >
+                                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                      </svg>
+                                                  </button>
+                                              )}
+                                          </td>
 
-                                          <td className="border border-gray-300 px-0 py-0">
-                                              <input
+                                          <td className="border border-gray-300 px-0 py-0 align-top">
+                                              <textarea
                                                   ref={(el) => { cartTableCellRefs.current[`${index}--1`] = el; }}
-                                                  type="text"
                                                   value={item?.productName || ''}
                                                   onChange={(e) => {
                                                       if (!item) {
@@ -4222,16 +4213,16 @@ const AdminPOSOrders = () => {
                                                       }
                                                   }}
                                                   onKeyDown={(e) => handleCartCellKeyDown(e, index, -1, Math.max(8, cart.length))}
-                                                  className="w-full border-0 bg-white text-sm outline-none p-3 focus:bg-yellow-50 cursor-text"
+                                                  className="w-full border-0 bg-white text-xs font-bold outline-none px-0.5 py-0.5 focus:bg-yellow-50 cursor-text resize-none overflow-hidden" style={{minHeight: '20px', height: 'auto', lineHeight: '1.3'}}
                                                   placeholder="Enter item name"
                                               />
                                           </td>
 
-                                          <td className="border border-gray-300 px-0 py-0">
+                                          <td className="border border-gray-300 px-0 py-0 align-top">
                                               <input
                                                   ref={(el) => { cartTableCellRefs.current[`${index}-0`] = el; }}
                                                   type="text"
-                                                  inputMode="numeric"
+                                                  inputMode="decimal"
                                                   value={mrp || ''}
                                                   onChange={(e) => {
                                                       const val = e.target.value.replace(/[^0-9.]/g, '');
@@ -4256,47 +4247,67 @@ const AdminPOSOrders = () => {
                                                       }
                                                   }}
                                                   onKeyDown={(e) => handleCartCellKeyDown(e, index, 0, Math.max(8, cart.length))}
-                                                  className="w-full border-0 bg-white text-right text-sm outline-none p-3 focus:bg-yellow-50 cursor-text"
+                                                  className="w-full border-0 bg-white text-right text-xs outline-none px-0.5 py-0.5 focus:bg-yellow-50 cursor-text"
                                               />
                                           </td>
 
-                                          <td className="border border-gray-300 px-0 py-0">
-                                              <input
-                                                  ref={(el) => { cartTableCellRefs.current[`${index}-1`] = el; }}
-                                                  type="text"
-                                                  inputMode="numeric"
-                                                  value={qty || ''}
-                                                  onChange={(e) => {
-                                                      const val = e.target.value.replace(/[^0-9]/g, '');
-                                                      const nextQty = Number(val);
-                                                      if (!item) {
-                                                          const newItem: CartItem = {
-                                                              _id: `temp_${index}_${Date.now()}`,
-                                                              productId: `temp_${index}_${Date.now()}`,
-                                                              productName: '',
-                                                              price: 0,
-                                                              qty: nextQty || 1,
-                                                              compareAtPrice: 0,
-                                                              customPrice: undefined,
-                                                              mainImage: '',
-                                                              purchasePrice: 0,
-                                                              wholesalePrice: 0
-                                                          };
-                                                          const newCart = [...cart];
-                                                          newCart[index] = newItem;
-                                                          setCart(newCart);
-                                                      } else {
-                                                          if (nextQty > 0 || val === '') {
-                                                              setQuantity(lineId, nextQty || 1);
+                                          <td className="border border-gray-300 px-0.5 py-0.5 align-top">
+                                              <div className="flex items-center justify-center gap-0.5">
+                                                  <button
+                                                      type="button"
+                                                      onClick={() => item && updateQuantity(lineId, -1)}
+                                                      disabled={!item}
+                                                      tabIndex={-1}
+                                                      className="w-6 h-6 shrink-0 flex items-center justify-center rounded bg-gray-200 text-gray-700 text-sm font-bold hover:bg-gray-300 active:scale-95 transition-transform disabled:opacity-30 disabled:cursor-not-allowed"
+                                                  >
+                                                      −
+                                                  </button>
+                                                  <input
+                                                      ref={(el) => { cartTableCellRefs.current[`${index}-1`] = el; }}
+                                                      type="text"
+                                                      inputMode="decimal"
+                                                      value={qty || ''}
+                                                      onChange={(e) => {
+                                                          const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                          const nextQty = parseFloat(val);
+                                                          if (!item) {
+                                                              const newItem: CartItem = {
+                                                                  _id: `temp_${index}_${Date.now()}`,
+                                                                  productId: `temp_${index}_${Date.now()}`,
+                                                                  productName: '',
+                                                                  price: 0,
+                                                                  qty: nextQty || 1,
+                                                                  compareAtPrice: 0,
+                                                                  customPrice: undefined,
+                                                                  mainImage: '',
+                                                                  purchasePrice: 0,
+                                                                  wholesalePrice: 0
+                                                              };
+                                                              const newCart = [...cart];
+                                                              newCart[index] = newItem;
+                                                              setCart(newCart);
+                                                          } else {
+                                                              if (nextQty > 0 || val === '') {
+                                                                  setQuantity(lineId, nextQty || 1);
+                                                              }
                                                           }
-                                                      }
-                                                  }}
-                                                  onKeyDown={(e) => handleCartCellKeyDown(e, index, 1, Math.max(8, cart.length))}
-                                                  className="w-full border-0 bg-white text-right text-sm outline-none p-3 focus:bg-yellow-50 cursor-text"
-                                              />
+                                                      }}
+                                                      onKeyDown={(e) => handleCartCellKeyDown(e, index, 1, Math.max(8, cart.length))}
+                                                      className="w-8 shrink-0 border-0 bg-white text-center text-xs outline-none px-0 py-0.5 focus:bg-yellow-50 cursor-text"
+                                                  />
+                                                  <button
+                                                      type="button"
+                                                      onClick={() => item && updateQuantity(lineId, 1)}
+                                                      disabled={!item}
+                                                      tabIndex={-1}
+                                                      className="w-6 h-6 shrink-0 flex items-center justify-center rounded bg-gray-200 text-gray-700 text-sm font-bold hover:bg-gray-300 active:scale-95 transition-transform disabled:opacity-30 disabled:cursor-not-allowed"
+                                                  >
+                                                      +
+                                                  </button>
+                                              </div>
                                           </td>
 
-                                          <td className="border border-gray-300 px-0 py-0">
+                                          <td className="border border-gray-300 px-0 py-0 align-top">
                                               <input
                                                   ref={(el) => { cartTableCellRefs.current[`${index}-2`] = el; }}
                                                   type="text"
@@ -4325,20 +4336,20 @@ const AdminPOSOrders = () => {
                                                       }
                                                   }}
                                                   onKeyDown={(e) => handleCartCellKeyDown(e, index, 2, Math.max(8, cart.length))}
-                                                  className="w-full border-0 bg-white text-right text-sm outline-none p-3 focus:bg-yellow-50 cursor-text"
+                                                  className="w-full border-0 bg-white text-right text-xs outline-none px-0.5 py-0.5 focus:bg-yellow-50 cursor-text"
                                               />
                                           </td>
 
-                                          <td className="border border-gray-300 px-3 py-4 text-right text-sm font-bold">
+                                          <td className="border border-gray-300 px-0.5 py-0 text-right text-xs font-bold align-top">
                                               {item ? `₹${(sp * item.qty).toFixed(2)}` : ''}
                                           </td>
 
-                                          <td className="border border-gray-300 px-3 py-4 text-center">
+                                          <td className="border border-gray-300 px-0.5 py-0 text-center align-top">
                                               {item ? (
                                                   <button
                                                       type="button"
                                                       onClick={() => removeFromCart(lineId)}
-                                                      className="text-red-500 hover:text-red-700 text-lg font-bold"
+                                                      className="text-red-500 hover:text-red-700 text-xs font-bold"
                                                       title="Delete"
                                                   >
                                                       ✕
@@ -4367,7 +4378,7 @@ const AdminPOSOrders = () => {
                               };
                               setCart([...cart, newItem]);
                           }}
-                          className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded font-bold text-sm"
+                          className="w-full bg-green-500 hover:bg-green-600 text-white py-1.5 rounded font-bold text-xs"
                       >
                           + Add Row
                       </button>
@@ -4557,7 +4568,7 @@ const AdminPOSOrders = () => {
               </div>
 
               {/* Mobile Footer */}
-              <div className="flex-none md:hidden bg-gray-50/95 p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] border-t border-gray-100 backdrop-blur-sm fixed bottom-0 left-0 right-0 z-30">
+              <div className="flex-none md:hidden bg-gray-50 px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)] border-t border-gray-100 backdrop-blur-sm fixed bottom-0 left-0 right-0 z-30">
                   {/* Desktop Footer Row */}
                   <div className="hidden md:flex flex-row items-center justify-between gap-4">
                       {/* Left Side: Total */}
@@ -4606,10 +4617,10 @@ const AdminPOSOrders = () => {
                           <span className="text-sm font-bold text-gray-900">₹{calculateTotal().toLocaleString()}</span>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-1">
+                      <div className={`grid gap-1 ${activeBillId.startsWith('edit_') ? 'grid-cols-2' : 'grid-cols-[0.75fr_0.75fr_1.3fr]'}`}>
                           <button
                             onClick={() => setShowQuickAdd(true)}
-                            className="rounded-lg bg-[#f7d8e7] text-[#b34f7e] py-1.5 text-xs font-semibold border border-[var(--primary-alpha-20)] active:scale-[0.98]"
+                            className="rounded-lg bg-[#f7d8e7] text-[#b34f7e] py-1 text-[11px] font-semibold border border-[var(--primary-alpha-20)] active:scale-[0.98]"
                           >
                             Quick add +
                           </button>
@@ -4617,7 +4628,7 @@ const AdminPOSOrders = () => {
                           <button
                             onClick={activeBillId.startsWith('edit_') ? handleUpdateOrder : handleAccessPayment}
                             disabled={loading || cart.length === 0}
-                            className="rounded-lg bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-1.5 text-xs transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="rounded-lg bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-1 text-[11px] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                           >
                             {loading ? (activeBillId.startsWith('edit_') ? 'Updating...' : 'Paying...') : (activeBillId.startsWith('edit_') ? 'Update' : 'Pay')}
                           </button>
@@ -4626,7 +4637,7 @@ const AdminPOSOrders = () => {
                             <button
                               onClick={handleGenerateBill}
                               disabled={cart.length === 0}
-                              className="rounded-lg bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-semibold py-1.5 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="rounded-lg bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-bold py-2 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
                             >
                               Bill
                             </button>
