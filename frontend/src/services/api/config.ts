@@ -32,25 +32,15 @@ const buildApiBaseCandidates = (): string[] => {
     return unique([fromEnvBase, fromEnvRoot, "/api/v1"]);
   }
 
-  const originCandidate =
-    typeof window !== "undefined" && window.location?.origin
-      ? withApiVersionPath(window.location.origin)
-      : "";
-
-  // The site's own origin (e.g. www.geeta.today) never actually serves the
-  // API - it's a static SPA host whose catch-all rewrite returns index.html
-  // for any path, including /api/*. That's a 200 response, not a network
-  // error, so the axios failover below never catches it. Keep the real API
-  // host ahead of the origin so we don't silently hit the SPA fallback.
-  return unique([
-    fromEnvBase,
-    fromEnvRoot,
-    "https://api.geeta.today/api/v1",
-    originCandidate,
-    "https://www.geeta.today/api/v1",
-    "https://geeta.today/api/v1",
-    "/api/v1",
-  ]);
+  // The site's own origin (www.geeta.today / geeta.today) and any relative
+  // path never actually serve the API - they're the static SPA host whose
+  // catch-all rewrite returns index.html for any path, including /api/*.
+  // That's a 200 response, not a network error, so the axios failover below
+  // can never detect it's wrong. Once a transient blip on api.geeta.today
+  // trips the failover, landing here silently and permanently poisons the
+  // session with fake "successful" HTML responses. Don't list them at all -
+  // only the real API host belongs here.
+  return unique([fromEnvBase, fromEnvRoot, "https://api.geeta.today/api/v1"]);
 };
 
 const API_BASE_CANDIDATES = buildApiBaseCandidates();
