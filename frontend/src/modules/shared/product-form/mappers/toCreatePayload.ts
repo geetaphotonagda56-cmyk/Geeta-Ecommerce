@@ -76,6 +76,7 @@ export function toCreatePayload(state: ProductFormState): CreateProductPayload {
         mainImage: v.mainImage || undefined,
         galleryImages: v.galleryImages,
         status: v.status,
+        tieredPrices: (v.tieredPrices || []).filter((t) => t.minQty > 0),
       };
     }),
   };

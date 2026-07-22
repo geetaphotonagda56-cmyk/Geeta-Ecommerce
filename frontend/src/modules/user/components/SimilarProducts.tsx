@@ -1,6 +1,7 @@
 import { Product } from '../../../types/domain';
 import { useNavigate } from 'react-router-dom';
 import { calculateProductPrice } from '../../../utils/priceUtils';
+import UnitPricingHint from './UnitPricingHint';
 
 interface SimilarProductsProps {
   products: Product[];
@@ -62,6 +63,7 @@ export default function SimilarProducts({ products, currentProductId }: SimilarP
                       <span className="text-xs text-neutral-500 line-through">₹{mrp.toLocaleString('en-IN')}</span>
                     )}
                   </div>
+                  <UnitPricingHint product={product} className="text-[9px] font-semibold text-[var(--customer-primary)] mt-0.5" />
                 </div>
               </div>
             );

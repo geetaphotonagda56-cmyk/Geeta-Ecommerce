@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getBrandById, Brand } from '../../services/api/brandService';
 import { getProducts } from '../../services/api/customerProductService';
 import ProductCard from './components/ProductCard';
+import ShareButton from '../../components/ShareButton';
 
 import IconLoader from '../../components/loaders/IconLoader';
 
@@ -75,12 +76,18 @@ export default function BrandProducts() {
                     <path d="M19 12H5M12 19l-7-7 7-7"/>
                 </svg>
             </button>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
                 {brand?.image && (
                     <img src={brand.image} alt="" className="w-8 h-8 object-contain rounded-md border border-neutral-100" />
                 )}
-                <h1 className="text-lg font-bold text-neutral-800">{brand?.name || 'Brand Products'}</h1>
+                <h1 className="text-lg font-bold text-neutral-800 truncate">{brand?.name || 'Brand Products'}</h1>
             </div>
+            <ShareButton
+                iconOnly
+                title={brand?.name}
+                text={brand?.name ? `Check out ${brand.name} on Geeta Stores` : undefined}
+                className="w-8 h-8 flex items-center justify-center hover:bg-neutral-50 rounded-full transition-colors text-neutral-700 ml-auto flex-shrink-0"
+            />
         </div>
       </div>
 

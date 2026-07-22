@@ -24,6 +24,7 @@ export function fromProductDetail(product: any): ProductFormState {
           mainImage: v.mainImage || v.image || "",
           galleryImages: v.galleryImages || [],
           status: v.status || "Available",
+          tieredPrices: Array.isArray(v.tieredPrices) ? v.tieredPrices : [],
         }))
       : [defaultVariant()];
 

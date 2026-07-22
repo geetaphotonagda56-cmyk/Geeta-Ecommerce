@@ -474,12 +474,9 @@ export default function Home() {
       {/* Hero Header with Gradient and Tabs */}
       <HomeHero activeTab={activeTab} onTabChange={handleTabChange} />
 
-      {/* 2. MAIN SLIDER - With Themed Background */}
-      <div
-        className="px-4 md:px-6 lg:px-8 pt-4 md:pt-6 pb-4"
-        style={{ background: `linear-gradient(to bottom right, ${theme.primary[0]}, ${theme.primary[1]}, ${theme.primary[2]})` }}
-      >
-          <BannerSlider position="HOME_MAIN_SLIDER" />
+      {/* 2. MAIN SLIDER */}
+      <div className="bg-white px-3 pt-3 pb-2">
+          <BannerSlider position="HOME_MAIN_SLIDER" roundedClass="rounded-md" imageFit="cover" />
       </div>
 
       {/* Promo Strip - commented out per request, replaced with Explore Our Range */}
@@ -539,9 +536,12 @@ export default function Home() {
         {/* Filtered Products Section */}
         {activeTab !== "all" && (
           <div data-products-section className="mt-6 mb-6 md:mt-8 md:mb-8">
-            <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight capitalize">
-              {activeTab === "grocery" ? "Grocery Items" : activeTab}
-            </h2>
+            <div className="flex items-center gap-2 mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
+              <span className="w-1 h-5 md:h-6 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
+              <h2 className="text-lg md:text-2xl font-bold text-neutral-900 tracking-tight capitalize">
+                {activeTab === "grocery" ? "Grocery Items" : activeTab}
+              </h2>
+            </div>
             <div className="px-4 md:px-6 lg:px-8">
               {filteredProducts.length > 0 ? (
                 <LazyProductGrid
@@ -586,9 +586,12 @@ export default function Home() {
                     return (
                       <div key={section.id} className="mt-6 mb-6 md:mt-8 md:mb-8">
                         {section.title && (
-                          <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight capitalize">
-                            {section.title}
-                          </h2>
+                          <div className="flex items-center gap-2 mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
+                            <span className="w-1 h-5 md:h-6 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
+                            <h2 className="text-lg md:text-2xl font-bold text-neutral-900 tracking-tight capitalize">
+                              {section.title}
+                            </h2>
+                          </div>
                         )}
                         <div className="px-4 md:px-6 lg:px-8">
                           <LazyProductGrid
@@ -624,9 +627,12 @@ export default function Home() {
 
             {/* Shop by Store Section */}
             <div className="mb-6 mt-6 md:mb-8 md:mt-8">
-              <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight">
-                Shop by Store
-              </h2>
+              <div className="flex items-center gap-2 mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
+                <span className="w-1 h-5 md:h-6 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
+                <h2 className="text-lg md:text-2xl font-bold text-neutral-900 tracking-tight">
+                  Shop by Store
+                </h2>
+              </div>
               <div className="px-4 md:px-6 lg:px-8">
                 <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 md:gap-4">
                   {(homeData.shops || []).map((tile: any) => {
@@ -636,14 +642,14 @@ export default function Home() {
                         tile.productImages.filter(Boolean).length > 0);
 
                     return (
-                      <div key={tile.id} className="flex flex-col">
+                      <div key={tile.id} className="flex flex-col group">
                         <div
                           onClick={() => {
                             const storeSlug =
                               tile.slug || tile.id.replace("-store", "");
                             navigate(`/store/${storeSlug}`);
                           }}
-                          className="block bg-white rounded-xl shadow-sm border border-neutral-200 hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
+                          className="block bg-white rounded-2xl shadow-sm border border-neutral-200 hover:shadow-md hover:border-[var(--customer-primary-alpha-30)] transition-all cursor-pointer overflow-hidden">
                           {hasImages ? (
                             <img
                               src={
@@ -653,11 +659,11 @@ export default function Home() {
                                   : "")
                               }
                               alt={tile.name}
-                              className="w-full h-16 object-cover"
+                              className="w-full h-20 object-cover transition-transform duration-300 group-hover:scale-105"
                             />
                           ) : (
                             <div
-                              className={`w-full h-16 flex items-center justify-center text-3xl text-neutral-300 ${tile.bgColor || "bg-neutral-50"
+                              className={`w-full h-20 flex items-center justify-center text-3xl text-neutral-300 ${tile.bgColor || "bg-neutral-50"
                                 }`}>
                               {tile.name.charAt(0)}
                             </div>

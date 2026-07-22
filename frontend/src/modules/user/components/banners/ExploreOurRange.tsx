@@ -58,7 +58,7 @@ export default function ExploreOurRange() {
   };
 
   return (
-    <div className="px-4 md:px-6 lg:px-8 pt-6 md:pt-8 pb-6 md:pb-8">
+    <div className="px-4 md:px-6 lg:px-8 pt-4 md:pt-6 pb-6 md:pb-8">
       {/* Heading */}
       <div className="relative text-center mb-7 md:mb-9">
         {/* Ambient glow behind the title */}
@@ -111,13 +111,10 @@ export default function ExploreOurRange() {
           whileInView={{ scaleX: 1, opacity: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.15, ease: 'easeOut' }}
-          className="h-1.5 w-24 md:w-28 mx-auto mt-2.5 rounded-full animate-gradient-flow"
+          className="h-1.5 w-24 md:w-28 mx-auto mt-1 rounded-full animate-gradient-flow"
           style={{ backgroundImage: GRADIENT_TEXT }}
         />
 
-        <p className="text-sm md:text-base text-gray-500 font-medium mt-3">
-          Shop smart across every price point
-        </p>
       </div>
 
       {/* 3x3 Grid */}

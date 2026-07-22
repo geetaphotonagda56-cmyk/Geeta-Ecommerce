@@ -9,12 +9,14 @@ interface Props {
   /** @deprecated Use aspect-ratio fitting instead of fixed heights */
   heightClass?: string;
   roundedClass?: string;
+  imageFit?: 'contain' | 'cover';
 }
 
 export default function BannerSlider({
   position,
   className = '',
   roundedClass = 'rounded-2xl',
+  imageFit = 'contain',
 }: Props) {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -72,7 +74,7 @@ export default function BannerSlider({
             <img
               src={banner.image || banner.imageUrl}
               alt={banner.title || 'Banner'}
-              className="w-full h-full object-contain object-center"
+              className={`w-full h-full ${imageFit === 'cover' ? 'object-cover' : 'object-contain'} object-center`}
               loading={index === 0 ? 'eager' : 'lazy'}
               draggable={false}
             />
@@ -112,29 +114,6 @@ export default function BannerSlider({
               />
             ))}
           </div>
-        )}
-
-        {banners.length > 1 && (
-          <>
-            <button
-              onClick={() => setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length)}
-              aria-label="Previous banner"
-              className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 bg-black/25 hover:bg-black/40 backdrop-blur-sm text-white p-2 rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20"
-            >
-              <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button
-              onClick={() => setCurrentIndex((prev) => (prev + 1) % banners.length)}
-              aria-label="Next banner"
-              className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 bg-black/25 hover:bg-black/40 backdrop-blur-sm text-white p-2 rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20"
-            >
-              <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </>
         )}
       </div>
     </div>

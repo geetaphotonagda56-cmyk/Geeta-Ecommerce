@@ -7,6 +7,7 @@ import { useCart } from '../../context/CartContext';
 import { getProducts } from '../../services/api/customerProductService';
 import WishlistButton from '../../components/WishlistButton';
 import { calculateProductPrice } from '../../utils/priceUtils';
+import UnitPricingHint from './components/UnitPricingHint';
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -416,6 +417,7 @@ export default function OrderAgain() {
                           </span>
                         )}
                       </div>
+                      <UnitPricingHint product={product} className="text-[8px] font-semibold text-[var(--customer-primary)] mt-0.5" />
                     </div>
 
                     {/* Bottom Link */}

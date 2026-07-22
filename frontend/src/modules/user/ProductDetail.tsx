@@ -302,6 +302,16 @@ export default function ProductDetail() {
   const hasDiscount = variantMrp > variantPrice;
   const discount = hasDiscount ? Math.round(((variantMrp - variantPrice) / variantMrp) * 100) : 0;
 
+  // Prefer the selected variant's real tiered prices; the root unitPricing
+  // field is often just a stale zero-priced default (see ProductCard.tsx).
+  const activeVariantTieredPrices = (
+    (selectedVariant || customerVariations[0])?.tieredPrices || []
+  ).filter((t: any) => t && Number(t.price) > 0);
+  const rootTieredPrices = ((product as any)?.unitPricing || []).filter(
+    (t: any) => t && Number(t.price) > 0
+  );
+  const tieredPrices = activeVariantTieredPrices.length > 0 ? activeVariantTieredPrices : rootTieredPrices;
+
   const variantStock = selectedVariant?.stock !== undefined ? selectedVariant.stock : (product?.stock || 0);
   const isVariantAvailable = selectedVariant?.status !== "Sold out" && (variantStock > 0 || variantStock === 0); // 0 means unlimited
 
@@ -945,6 +955,42 @@ export default function ProductDetail() {
               </>
             )}
           </div>
+
+          {/* Unit Pricing (Buy More & Save) */}
+          {tieredPrices.length > 0 && (
+            <div className="mb-2 rounded-lg border border-neutral-200 bg-neutral-50 p-2.5">
+              <p className="text-xs font-semibold text-neutral-700 mb-1.5">Buy more & save</p>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-500">1 unit</span>
+                  <span className="font-semibold text-neutral-900">
+                    ₹{variantPrice.toLocaleString('en-IN')}
+                  </span>
+                </div>
+                {tieredPrices
+                  .slice()
+                  .sort((a: any, b: any) => a.minQty - b.minQty)
+                  .map((tier: any, idx: number) => {
+                    const tierDiscount = variantMrp > tier.price
+                      ? Math.round(((variantMrp - tier.price) / variantMrp) * 100)
+                      : 0;
+                    return (
+                      <div key={idx} className="flex items-center justify-between text-xs">
+                        <span className="text-neutral-600 font-medium">{tier.minQty}+ units</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="font-semibold text-[var(--customer-primary)]">
+                            ₹{tier.price.toLocaleString('en-IN')}
+                          </span>
+                          {tierDiscount > 0 && (
+                            <span className="text-[10px] text-neutral-500">{tierDiscount}% off</span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
 
           {/* Stock Status */}
           {variantStock !== 0 && variantStock !== undefined && variantStock !== null && (

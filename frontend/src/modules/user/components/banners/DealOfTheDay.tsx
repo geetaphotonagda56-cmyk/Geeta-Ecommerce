@@ -6,6 +6,8 @@ import { calculateCardPrice } from '../../../../utils/priceUtils';
 import { mapApiProductForCustomerDisplay } from '../../../../utils/customerVariantUtils';
 import { bannerService } from '../../../../services/bannerService';
 import BannerSlider from './BannerSlider';
+import ViewAllButton from '../ViewAllButton';
+import UnitPricingHint from '../UnitPricingHint';
 
 // Admin-managed Customer App Theme tokens. Replaces the previously hardcoded
 // orange palette so this admin-curated section follows the brand color picked
@@ -117,13 +119,7 @@ export default function DealOfTheDay() {
                   <h3 className="text-2xl font-bold text-gray-800">Deal of the Day</h3>
                   <p className="text-sm text-gray-500 mt-1">Grab the best prices before they reset!</p>
               </div>
-              <button
-                onClick={() => navigate('/deal-of-the-day')}
-                className="text-sm font-semibold flex items-center gap-1 transition-colors"
-                style={{ color: BRAND.primary }}
-              >
-                  View All <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-              </button>
+              <ViewAllButton onClick={() => navigate('/deal-of-the-day')} />
           </div>
 
           {/* Large Cards Carousel */}
@@ -172,6 +168,7 @@ export default function DealOfTheDay() {
                                     <span className="text-sm text-gray-400 line-through">₹{mrp}</span>
                                  )}
                              </div>
+                             <UnitPricingHint product={product} className="text-xs font-semibold text-[var(--customer-primary)] mt-1" />
                              <button
                                 className="mt-4 w-full text-white font-bold py-2 px-4 rounded-lg transition-colors"
                                 style={{ backgroundColor: BRAND.primary }}

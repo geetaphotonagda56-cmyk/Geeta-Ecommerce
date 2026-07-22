@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
+import ViewAllButton from "./ViewAllButton";
 
 interface CategoryTile {
   id: string;
@@ -85,19 +86,14 @@ export default function CategoryTileSection({
     <div className="mb-6 md:mb-8 mt-0 overflow-visible">
       {title && (
         <div className="flex items-center justify-between mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
-          <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 tracking-tight">
-            {title}
-          </h2>
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-5 md:h-6 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
+            <h2 className="text-lg md:text-2xl font-bold text-neutral-900 tracking-tight">
+              {title}
+            </h2>
+          </div>
           {viewAllLink && (
-            <Link
-              to={viewAllLink}
-              className="text-xs md:text-sm font-semibold flex items-center gap-1 text-[var(--customer-primary)] hover:opacity-80 transition-opacity flex-shrink-0"
-            >
-              View All
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
+            <ViewAllButton onClick={() => navigate(viewAllLink)} />
           )}
         </div>
       )}

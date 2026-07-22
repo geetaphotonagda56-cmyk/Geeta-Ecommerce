@@ -143,11 +143,17 @@ export default function ProductCard({
   // Get Price and MRP using primary variant (first created) with legacy fallbacks
   const { displayPrice, mrp, discount } = calculateCardPrice(product);
 
-  // Get real tiered pricing from root or first variation, ignoring zero-priced default tiers
-  const tieredPrices = (((product as any).unitPricing && (product as any).unitPricing.length > 0)
-      ? (product as any).unitPricing
-      : (primaryVariant?.tieredPrices || [])
-  ).filter((t: any) => t && Number(t.price) > 0);
+  // Get real tiered pricing from the primary variant, falling back to the
+  // root unitPricing field only when the variant has none. The variant is
+  // preferred because that's where the product form actually saves tiers -
+  // root unitPricing is often just a stale zero-priced default.
+  const variantTieredPrices = (primaryVariant?.tieredPrices || []).filter(
+    (t: any) => t && Number(t.price) > 0
+  );
+  const rootTieredPrices = ((product as any).unitPricing || []).filter(
+    (t: any) => t && Number(t.price) > 0
+  );
+  const tieredPrices = variantTieredPrices.length > 0 ? variantTieredPrices : rootTieredPrices;
 
   const variationSelector = hasRealVariants(product) ? 0 : undefined;
   // Calculate dynamic unit price based on cart quantity
@@ -284,14 +290,14 @@ export default function ProductCard({
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.97 }}
       transition={{ duration: 0.2 }}
-      className="bg-white overflow-hidden flex flex-col relative border border-neutral-100 hover:shadow-md transition-shadow"
+      className="h-full bg-white overflow-hidden flex flex-col relative rounded-md border border-neutral-100 hover:shadow-md transition-shadow"
       style={{ backgroundColor: '#ffffff' }}
     >
       <div
         onClick={handleCardClick}
         className="cursor-pointer flex-1 flex flex-col"
       >
-        <div className={`w-full ${compact ? 'h-48 md:h-56' : categoryStyle ? 'h-56 md:h-64' : 'h-64 md:h-80'} bg-neutral-100 flex items-center justify-center overflow-hidden relative`}>
+        <div className={`w-full ${compact ? 'h-48 md:h-56' : categoryStyle ? 'h-56 md:h-64' : 'h-64 md:h-80'} bg-white flex items-center justify-center overflow-hidden relative`}>
           {cardImageUrl ? (
             <img
               ref={imageRef}

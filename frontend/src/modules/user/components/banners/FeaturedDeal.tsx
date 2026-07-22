@@ -5,6 +5,8 @@ import { Product } from '../../../../types/domain';
 import { calculateCardPrice } from '../../../../utils/priceUtils';
 import { mapApiProductForCustomerDisplay } from '../../../../utils/customerVariantUtils';
 import { bannerService } from '../../../../services/bannerService';
+import ViewAllButton from '../ViewAllButton';
+import UnitPricingHint from '../UnitPricingHint';
 
 // Admin-managed Customer App Theme tokens. We avoid the per-header-category
 // palette here so admin-curated deals always reflect the brand color chosen in
@@ -95,16 +97,13 @@ export default function FeaturedDeal() {
             style={{ borderColor: BRAND.border }}
           >
               <div>
-                  <h3 className="text-xl font-black text-slate-800 tracking-tight">Featured Deals</h3>
-                  <p className="text-[11px] text-slate-500 mt-0.5">See the latest deals and exciting new offers!</p>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1 h-5 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
+                    <h3 className="text-xl font-black text-slate-800 tracking-tight">Featured Deals</h3>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5 ml-3">See the latest deals and exciting new offers!</p>
               </div>
-              <button
-                onClick={() => navigate('/featured-deals')}
-                className="text-xs font-bold flex items-center gap-1 transition-colors bg-white/50 px-3 py-1.5 rounded-full border"
-                style={{ color: BRAND.primary, borderColor: BRAND.border }}
-              >
-                  View All <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-              </button>
+              <ViewAllButton onClick={() => navigate('/featured-deals')} />
           </div>
 
           {/* Product Grid/Carousel */}
@@ -150,6 +149,7 @@ export default function FeaturedDeal() {
                                  <span className="text-xs text-red-400 line-through">₹{mrp}</span>
                                  <span className="text-sm font-bold text-[var(--customer-primary)]">₹{displayPrice}</span>
                              </div>
+                             <UnitPricingHint product={product} className="text-[9px] font-semibold text-[var(--customer-primary)] mt-0.5" />
 
                              {/* Decoration circle */}
                              <div className="absolute bottom-3 right-3">

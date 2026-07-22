@@ -9,24 +9,54 @@ const createImage = (url: string): Promise<HTMLImageElement> =>
     image.src = url;
   });
 
+const getRadianAngle = (degrees: number): number => (degrees * Math.PI) / 180;
+
+// Bounding box of `width`x`height` after rotating by `rotation` degrees -
+// needed so the rotated image isn't clipped before we crop it.
+const rotatedBoundingBox = (width: number, height: number, rotation: number) => {
+  const rotRad = getRadianAngle(rotation);
+  return {
+    width: Math.abs(Math.cos(rotRad) * width) + Math.abs(Math.sin(rotRad) * height),
+    height: Math.abs(Math.sin(rotRad) * width) + Math.abs(Math.cos(rotRad) * height),
+  };
+};
+
 /**
  * Crops an image to the given pixel area and returns a File ready for upload.
- * Mirrors the canonical react-easy-crop cropping recipe.
+ * Mirrors the canonical react-easy-crop cropping recipe (including its
+ * rotation handling: draw the source image rotated onto a bounding-box-sized
+ * canvas first, then crop out of that).
  *
  * In "contain" mode (whole image visible, letterboxed), react-easy-crop can
- * report a crop area that extends outside the source image's natural bounds
- * to represent the empty gap - drawImage silently skips that out-of-bounds
- * portion, so we pre-fill the canvas with backgroundColor first so gaps come
- * out as a solid color instead of black/transparent.
+ * report a crop area that extends outside the rotated image's bounds to
+ * represent the empty gap - drawImage silently skips that out-of-bounds
+ * portion, so we pre-fill both canvases with backgroundColor first so gaps
+ * come out as a solid color instead of black/transparent.
  */
 export async function getCroppedImageFile(
   imageSrc: string,
   cropAreaPixels: Area,
   fileName: string,
   mimeType: string = "image/jpeg",
-  backgroundColor: string = "#FFFFFF"
+  backgroundColor: string = "#FFFFFF",
+  rotation: number = 0
 ): Promise<File> {
   const image = await createImage(imageSrc);
+
+  const { width: bBoxWidth, height: bBoxHeight } = rotatedBoundingBox(image.width, image.height, rotation);
+  const rotatedCanvas = document.createElement("canvas");
+  rotatedCanvas.width = bBoxWidth;
+  rotatedCanvas.height = bBoxHeight;
+  const rotatedCtx = rotatedCanvas.getContext("2d");
+  if (!rotatedCtx) throw new Error("Could not get canvas context");
+
+  rotatedCtx.fillStyle = backgroundColor;
+  rotatedCtx.fillRect(0, 0, bBoxWidth, bBoxHeight);
+  rotatedCtx.translate(bBoxWidth / 2, bBoxHeight / 2);
+  rotatedCtx.rotate(getRadianAngle(rotation));
+  rotatedCtx.translate(-image.width / 2, -image.height / 2);
+  rotatedCtx.drawImage(image, 0, 0);
+
   const canvas = document.createElement("canvas");
   canvas.width = cropAreaPixels.width;
   canvas.height = cropAreaPixels.height;
@@ -37,7 +67,7 @@ export async function getCroppedImageFile(
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.drawImage(
-    image,
+    rotatedCanvas,
     cropAreaPixels.x,
     cropAreaPixels.y,
     cropAreaPixels.width,

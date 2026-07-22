@@ -15,6 +15,7 @@ export interface ProductVariantForm {
   galleryImages: string[];
   status: "Available" | "Sold out" | "In stock";
   attributes?: Record<string, string>;
+  tieredPrices: { minQty: number; price: number }[];
 }
 
 export interface ProductMainInfoForm {
@@ -81,6 +82,7 @@ export const defaultVariant = (): ProductVariantForm => ({
   galleryImages: [],
   status: "Available",
   attributes: {},
+  tieredPrices: [],
 });
 
 export const defaultMainInfo = (overrides?: Partial<ProductMainInfoForm>): ProductMainInfoForm => ({
@@ -185,5 +187,6 @@ export interface CreateProductPayload {
     galleryImages?: string[];
     status?: string;
     attributes?: Record<string, string>;
+    tieredPrices?: { minQty: number; price: number }[];
   }>;
 }

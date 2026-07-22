@@ -3,7 +3,7 @@ import { BannerPosition } from '../../../../types/banner';
 /** Wide promo banners — use contain so uploaded art is not cropped on mobile. */
 export const BANNER_ASPECT_CLASS: Partial<Record<BannerPosition | string, string>> = {
   'Main Banner': 'aspect-[5/2] sm:aspect-[2.75/1]',
-  HOME_MAIN_SLIDER: 'aspect-[5/2] sm:aspect-[2.75/1]',
+  HOME_MAIN_SLIDER: 'aspect-[16/9]',
   'Main Section Banner': 'aspect-[5/2] sm:aspect-[3/1]',
   'Footer Banner': 'aspect-[5/2] sm:aspect-[3/1]',
   'Flash Deals': 'aspect-[5/2] sm:aspect-[2.75/1]',

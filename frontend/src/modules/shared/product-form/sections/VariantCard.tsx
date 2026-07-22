@@ -611,6 +611,63 @@ export default function VariantCard({
           </FormField>
         </div>
 
+        <FormField
+          label="Unit Pricing"
+          hint="Optional quantity-based pricing — e.g. buy 5+ units at a lower price per unit"
+        >
+          <div className="space-y-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-3">
+            {(variant.tieredPrices || []).length > 0 && (
+              <div className="space-y-2">
+                {variant.tieredPrices.map((slab, slabIndex) => (
+                  <div key={slabIndex} className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        className={inputClass}
+                        placeholder="Min Qty"
+                        value={slab.minQty || ""}
+                        onChange={(e) => {
+                          const next = [...variant.tieredPrices];
+                          next[slabIndex] = { ...next[slabIndex], minQty: Number(e.target.value) || 0 };
+                          patch({ tieredPrices: next });
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        className={inputClass}
+                        placeholder="Price / Unit"
+                        value={slab.price || ""}
+                        onChange={(e) => {
+                          const next = [...variant.tieredPrices];
+                          next[slabIndex] = { ...next[slabIndex], price: Number(e.target.value) || 0 };
+                          patch({ tieredPrices: next });
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => patch({ tieredPrices: variant.tieredPrices.filter((_, i) => i !== slabIndex) })}
+                      className="shrink-0 rounded-lg px-2 py-2 text-sm font-bold text-rose-500 hover:bg-rose-50"
+                      aria-label="Remove pricing slab"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => patch({ tieredPrices: [...(variant.tieredPrices || []), { minQty: 0, price: 0 }] })}
+              className="text-sm font-semibold text-[var(--primary-color,#7c3aed)] hover:opacity-80"
+            >
+              + Add Slab
+            </button>
+          </div>
+        </FormField>
+
         {isFieldEnabled("basic", "item_code") && (
           <FormField label="SKU / Item Code">
             <input

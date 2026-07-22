@@ -827,75 +827,6 @@ const AdminPOSOrders = () => {
     }
   };
 
-  // Spreadsheet-style entry table: always shows at least MIN_PURCHASE_TABLE_ROWS
-  // rows (existing items + blank rows to fill up), plus any extra rows the
-  // user added manually via the "+ Add Rows" button.
-  const MIN_PURCHASE_TABLE_ROWS = 10;
-  const [purchaseExtraBlankRows, setPurchaseExtraBlankRows] = useState(0);
-  const [purchaseDraftRows, setPurchaseDraftRows] = useState<Record<number, { name: string; qty: string; rate: string }>>({});
-  const purchaseTableCellRefs = useRef<Record<string, HTMLInputElement | null>>({});
-
-  const focusPurchaseTableCell = (row: number, col: 0 | 1 | 2) => {
-    requestAnimationFrame(() => {
-      purchaseTableCellRefs.current[`${row}-${col}`]?.focus();
-    });
-  };
-
-  const getPurchaseDraftRow = (blankIndex: number) =>
-    purchaseDraftRows[blankIndex] || { name: '', qty: '', rate: '' };
-
-  const updatePurchaseDraftRow = (blankIndex: number, updates: Partial<{ name: string; qty: string; rate: string }>) => {
-    setPurchaseDraftRows((prev) => ({
-      ...prev,
-      [blankIndex]: { ...getPurchaseDraftRow(blankIndex), ...updates },
-    }));
-  };
-
-  // Turns a blank draft row into a real manual PurchaseItem once it has a name.
-  const commitPurchaseDraftRow = (blankIndex: number): string | null => {
-    const draft = getPurchaseDraftRow(blankIndex);
-    const name = draft.name.trim();
-    if (!name) return null;
-
-    const newId = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const qty = parseInt(draft.qty) || 1;
-    const rate = parseFloat(draft.rate) || 0;
-
-    const newItem: PurchaseItem = {
-      id: newId,
-      productId: newId,
-      baseProductId: newId,
-      productName: name,
-      isVariant: false,
-      variationId: '',
-      image: '',
-      mrp: rate,
-      retailPrice: rate,
-      wholesalePrice: rate,
-      purchasePrice: rate,
-      qty,
-      currentQty: 0,
-      includingGST: true,
-      billDiscount: 0,
-      billDiscountType: '₹',
-      gstPercent: 0,
-      barcode: '',
-      mfgDate: '',
-      expiry: '',
-      hsn: '',
-      batch: '',
-      packOf: 1,
-      additionalOpen: false,
-    };
-
-    setPurchaseItems((prev) => [...prev, newItem]);
-    setPurchaseDraftRows((prev) => {
-      const next = { ...prev };
-      delete next[blankIndex];
-      return next;
-    });
-    return newId;
-  };
   const [purchaseBarcodeScanItemId, setPurchaseBarcodeScanItemId] = useState<string | null>(null);
   const [purchaseSearchLoading, setPurchaseSearchLoading] = useState(false);
   const [purchaseSearchResults, setPurchaseSearchResults] = useState<Product[]>([]);
@@ -1819,7 +1750,7 @@ const AdminPOSOrders = () => {
     }
   };
 
-  // Cart Table: Sr.no / Edit / Image / Name / MRP(0) / Qty(1) / Retail Price(2) / Sub Total / Delete
+  // Cart Table: Sr.no / Edit / Image / Name / Qty(0) / MRP(1) / Retail Price(2) / Sub Total / Delete
   const cartTableCellRefs = useRef<Record<string, HTMLInputElement | null>>({});
   // Raw in-progress text for decimal cells (MRP/Rate), so a trailing "." or "12.50" isn't
   // collapsed back to its numeric form (e.g. "12") on every keystroke while typing.
@@ -4244,8 +4175,8 @@ const AdminPOSOrders = () => {
                           <colgroup>
                               <col style={{width: '5%', minWidth: '35px'}} />
                               <col style={{width: '32%', minWidth: '100px'}} />
-                              <col style={{width: '10%', minWidth: '55px'}} />
                               <col style={{width: '21%', minWidth: '95px'}} />
+                              <col style={{width: '10%', minWidth: '55px'}} />
                               <col style={{width: '10%', minWidth: '55px'}} />
                               <col style={{width: '14%', minWidth: '60px'}} />
                               <col style={{width: '8%', minWidth: '45px'}} />
@@ -4254,8 +4185,8 @@ const AdminPOSOrders = () => {
                               <tr className="bg-[var(--primary-color)] text-white sticky top-0 z-10 h-4">
                                   <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">Edit</th>
                                   <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">Item Name</th>
-                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">MRP</th>
                                   <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">Qty</th>
+                                  <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">MRP</th>
                                   <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">Rate</th>
                                   <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">Total</th>
                                   <th className="border border-gray-400 px-0.5 py-0 font-bold text-xs md:text-base">Delete</th>
@@ -4317,46 +4248,6 @@ const AdminPOSOrders = () => {
                                               />
                                           </td>
 
-                                          <td className="border border-gray-300 px-0 py-0 align-top">
-                                              <input
-                                                  ref={(el) => { cartTableCellRefs.current[`${index}-0`] = el; }}
-                                                  type="text"
-                                                  inputMode="decimal"
-                                                  value={cartCellDrafts[`${index}-0`] ?? (mrp || '')}
-                                                  onBlur={() => setCartCellDrafts(prev => {
-                                                      if (!(`${index}-0` in prev)) return prev;
-                                                      const next = { ...prev };
-                                                      delete next[`${index}-0`];
-                                                      return next;
-                                                  })}
-                                                  onChange={(e) => {
-                                                      const val = e.target.value.replace(/[^0-9.]/g, '');
-                                                      setCartCellDrafts(prev => ({ ...prev, [`${index}-0`]: val }));
-                                                      if (!item) {
-                                                          const newItem: CartItem = {
-                                                              _id: `temp_${index}_${Date.now()}`,
-                                                              productId: `temp_${index}_${Date.now()}`,
-                                                              productName: '',
-                                                              price: 0,
-                                                              qty: 1,
-                                                              compareAtPrice: parseFloat(val) || 0,
-                                                              customPrice: undefined,
-                                                              mainImage: '',
-                                                              purchasePrice: 0,
-                                                              wholesalePrice: 0
-                                                          };
-                                                          const newCart = [...cart];
-                                                          newCart[index] = newItem;
-                                                          setCart(newCart);
-                                                      } else {
-                                                          updateItemDetails(lineId, { compareAtPrice: parseFloat(val) || 0 });
-                                                      }
-                                                  }}
-                                                  onKeyDown={(e) => handleCartCellKeyDown(e, index, 0, Math.max(8, cart.length))}
-                                                  className="w-full border-0 bg-white text-right text-xs md:text-base outline-none px-0.5 py-0.5 focus:bg-yellow-50 cursor-text"
-                                              />
-                                          </td>
-
                                           <td className="border border-gray-300 px-0.5 py-0.5 align-top">
                                               <div className="flex items-center justify-center gap-0.5">
                                                   <button
@@ -4364,12 +4255,12 @@ const AdminPOSOrders = () => {
                                                       onClick={() => item && updateQuantity(lineId, -1)}
                                                       disabled={!item}
                                                       tabIndex={-1}
-                                                      className="w-6 h-6 shrink-0 flex items-center justify-center rounded bg-gray-200 text-gray-700 text-sm font-bold hover:bg-gray-300 active:scale-95 transition-transform disabled:opacity-30 disabled:cursor-not-allowed"
+                                                      className="w-6 h-6 shrink-0 flex items-center justify-center rounded bg-gray-900 text-white text-sm font-bold hover:bg-black active:scale-95 transition-transform disabled:opacity-30 disabled:cursor-not-allowed"
                                                   >
                                                       −
                                                   </button>
                                                   <input
-                                                      ref={(el) => { cartTableCellRefs.current[`${index}-1`] = el; }}
+                                                      ref={(el) => { cartTableCellRefs.current[`${index}-0`] = el; }}
                                                       type="text"
                                                       inputMode="decimal"
                                                       value={qty || ''}
@@ -4398,7 +4289,7 @@ const AdminPOSOrders = () => {
                                                               }
                                                           }
                                                       }}
-                                                      onKeyDown={(e) => handleCartCellKeyDown(e, index, 1, Math.max(8, cart.length))}
+                                                      onKeyDown={(e) => handleCartCellKeyDown(e, index, 0, Math.max(8, cart.length))}
                                                       className="w-8 shrink-0 border-0 bg-white text-center text-xs md:text-base outline-none px-0 py-0.5 focus:bg-yellow-50 cursor-text"
                                                   />
                                                   <button
@@ -4406,11 +4297,51 @@ const AdminPOSOrders = () => {
                                                       onClick={() => item && updateQuantity(lineId, 1)}
                                                       disabled={!item}
                                                       tabIndex={-1}
-                                                      className="w-6 h-6 shrink-0 flex items-center justify-center rounded bg-gray-200 text-gray-700 text-sm font-bold hover:bg-gray-300 active:scale-95 transition-transform disabled:opacity-30 disabled:cursor-not-allowed"
+                                                      className="w-6 h-6 shrink-0 flex items-center justify-center rounded bg-gray-900 text-white text-sm font-bold hover:bg-black active:scale-95 transition-transform disabled:opacity-30 disabled:cursor-not-allowed"
                                                   >
                                                       +
                                                   </button>
                                               </div>
+                                          </td>
+
+                                          <td className="border border-gray-300 px-0 py-0 align-top">
+                                              <input
+                                                  ref={(el) => { cartTableCellRefs.current[`${index}-1`] = el; }}
+                                                  type="text"
+                                                  inputMode="decimal"
+                                                  value={cartCellDrafts[`${index}-1`] ?? (mrp || '')}
+                                                  onBlur={() => setCartCellDrafts(prev => {
+                                                      if (!(`${index}-1` in prev)) return prev;
+                                                      const next = { ...prev };
+                                                      delete next[`${index}-1`];
+                                                      return next;
+                                                  })}
+                                                  onChange={(e) => {
+                                                      const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                      setCartCellDrafts(prev => ({ ...prev, [`${index}-1`]: val }));
+                                                      if (!item) {
+                                                          const newItem: CartItem = {
+                                                              _id: `temp_${index}_${Date.now()}`,
+                                                              productId: `temp_${index}_${Date.now()}`,
+                                                              productName: '',
+                                                              price: 0,
+                                                              qty: 1,
+                                                              compareAtPrice: parseFloat(val) || 0,
+                                                              customPrice: undefined,
+                                                              mainImage: '',
+                                                              purchasePrice: 0,
+                                                              wholesalePrice: 0
+                                                          };
+                                                          const newCart = [...cart];
+                                                          newCart[index] = newItem;
+                                                          setCart(newCart);
+                                                      } else {
+                                                          updateItemDetails(lineId, { compareAtPrice: parseFloat(val) || 0 });
+                                                      }
+                                                  }}
+                                                  onKeyDown={(e) => handleCartCellKeyDown(e, index, 1, Math.max(8, cart.length))}
+                                                  className="w-full border-0 bg-white text-right text-xs md:text-base outline-none px-0.5 py-0.5 focus:bg-yellow-50 cursor-text"
+                                              />
                                           </td>
 
                                           <td className="border border-gray-300 px-0 py-0 align-top">
@@ -4975,194 +4906,276 @@ const AdminPOSOrders = () => {
               </div>
             )}
 
-            {(() => {
-              const blankCount = Math.max(MIN_PURCHASE_TABLE_ROWS - purchaseItems.length, 0) + purchaseExtraBlankRows;
-              const totalRows = purchaseItems.length + blankCount;
-              const totalQty = purchaseItems.reduce((sum, item) => sum + (item.qty || 0), 0);
-
-              const handleCellKeyDown = (
-                e: React.KeyboardEvent<HTMLInputElement>,
-                row: number,
-                col: 0 | 1 | 2,
-                isBlank: boolean,
-                blankIndex: number
-              ) => {
-                if (e.key !== 'Enter') return;
-                e.preventDefault();
-
-                if (isBlank) {
-                  const newId = commitPurchaseDraftRow(blankIndex);
-                  if (newId) {
-                    // Row just became real - move to its Qty cell.
-                    focusPurchaseTableCell(row, 1);
-                    return;
-                  }
-                  // Nothing typed - just move within the row / to next row.
-                  if (col < 2) {
-                    focusPurchaseTableCell(row, (col + 1) as 0 | 1 | 2);
-                  } else if (row + 1 < totalRows) {
-                    focusPurchaseTableCell(row + 1, 0);
-                  }
-                  return;
-                }
-
-                if (col < 2) {
-                  focusPurchaseTableCell(row, (col + 1) as 0 | 1 | 2);
-                } else if (row + 1 < totalRows) {
-                  focusPurchaseTableCell(row + 1, 0);
-                }
-              };
-
-              return (
-                <div className="bg-white rounded-2xl border border-[var(--primary-alpha-20)] overflow-hidden shadow-sm">
-                  <table className="w-full text-sm border-collapse">
-                    <thead>
-                      <tr className="bg-[var(--primary-color)] text-white">
-                        <th className="px-2 py-2.5 text-left font-bold w-10">#</th>
-                        <th className="px-2 py-2.5 text-left font-bold">Item</th>
-                        <th className="px-2 py-2.5 text-right font-bold w-20">Qty</th>
-                        <th className="px-2 py-2.5 text-right font-bold w-24">Rate</th>
-                        <th className="px-2 py-2.5 text-right font-bold w-24">Total</th>
-                        <th className="px-2 py-2.5 text-center font-bold w-20">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {purchaseItems.map((item, index) => {
-                        const rowTotal = item.purchasePrice * item.qty;
-                        return (
-                          <tr key={item.id} className="border-t border-gray-100 hover:bg-gray-50/60">
-                            <td className="px-2 py-1.5 text-gray-400 font-medium">{index + 1}</td>
-                            <td className="px-2 py-1.5">
-                              <input
-                                ref={(el) => { purchaseTableCellRefs.current[`${index}-0`] = el; }}
-                                type="text"
-                                value={item.productName}
-                                onChange={(e) => updatePurchaseItem(item.id, { productName: e.target.value })}
-                                onKeyDown={(e) => handleCellKeyDown(e, index, 0, false, -1)}
-                                className="w-full bg-transparent focus:outline-none focus:bg-white px-1 py-1 rounded"
-                              />
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <input
-                                ref={(el) => { purchaseTableCellRefs.current[`${index}-1`] = el; }}
-                                type="number"
-                                min={1}
-                                value={item.qty}
-                                onChange={(e) => updatePurchaseItem(item.id, { qty: Math.max(1, Number(e.target.value) || 1) })}
-                                onKeyDown={(e) => handleCellKeyDown(e, index, 1, false, -1)}
-                                className="w-full bg-transparent text-right focus:outline-none focus:bg-white px-1 py-1 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              />
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <input
-                                ref={(el) => { purchaseTableCellRefs.current[`${index}-2`] = el; }}
-                                type="number"
-                                min={0}
-                                value={item.purchasePrice}
-                                onChange={(e) => updatePurchaseItem(item.id, { purchasePrice: Math.max(0, Number(e.target.value) || 0) })}
-                                onKeyDown={(e) => handleCellKeyDown(e, index, 2, false, -1)}
-                                className="w-full bg-transparent text-right focus:outline-none focus:bg-white px-1 py-1 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              />
-                            </td>
-                            <td className="px-2 py-1.5 text-right font-semibold text-gray-800">₹{rowTotal.toFixed(2)}</td>
-                            <td className="px-2 py-1.5">
-                              <div className="flex items-center justify-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => openPurchaseEditModal(item)}
-                                  className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--primary-color)] hover:bg-[var(--primary-alpha-10)] transition-colors"
-                                  title="Edit"
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                  </svg>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => removePurchaseItem(item.id)}
-                                  className="w-7 h-7 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-                                  title="Delete"
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-
-                      {Array.from({ length: blankCount }).map((_, i) => {
-                        const rowIndex = purchaseItems.length + i;
-                        const draft = getPurchaseDraftRow(i);
-                        return (
-                          <tr key={`blank-${i}`} className="border-t border-gray-100">
-                            <td className="px-2 py-1.5 text-gray-300 font-medium">{rowIndex + 1}</td>
-                            <td className="px-2 py-1.5">
-                              <input
-                                ref={(el) => { purchaseTableCellRefs.current[`${rowIndex}-0`] = el; }}
-                                type="text"
-                                value={draft.name}
-                                placeholder="Type item name..."
-                                onChange={(e) => updatePurchaseDraftRow(i, { name: e.target.value })}
-                                onBlur={() => commitPurchaseDraftRow(i)}
-                                onKeyDown={(e) => handleCellKeyDown(e, rowIndex, 0, true, i)}
-                                className="w-full bg-transparent focus:outline-none focus:bg-white px-1 py-1 rounded placeholder:text-gray-300"
-                              />
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <input
-                                ref={(el) => { purchaseTableCellRefs.current[`${rowIndex}-1`] = el; }}
-                                type="number"
-                                min={1}
-                                value={draft.qty}
-                                placeholder="1"
-                                onChange={(e) => updatePurchaseDraftRow(i, { qty: e.target.value })}
-                                onBlur={() => commitPurchaseDraftRow(i)}
-                                onKeyDown={(e) => handleCellKeyDown(e, rowIndex, 1, true, i)}
-                                className="w-full bg-transparent text-right focus:outline-none focus:bg-white px-1 py-1 rounded placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              />
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <input
-                                ref={(el) => { purchaseTableCellRefs.current[`${rowIndex}-2`] = el; }}
-                                type="number"
-                                min={0}
-                                value={draft.rate}
-                                placeholder="0"
-                                onChange={(e) => updatePurchaseDraftRow(i, { rate: e.target.value })}
-                                onBlur={() => commitPurchaseDraftRow(i)}
-                                onKeyDown={(e) => handleCellKeyDown(e, rowIndex, 2, true, i)}
-                                className="w-full bg-transparent text-right focus:outline-none focus:bg-white px-1 py-1 rounded placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              />
-                            </td>
-                            <td className="px-2 py-1.5 text-right text-gray-300">—</td>
-                            <td className="px-2 py-1.5"></td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t-2 border-[var(--primary-alpha-20)] bg-[var(--primary-alpha-10)] font-bold text-gray-800">
-                        <td className="px-2 py-2.5" colSpan={2}>Total Qty: {totalQty}</td>
-                        <td className="px-2 py-2.5" colSpan={2}>Total</td>
-                        <td className="px-2 py-2.5 text-right" colSpan={2}>₹{calculatePurchaseTotal().toFixed(2)}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                  <div className="p-2 border-t border-gray-100">
-                    <button
-                      type="button"
-                      onClick={() => setPurchaseExtraBlankRows((n) => n + 5)}
-                      className="w-full py-2 rounded-xl border border-dashed border-[var(--primary-alpha-30)] text-[var(--primary-color)] text-sm font-semibold hover:bg-[var(--primary-alpha-10)] transition-colors"
-                    >
-                      + Add 5 Rows
-                    </button>
-                  </div>
+            {purchaseItems.length === 0 ? (
+              <div className="min-h-[45vh] flex flex-col items-center justify-center text-center bg-white rounded-2xl border border-[var(--primary-alpha-20)]">
+                <div className="w-16 h-16 rounded-2xl bg-gray-200 flex items-center justify-center mb-3">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13l-1 5h12" />
+                  </svg>
                 </div>
-              );
-            })()}
+                <p className="text-2xl md:text-2xl font-semibold text-gray-700">No items added yet</p>
+                <p className="text-gray-500 mt-2">Search and add products to start your purchase entry</p>
+              </div>
+            ) : (
+              <div className="space-y-4 md:space-y-3">
+                {purchaseItems.map((item, index) => {
+                  const subtotal = item.purchasePrice * item.qty;
+                  const afterPurchaseQty = item.currentQty + item.qty;
+                  const discountAmount = item.billDiscountType === '%' ? (subtotal * item.billDiscount) / 100 : item.billDiscount;
+
+                  if (purchaseMode === 'Quotation') {
+                    return (
+                      <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-2 shadow-sm mb-2 relative overflow-hidden group shrink-0">
+
+                         {/* Main Row: Image, Info, and Price */}
+                         <div className="flex items-start gap-3 mb-2">
+                             {/* Large Image */}
+                             <div className="w-16 h-16 flex-shrink-0 bg-white rounded-lg border border-gray-100 flex items-center justify-center p-1 overflow-hidden shadow-sm">
+                                  {item.image ? (
+                                      <img src={item.image} alt={item.productName} className="w-full h-full object-contain" />
+                                  ) : (
+                                      <span className="text-xs text-gray-300">Img</span>
+                                  )}
+                             </div>
+
+                             {/* Product Details & Price */}
+                             <div className="flex-1 min-w-0">
+                                  <div className="flex justify-between items-start mb-1 gap-2">
+                                      <div className="flex items-start gap-2 min-w-0">
+                                           <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">#{index + 1}</span>
+                                           <div className="min-w-0">
+                                                <h4 className="text-sm font-semibold text-gray-800 leading-tight line-clamp-2">{item.productName}</h4>
+                                            </div>
+                                      </div>
+                                      <div className="font-bold text-gray-900 text-base flex-shrink-0">₹{Math.max(subtotal - discountAmount, 0).toFixed(2)}</div>
+                                  </div>
+
+                                  <div className="flex flex-col text-xs">
+                                       <span className="text-gray-500 leading-none">
+                                         MRP: <span className="line-through decoration-gray-400">₹{item.mrp}</span>{' '}
+                                         <span className="font-bold text-[var(--primary-color)] ml-1">SP: ₹{item.retailPrice}</span>
+                                       </span>
+                                  </div>
+                             </div>
+                         </div>
+
+                        {/* Bottom Row: Actions & Quantity */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => removePurchaseItem(item.id)}
+                              className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-colors border border-red-100"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => openPurchaseEditModal(item)}
+                              className="px-3 py-1.5 flex items-center gap-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                            >
+                              <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                              Edit
+                            </button>
+                          </div>
+
+                          {/* Quantity Control */}
+                          <div className="flex items-center bg-gray-50 rounded-lg p-0.5 border border-gray-200">
+                            <button
+                              onClick={() => updatePurchaseItem(item.id, { qty: Math.max(1, item.qty - 1) })}
+                              className="w-7 h-7 flex items-center justify-center text-gray-600 hover:bg-white hover:shadow-sm rounded transition-all font-bold text-lg"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min={1}
+                              value={item.qty || ''}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                updatePurchaseItem(item.id, { qty: isNaN(val) ? 0 : Math.max(1, val) });
+                              }}
+                              className="w-12 text-center bg-transparent text-sm font-bold text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                            <button
+                              onClick={() => updatePurchaseItem(item.id, { qty: item.qty + 1 })}
+                              className="w-7 h-7 flex items-center justify-center text-[var(--primary-color)] hover:bg-white hover:shadow-sm rounded transition-all font-bold text-lg"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={item.id} className="bg-white rounded-2xl border border-[var(--primary-alpha-20)] shadow-sm p-2 md:p-3 mb-2">
+                      <div className="flex gap-3 items-start">
+                        <div className="text-xl font-bold text-gray-600">#{index + 1}</div>
+                        <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center">
+                          {item.image ? <img src={item.image} alt={item.productName} className="w-full h-full object-contain" /> : <span className="text-xs text-gray-400">IMG</span>}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs text-gray-500">MRP: ₹{item.mrp} | Sp.: ₹{item.retailPrice}</p>
+                          {purchaseMode === 'Purchase' && (
+                            <p className="text-xs text-gray-500">Current Quantity: {item.currentQty} Piece</p>
+                          )}
+                          <h3 className="text-xl md:text-3xl font-bold text-gray-800 leading-tight">{item.productName}</h3>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-gray-500">Subtotal</div>
+                          <div className="font-bold text-gray-800">₹{Math.max(subtotal - discountAmount, 0).toFixed(2)}</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex gap-2 flex-wrap">
+                        <button
+                          onClick={() => openVariantPicker(item)}
+                          className="px-3 py-1.5 rounded-full border border-gray-300 text-sm font-medium md:py-1 md:text-[13px]"
+                        >
+                          + Add Variant
+                        </button>
+                        <button
+                          onClick={() => openPurchaseEditModal(item)}
+                          className="px-3 py-1.5 rounded-full border border-[var(--primary-color)] text-[var(--primary-color)] text-sm font-medium md:py-1 md:text-[13px]"
+                        >
+                          Edit
+                        </button>
+                        <button onClick={() => removePurchaseItem(item.id)} className="px-3 py-1.5 rounded-full border border-red-200 text-red-500 text-sm font-medium md:py-1 md:text-[13px]">Remove</button>
+                        <label className="ml-auto inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+                          <input type="checkbox" checked={item.includingGST} onChange={(e) => updatePurchaseItem(item.id, { includingGST: e.target.checked })} />
+                          Including GST
+                        </label>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 mt-3">
+                        <label className="text-xs text-gray-500">Total Price
+                          <input type="number" value={subtotal.toFixed(2)} readOnly className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
+                        </label>
+                        <label className="text-xs text-gray-500">Qty
+                          <input type="number" min={1} value={item.qty} onChange={(e) => updatePurchaseItem(item.id, { qty: Math.max(1, Number(e.target.value || 1)) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
+                        </label>
+                        <label className="text-xs text-gray-500">Purchase Price
+                          <input type="number" value={item.purchasePrice} onChange={(e) => updatePurchaseItem(item.id, { purchasePrice: Number(e.target.value || 0) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
+                        </label>
+                      </div>
+
+                      {purchaseMode === 'Purchase' && (
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                          <label className="text-xs text-gray-500">Current Quantity
+                            <input type="number" readOnly value={item.currentQty} className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
+                          </label>
+                          <label className="text-xs text-gray-500">Qty
+                            <input type="number" min={1} value={item.qty} onChange={(e) => updatePurchaseItem(item.id, { qty: Math.max(1, Number(e.target.value || 1)) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
+                          </label>
+                          <label className="text-xs text-gray-500">After Purchase
+                            <input type="number" readOnly value={afterPurchaseQty} className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
+                          </label>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <div className="grid grid-cols-[1fr_72px] gap-2 items-end">
+                          <label className="text-xs text-gray-500">Bill Discount
+                            <input type="number" value={item.billDiscount} onChange={(e) => updatePurchaseItem(item.id, { billDiscount: Number(e.target.value || 0) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
+                          </label>
+                          <select value={item.billDiscountType} onChange={(e) => updatePurchaseItem(item.id, { billDiscountType: e.target.value as '%' | '₹' })} className="rounded-xl border border-gray-300 px-2 py-2 h-[42px] md:h-10 md:py-1.5 md:text-sm">
+                            <option value="%">%</option>
+                            <option value="₹">₹</option>
+                          </select>
+                        </div>
+                        <label className="text-xs text-gray-500">GST
+                          <input type="number" value={item.gstPercent} onChange={(e) => updatePurchaseItem(item.id, { gstPercent: Number(e.target.value || 0) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 md:h-10 md:py-1.5 md:text-sm" />
+                        </label>
+                      </div>
+
+                      <button
+                        onClick={() => updatePurchaseItem(item.id, { additionalOpen: !item.additionalOpen })}
+                        className="w-full mt-3 text-left px-1 py-2 font-semibold text-gray-800 flex items-center justify-between"
+                      >
+                        <span>Additional Details</span>
+                        <span>{item.additionalOpen ? '▴' : '▾'}</span>
+                      </button>
+                      {item.additionalOpen && (
+                      <div className="space-y-2">
+                          <label className="text-xs text-gray-500 block">Enter Barcode Number</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={item.barcode}
+                              onChange={(e) => updatePurchaseItem(item.id, { barcode: e.target.value })}
+                              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2"
+                              placeholder="Scan or Enter"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPurchaseBarcodeScanItemId(item.id);
+                                setScanTarget('purchase-barcode');
+                                openBarcodeScanner(() => setShowScanner(true));
+                                setScannerKey((k: number) => k + 1);
+                              }}
+                              className="mt-1 px-3 py-2 bg-pink-50 border border-pink-200 rounded-xl hover:bg-pink-100 text-[var(--primary-color)] flex items-center justify-center gap-1 text-xs font-semibold"
+                              title="Scan Barcode"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7V5a2 2 0 012-2h2m6 0h2a2 2 0 012 2v2M5 17v2a2 2 0 002 2h2m6 0h2a2 2 0 002-2v-2M7 12h10M7 9h2m6 0h2m-4 6h2m-8 0h2" /></svg>
+                              Scan
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => handlePrintPurchaseBarcode(item)}
+                              className="rounded-lg bg-[var(--primary-color)] text-white py-2 text-sm font-semibold"
+                            >
+                              Print Barcode
+                            </button>
+                            <button
+                              onClick={() => handleAutoGeneratePurchaseBarcode(item.id)}
+                              className="rounded-lg bg-gray-100 text-gray-800 py-2 text-sm font-semibold"
+                            >
+                              Auto Generate Barcode
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="text-xs text-gray-500">MRP
+                              <input type="number" value={item.mrp} onChange={(e) => updatePurchaseItem(item.id, { mrp: Number(e.target.value || 0) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
+                            </label>
+                            <label className="text-xs text-gray-500">Retail Price
+                              <input type="number" value={item.retailPrice} onChange={(e) => updatePurchaseItem(item.id, { retailPrice: Number(e.target.value || 0) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
+                            </label>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <label className="text-xs text-gray-500">Wholesale
+                              <input type="number" value={item.wholesalePrice} onChange={(e) => updatePurchaseItem(item.id, { wholesalePrice: Number(e.target.value || 0) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
+                            </label>
+                            <label className="text-xs text-gray-500">Mfg Date
+                              <input type="date" value={item.mfgDate} onChange={(e) => updatePurchaseItem(item.id, { mfgDate: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
+                            </label>
+                            <label className="text-xs text-gray-500">Expiry
+                              <input type="date" value={item.expiry} onChange={(e) => updatePurchaseItem(item.id, { expiry: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
+                            </label>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <label className="text-xs text-gray-500">Hsn
+                              <input type="text" value={item.hsn} onChange={(e) => updatePurchaseItem(item.id, { hsn: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
+                            </label>
+                            <label className="text-xs text-gray-500">Batch
+                              <input type="text" value={item.batch} onChange={(e) => updatePurchaseItem(item.id, { batch: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
+                            </label>
+                            <label className="text-xs text-gray-500">Pack of
+                              <input type="number" min={1} value={item.packOf} onChange={(e) => updatePurchaseItem(item.id, { packOf: Math.max(1, Number(e.target.value || 1)) })} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2" />
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="bg-white border-t border-[var(--primary-alpha-20)] p-3 space-y-2 pb-4 md:pb-2.5 md:rounded-xl md:border md:shadow-sm md:max-w-[1450px] md:mx-auto md:w-full md:pt-2.5">

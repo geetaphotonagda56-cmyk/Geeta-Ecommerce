@@ -6,6 +6,8 @@ import { Product } from '../../types/domain';
 import { useEffect, useState } from 'react';
 import { getProducts } from '../../services/api/customerProductService';
 import WishlistButton from '../../components/WishlistButton';
+import ShareButton from '../../components/ShareButton';
+import UnitPricingHint from './components/UnitPricingHint';
 import { calculateProductPrice } from '../../utils/priceUtils';
 
 export default function FashionStore() {
@@ -69,14 +71,12 @@ export default function FashionStore() {
                   <path d="m21 21-4.35-4.35" stroke="#000000" strokeWidth="2" strokeLinecap="round" />
                 </svg>
               </button>
-              <button
+              <ShareButton
+                iconOnly
+                title="Fashion Basics Store"
+                text="Check out Fashion Basics Store on Geeta Stores"
                 className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-lg bg-white/70 shadow-sm hover:bg-white/80 transition-colors border border-white/20"
-                aria-label="Share"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M18 8A3 3 0 1 0 15 4.09M6 15a3 3 0 1 0 2.91-3M13 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm6 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
+              />
             </div>
           </div>
         </header>
@@ -184,6 +184,7 @@ export default function FashionStore() {
                           </span>
                         )}
                       </div>
+                      <UnitPricingHint product={product} className="text-[8px] font-semibold text-[var(--customer-primary)] mt-0.5" />
                     </div>
 
                     <AnimatePresence mode="wait">

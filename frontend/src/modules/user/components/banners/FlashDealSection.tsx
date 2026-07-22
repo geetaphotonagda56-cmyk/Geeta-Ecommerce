@@ -7,6 +7,8 @@ import { calculateCardPrice } from '../../../../utils/priceUtils';
 import { mapApiProductForCustomerDisplay } from '../../../../utils/customerVariantUtils';
 import { useLocation } from '../../../../hooks/useLocation';
 import BannerSlider from './BannerSlider';
+import ViewAllButton from '../ViewAllButton';
+import UnitPricingHint from '../UnitPricingHint';
 
 // Admin-managed Customer App Theme tokens. We intentionally read these instead
 // of the header-category palette so admin-created deals respect the brand color
@@ -215,14 +217,13 @@ export default function FlashDealSection() {
 
                 {/* Desktop View All Button */}
                 <div className="hidden md:block mt-8">
-                    <button
+                    <ViewAllButton
                         onClick={() => navigate('/flash-deals')}
-                        className="w-full py-3 bg-white hover:bg-white/90 text-sm font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
-                        style={{ color: BRAND.primary }}
-                    >
-                        View All Deals
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                    </button>
+                        label="View All Deals"
+                        variant="light"
+                        fullWidth
+                        className="py-3"
+                    />
                 </div>
              </div>
         </div>
@@ -268,6 +269,7 @@ export default function FlashDealSection() {
                                                 <span className="text-[10px] md:text-xs text-neutral-400 line-through">₹{mrp}</span>
                                             )}
                                         </div>
+                                        <UnitPricingHint product={product} className="text-[9px] md:text-[11px] font-semibold text-[var(--customer-primary)] mt-0.5" />
                                     </div>
                                 </div>
                             </div>
@@ -283,13 +285,7 @@ export default function FlashDealSection() {
 
         {/* Mobile Footer Action */}
         <div className="flex justify-center border-t border-neutral-100 pt-4 pb-4 md:hidden">
-            <button
-                onClick={() => navigate('/flash-deals')}
-                className="text-sm font-bold flex items-center gap-1 hover:gap-2 transition-all px-6 py-2 rounded-full border border-neutral-200 bg-white"
-                style={{ color: BRAND.primary }}
-            >
-                View All <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-            </button>
+            <ViewAllButton onClick={() => navigate('/flash-deals')} />
         </div>
       </div>
       )}
