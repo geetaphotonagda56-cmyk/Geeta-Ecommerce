@@ -112,6 +112,10 @@ export default function Search() {
   }, [inputValue]);
 
   useEffect(() => {
+    // Price-range cards (e.g. "Explore Our Range") land here with a slug
+    // already set - that's a browse action, not typing intent, so don't
+    // pop the mobile keyboard.
+    if (initialPriceSlug) return;
     inputRef.current?.focus();
   }, []);
 
@@ -418,7 +422,7 @@ export default function Search() {
                 placeholder="Search for atta, dal, coke and more"
                 className="h-full min-w-0 flex-1 bg-transparent text-sm font-medium text-neutral-900 outline-none placeholder:text-neutral-400 md:text-base"
                 aria-label="Search products"
-                autoFocus
+                autoFocus={!initialPriceSlug}
               />
               {suggestionsLoading && <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />}
               {inputValue && (

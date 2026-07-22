@@ -1111,6 +1111,57 @@ export const processReturnRequest = asyncHandler(
       }
     }
 
+    // Restock the returned item (e.g. an in-store walk-in return the admin closes out
+    // directly, with no delivery pickup task). Mirrors the POS sale deduction so stock
+    // isn't permanently understated. Guarded on the pre-update status so this can't
+    // double-credit if the request was already completed via the delivery pickup flow.
+    if (
+      status === "Completed" &&
+      returnRequest.status !== "Completed" &&
+      returnRequest.requestType === "Return"
+    ) {
+      try {
+        const orderItem = await OrderItem.findById(returnRequest.orderItem);
+        if (orderItem?.product) {
+          const productId = String(orderItem.product);
+          const product = await Product.findById(productId);
+          if (product) {
+            const variantId = resolveOrderItemVariantId(product, {
+              variantId: orderItem.variantId ? String(orderItem.variantId) : undefined,
+              sku: orderItem.sku,
+              variation: orderItem.variation,
+              productName: orderItem.productName,
+              unitPrice: orderItem.unitPrice,
+            });
+
+            if (variantId) {
+              const prevStock = await getVariantStock(productId, variantId);
+              const restored = await incrementVariantStock(productId, variantId, returnRequest.quantity);
+              if (restored) {
+                await StockLedger.create({
+                  product: productId,
+                  variationId: variantId,
+                  sku: resolveLedgerSku(orderItem.sku),
+                  quantity: returnRequest.quantity,
+                  type: "IN",
+                  source: "RETURN",
+                  referenceId: returnRequest._id,
+                  previousStock: prevStock,
+                  newStock: prevStock + returnRequest.quantity,
+                  admin: req.user?.userId,
+                });
+              }
+            } else {
+              console.warn(`Return restock skip: could not resolve variant for product ${productId}`);
+            }
+          }
+        }
+        await OrderItem.findByIdAndUpdate(returnRequest.orderItem, { status: "Returned" });
+      } catch (err) {
+        console.error("Failed to restock returned item:", err);
+      }
+    }
+
     const updatedReturn = await Return.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: true,
