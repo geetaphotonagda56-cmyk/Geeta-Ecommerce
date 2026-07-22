@@ -7,6 +7,16 @@ import {
   getPhonePePaymentStatus,
   isPhonePeConfigured,
 } from "../../services/phonepeService";
+import {
+  decrementVariantStock,
+  getVariantStock,
+} from "../product/variantStockService";
+import {
+  findVariantById,
+  resolveLedgerSku,
+  resolveOrderItemVariantId,
+  variantsFromProductDoc,
+} from "../product/variantHelpers";
 
 /**
  * Verify PhonePe payment (when configured) and mark POS online order complete + deduct stock.
@@ -61,63 +71,60 @@ export async function completePosOnlinePayment(
   for (const item of orderItems) {
     if (!item.product) continue;
 
-    const product = await Product.findById(item.product);
-    if (!product) continue;
+    const soldQty = Number(item.quantity) || 0;
+    if (soldQty <= 0) continue;
 
-    const productDoc = product as any;
-    const prevStock = Number(productDoc.stock) || 0;
-    const soldQty = item.quantity;
-    let stockUpdated = false;
+    try {
+      const productId = String(item.product);
+      const product = await Product.findById(productId).lean();
+      if (!product) continue;
 
-    if (item.sku && product.variations?.length) {
-      const vIndex = product.variations.findIndex((v) => v.sku === item.sku);
-      if (vIndex > -1) {
-        const prevVarStock = product.variations[vIndex].stock || 0;
-        product.variations[vIndex].stock = Math.max(0, prevVarStock - soldQty);
-        productDoc.stock = Math.max(0, prevStock - soldQty);
-        await product.save();
+      // Prefer the variant resolved at order-creation time; fall back to
+      // re-resolving (SKU / name / price / single-variant) for older orders
+      // placed before variantId was stored on the OrderItem.
+      const variantId = (item as any).variantId
+        ? String((item as any).variantId)
+        : resolveOrderItemVariantId(product, {
+            sku: item.sku,
+            productName: item.productName,
+            unitPrice: item.unitPrice,
+          });
 
-        await StockLedger.create({
-          product: product._id,
-          variationId: product.variations[vIndex]._id,
-          sku: item.sku,
-          quantity: soldQty,
-          type: "OUT",
-          source: "POS",
-          referenceId: order._id,
-          previousStock: prevVarStock,
-          newStock: product.variations[vIndex].stock,
-          ...(sellerId
-            ? { seller: sellerId }
-            : { admin: req.user?.userId }),
-        });
-        stockUpdated = true;
+      if (!variantId) {
+        console.warn(`POS online stock skip: could not resolve variant for product ${productId}`);
+        continue;
       }
-    }
 
-    if (!stockUpdated) {
-      productDoc.stock = Math.max(0, prevStock - soldQty);
-      await product.save();
+      const variants = variantsFromProductDoc(product);
+      const variant = findVariantById(variants, variantId);
+      const prevStock = await getVariantStock(productId, variantId);
+      const decremented = await decrementVariantStock(productId, variantId, soldQty);
+      if (!decremented) {
+        console.warn(`POS online stock decrement failed for ${productId}/${variantId}`);
+        continue;
+      }
+
+      const newStock = Math.max(0, prevStock - soldQty);
 
       await StockLedger.create({
-        product: product._id,
-        sku: item.sku || productDoc.sku || "N/A",
+        product: productId,
+        variationId: variantId,
+        sku: resolveLedgerSku(variant?.sku, item.sku),
         quantity: soldQty,
         type: "OUT",
         source: "POS",
         referenceId: order._id,
         previousStock: prevStock,
-        newStock: productDoc.stock,
+        newStock,
         ...(sellerId ? { seller: sellerId } : { admin: req.user?.userId }),
       });
-    }
 
-    const io = req.app.get("io");
-    if (io) {
-      io.emit("stock-update", {
-        productId: product._id,
-        newStock: productDoc.stock,
-      });
+      const io = req.app.get("io");
+      if (io) {
+        io.emit("stock-update", { productId, newStock });
+      }
+    } catch (err) {
+      console.error("POS online stock update error", err);
     }
   }
 

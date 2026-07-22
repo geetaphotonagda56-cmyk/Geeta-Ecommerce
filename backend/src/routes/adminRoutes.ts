@@ -203,6 +203,8 @@ router.get("/pos/stock-ledger", orderController.getPOSStockLedger);
 router.put("/pos/stock-ledger/:id", updateStockLedgerController.updateStockLedgerEntry);
 router.post("/pos/exchange", orderController.processPOSExchange);
 router.delete("/orders/pos/:id", deletePOSOrderController.deletePOSOrder);
+router.post("/orders/pos/:id/restore-stock-and-delete", deletePOSOrderController.restorePOSOrderStockAndDelete);
+router.post("/orders/pos/:id/restore-stock-only", deletePOSOrderController.restorePOSOrderStockOnly);
 router.get("/pos/purchase-entries", adminPOSPurchaseEntryController.getAdminPurchaseEntries);
 router.post("/pos/purchase-entries", adminPOSPurchaseEntryController.upsertAdminPurchaseEntry);
 router.delete("/pos/purchase-entries/:entryId", adminPOSPurchaseEntryController.deleteAdminPurchaseEntry);

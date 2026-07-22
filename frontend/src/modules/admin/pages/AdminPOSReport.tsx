@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { getPOSReport, getStockLedger, deletePOSOrder, updateStockLedgerEntry, updateOrderStatus, getOrderById } from "../../../services/api/admin/adminOrderService";
+import { getPOSReport, getStockLedger, deletePOSOrder, restorePOSOrderStockAndDelete, restorePOSOrderStockOnly, updateStockLedgerEntry, updateOrderStatus, getOrderById } from "../../../services/api/admin/adminOrderService";
 import jsPDF from "jspdf";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../../context/ToastContext";
@@ -46,6 +46,7 @@ const AdminPOSReport = () => {
     const [activeTab, setActiveTab] = useState<"orders" | "ledger">("orders");
     const [filter, setFilter] = useState("all");
     const [selectedActionOrder, setSelectedActionOrder] = useState<any>(null);
+    const [restoreChoiceOrder, setRestoreChoiceOrder] = useState<any>(null);
     const [editingLedgerEntry, setEditingLedgerEntry] = useState<any>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
@@ -217,6 +218,58 @@ const AdminPOSReport = () => {
             } finally {
                 setLoading(false);
             }
+        }
+    };
+
+    const handleOpenRestoreChoice = (order: any) => {
+        // Restriction: Cannot restore/delete orders with customer names
+        const isWalkIn = !order.customerName || order.customerName.toLowerCase() === "walk-in customer";
+        if (!isWalkIn) {
+            showToast("Orders with customer names cannot be deleted.", "error");
+            return;
+        }
+        setRestoreChoiceOrder(order);
+    };
+
+    const handleRestoreAndDelete = async () => {
+        const order = restoreChoiceOrder;
+        if (!order) return;
+        setRestoreChoiceOrder(null);
+        try {
+            setLoading(true);
+            const response = await restorePOSOrderStockAndDelete(order._id);
+            if (response.success) {
+                showToast("Stock restored and order deleted", "success");
+                fetchData(dateRange.start || undefined, dateRange.end || undefined);
+            } else {
+                showToast(response.message || "Failed to restore stock and delete order", "error");
+            }
+        } catch (error) {
+            console.error("Error restoring stock and deleting order:", error);
+            showToast("An error occurred while restoring stock and deleting the order", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRestoreOnly = async () => {
+        const order = restoreChoiceOrder;
+        if (!order) return;
+        setRestoreChoiceOrder(null);
+        try {
+            setLoading(true);
+            const response = await restorePOSOrderStockOnly(order._id);
+            if (response.success) {
+                showToast("Stock restored - bill kept for reference", "success");
+                fetchData(dateRange.start || undefined, dateRange.end || undefined);
+            } else {
+                showToast(response.message || "Failed to restore stock", "error");
+            }
+        } catch (error) {
+            console.error("Error restoring stock:", error);
+            showToast("An error occurred while restoring stock", "error");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -853,20 +906,32 @@ const AdminPOSReport = () => {
                                                  </td>
                                                  <td className="px-6 py-4">
                                                       {(!order.customerName || order.customerName.toLowerCase() === "walk-in customer") ? (
-                                                          <button
-                                                              onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order); }}
-                                                              className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
-                                                              title="Delete Order"
-                                                          >
-                                                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                  <polyline points="3 6 5 6 21 6"></polyline>
-                                                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                                                  <line x1="10" y1="11" x2="10" y2="17"></line>
-                                                                  <line x1="14" y1="11" x2="14" y2="17"></line>
-                                                              </svg>
-                                                          </button>
+                                                          <div className="flex items-center gap-1">
+                                                              <button
+                                                                  onClick={(e) => { e.stopPropagation(); handleOpenRestoreChoice(order); }}
+                                                                  className="text-amber-500 hover:text-amber-700 p-1 rounded hover:bg-amber-50 transition-colors"
+                                                                  title="Restore Stock & Delete (undo a mistaken bill)"
+                                                              >
+                                                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                      <polyline points="1 4 1 10 7 10"></polyline>
+                                                                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                                                                  </svg>
+                                                              </button>
+                                                              <button
+                                                                  onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order); }}
+                                                                  className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
+                                                                  title="Delete Order"
+                                                              >
+                                                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                      <polyline points="3 6 5 6 21 6"></polyline>
+                                                                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                                      <line x1="10" y1="11" x2="10" y2="17"></line>
+                                                                      <line x1="14" y1="11" x2="14" y2="17"></line>
+                                                                  </svg>
+                                                              </button>
+                                                          </div>
                                                       ) : (
-                                                          <div className="w-[26px] h-[26px]" /> // Spacer to maintain alignment
+                                                          <div className="w-[52px] h-[26px]" /> // Spacer to maintain alignment
                                                       )}
                                                  </td>
                                              </tr>
@@ -1057,6 +1122,51 @@ const AdminPOSReport = () => {
                                      </button>
                                  )}
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Restore Stock Choice Modal */}
+            {restoreChoiceOrder && (
+                <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl transform transition-all animate-in zoom-in-95">
+                        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                            <h3 className="font-bold text-gray-800">Restore Stock</h3>
+                            <button onClick={() => setRestoreChoiceOrder(null)} className="text-gray-400 hover:text-gray-600">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <div className="p-5">
+                            <p className="text-sm text-gray-500 mb-5">
+                                This adds order <span className="font-bold text-gray-700">#{restoreChoiceOrder.orderNumber}</span>'s items back to inventory. What should happen to the bill itself?
+                            </p>
+
+                            <button
+                                onClick={handleRestoreOnly}
+                                className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 border border-gray-200 rounded-xl transition-colors text-left group mb-2"
+                            >
+                                <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                                </div>
+                                <div>
+                                    <div className="font-semibold text-gray-700">Restore stock, keep bill</div>
+                                    <div className="text-xs text-gray-400">Bill stays in the report for reference</div>
+                                </div>
+                            </button>
+
+                            <button
+                                onClick={handleRestoreAndDelete}
+                                className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 border border-gray-200 rounded-xl transition-colors text-left group"
+                            >
+                                <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/></svg>
+                                </div>
+                                <div>
+                                    <div className="font-semibold text-gray-700">Restore stock, delete bill</div>
+                                    <div className="text-xs text-gray-400">Permanently removes the order too</div>
+                                </div>
+                            </button>
                         </div>
                     </div>
                 </div>

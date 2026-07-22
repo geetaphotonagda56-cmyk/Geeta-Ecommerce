@@ -382,6 +382,23 @@ export const deletePOSOrder = async (id: string): Promise<ApiResponse<any>> => {
 };
 
 /**
+ * Restore stock for a POS order's items, then delete the order.
+ * Use for bills created by mistake, so the sold quantity goes back to inventory.
+ */
+export const restorePOSOrderStockAndDelete = async (id: string): Promise<ApiResponse<any>> => {
+  const response = await api.post<ApiResponse<any>>(`/admin/orders/pos/${id}/restore-stock-and-delete`);
+  return response.data;
+};
+
+/**
+ * Restore stock for a POS order's items, but keep the order/bill record.
+ */
+export const restorePOSOrderStockOnly = async (id: string): Promise<ApiResponse<any>> => {
+  const response = await api.post<ApiResponse<any>>(`/admin/orders/pos/${id}/restore-stock-only`);
+  return response.data;
+};
+
+/**
  * Delete Order (Online/Non-POS) and Restore Stock
  */
 export const deleteOrder = async (id: string): Promise<ApiResponse<any>> => {

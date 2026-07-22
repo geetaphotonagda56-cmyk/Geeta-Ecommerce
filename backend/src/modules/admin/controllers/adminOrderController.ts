@@ -1342,11 +1342,15 @@ export const createPOSOrder = asyncHandler(
                if (product) {
                    productId = product._id;
                    const variants = variantsFromProductDoc(product);
-                   resolvedVariant = item.variationId
-                     ? findVariantById(variants, item.variationId)
-                     : variants.length === 1
-                       ? variants[0]
-                       : undefined;
+                   const resolvedVariantId = resolveOrderItemVariantId(product, {
+                       variantId: item.variationId,
+                       sku: item.sku,
+                       productName: item.name,
+                       unitPrice: item.price,
+                   });
+                   resolvedVariant = resolvedVariantId
+                     ? findVariantById(variants, resolvedVariantId)
+                     : undefined;
                    productData = {
                        productName: item.name || product.productName,
                        mainImage: resolvedVariant?.mainImage || (product as any).listing?.imageUrl || "",
@@ -1462,24 +1466,21 @@ export const createPOSOrder = asyncHandler(
                const product = await Product.findById(productId).lean();
                if (!product) continue;
 
-               const variants = variantsFromProductDoc(product);
-               if (!variants.length) {
-                   console.warn(`POS stock skip: product ${productId} has no variants`);
-                   continue;
-               }
-
-               let variantId = item.variationId ? String(item.variationId) : undefined;
-               if (variantId && !findVariantById(variants, variantId)) {
-                   variantId = undefined;
-               }
-               if (!variantId && variants.length === 1) {
-                   variantId = String(variants[0]._id);
-               }
+               // Falls back through SKU / product name / unique price match when the cart
+               // didn't carry a resolvable variationId - matters for multi-variant products,
+               // since a single-variant product always resolves via its lone variant anyway.
+               const variantId = resolveOrderItemVariantId(product, {
+                   variantId: item.variationId,
+                   sku: item.sku,
+                   productName: item.name,
+                   unitPrice: item.price,
+               });
                if (!variantId) {
                    console.warn(`POS stock skip: could not resolve variant for product ${productId}`);
                    continue;
                }
 
+               const variants = variantsFromProductDoc(product);
                const variant = findVariantById(variants, variantId)!;
                const prevStock = await getVariantStock(productId, variantId);
                const decremented = await decrementVariantStock(productId, variantId, soldQty);
@@ -1575,15 +1576,26 @@ export const initiatePOSOnlineOrder = asyncHandler(
        };
        let productId = null;
        let product: any = null;
+       let resolvedVariantId: string | undefined;
 
        if (item.productId && mongoose.Types.ObjectId.isValid(item.productId)) {
            product = await Product.findById(item.productId).populate('seller');
            if (product) {
                productId = product._id;
+               resolvedVariantId = resolveOrderItemVariantId(product, {
+                   variantId: item.variationId,
+                   sku: item.sku,
+                   productName: item.name,
+                   unitPrice: item.price,
+               });
+               const variants = variantsFromProductDoc(product);
+               const resolvedVariant = resolvedVariantId
+                 ? findVariantById(variants, resolvedVariantId)
+                 : undefined;
                productData = {
                    productName: product.productName,
-                   mainImage: product.mainImage,
-                   sku: product.sku,
+                   mainImage: resolvedVariant?.mainImage || product.mainImage,
+                   sku: resolvedVariant?.sku || "",
                    seller: product.seller ? ((product.seller as any)._id || product.seller) : null
                };
            }
@@ -1636,6 +1648,7 @@ export const initiatePOSOnlineOrder = asyncHandler(
          status: "Pending" // Initial status
        };
        if (productId) payload.product = productId;
+       if (resolvedVariantId) payload.variantId = resolvedVariantId;
        if (productData.seller) payload.seller = productData.seller;
 
        orderItemsPayload.push(payload);

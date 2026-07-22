@@ -8,6 +8,11 @@ import {
   initiatePhonePePayment,
   isPhonePeConfigured,
 } from "../../services/phonepeService";
+import {
+  findVariantById,
+  resolveOrderItemVariantId,
+  variantsFromProductDoc,
+} from "../product/variantHelpers";
 
 export interface InitiatePosOnlineInput {
   customerId: string;
@@ -55,15 +60,26 @@ export async function initiatePosOnlineOrderCore(input: InitiatePosOnlineInput) 
     };
     let productId = null;
     let product: any = null;
+    let resolvedVariantId: string | undefined;
 
     if (item.productId && mongoose.Types.ObjectId.isValid(item.productId)) {
       product = await Product.findById(item.productId).populate("seller");
       if (product) {
         productId = product._id;
+        resolvedVariantId = resolveOrderItemVariantId(product, {
+          variantId: item.variationId,
+          sku: item.sku,
+          productName: item.name,
+          unitPrice: item.price,
+        });
+        const variants = variantsFromProductDoc(product);
+        const resolvedVariant = resolvedVariantId
+          ? findVariantById(variants, resolvedVariantId)
+          : undefined;
         productData = {
           productName: product.productName,
-          mainImage: product.mainImage,
-          sku: product.sku,
+          mainImage: resolvedVariant?.mainImage || product.mainImage,
+          sku: resolvedVariant?.sku || "",
           seller: product.seller
             ? (product.seller as any)._id || product.seller
             : null,
@@ -122,6 +138,7 @@ export async function initiatePosOnlineOrderCore(input: InitiatePosOnlineInput) 
       status: "Pending",
     };
     if (productId) payload.product = productId;
+    if (resolvedVariantId) payload.variantId = resolvedVariantId;
     if (productData.seller) payload.seller = productData.seller;
 
     orderItemsPayload.push(payload);
