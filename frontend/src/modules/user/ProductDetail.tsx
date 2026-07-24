@@ -848,7 +848,7 @@ export default function ProductDetail() {
               />
             </svg>
             <span className="text-sm text-neutral-700 font-medium">
-              {formatDeliveryTime((product as any)?.deliveryTime, "17 MINS")}
+              {formatDeliveryTime((product as any)?.deliveryTime, "24 HOURS")}
             </span>
           </div>
 

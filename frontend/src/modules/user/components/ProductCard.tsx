@@ -162,7 +162,7 @@ export default function ProductCard({
   const deliveryTimeText = (() => {
     const raw = (product as any)?.deliveryTime;
     const text = raw === undefined || raw === null ? '' : String(raw).trim();
-    if (!text) return '14 MINS';
+    if (!text) return '24 HOURS';
     if (/^\d+(\.\d+)?$/.test(text)) return `${text} MINS`;
     return text;
   })();

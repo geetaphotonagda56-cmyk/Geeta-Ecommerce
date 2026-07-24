@@ -5,6 +5,7 @@ import {
   Product,
   Category,
   getProducts,
+  getProductById,
   updateProduct,
   createProduct,
   deleteProduct as deleteAdminProduct,
@@ -17,8 +18,7 @@ import {
 import { getAttributes } from "../../../services/api/admin/attributeService";
 import AttributeDropdown from "../../../components/AttributeDropdown";
 import SearchableSelect from "../../../components/SearchableSelect";
-import VariationEditor from "../../../components/VariationEditor";
-import VariationDropdown from "../../../components/VariationDropdown";
+import AttachProductPopover from "../../../components/AttachProductPopover";
 import { searchProductImage } from "../../../services/api/productService";
 import ImageCropperModal from "../../../components/ImageCropperModal";
 
@@ -151,6 +151,12 @@ export default function AdminStockBulkEdit({
   const [pageLoading, setPageLoading] = useState(false);
   const editedCacheRef = useRef<Map<string, EditableProduct>>(new Map());
   const [changesVersion, setChangesVersion] = useState(0);
+  // "Attach Existing Product" deactivates (not deletes) the merged-in
+  // original right away, stripping its barcode so it's freed up before this
+  // product's own save; handleSave awaits any of these still in flight
+  // first so a fast "Save Changes" click can never race ahead and hit a
+  // false "barcode already in use" conflict against the original.
+  const pendingAttachDeactivationsRef = useRef<Set<Promise<void>>>(new Set());
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -164,7 +170,8 @@ export default function AdminStockBulkEdit({
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [availableAttributes, setAvailableAttributes] = useState<{_id: string, name: string}[]>([]);
-  const [activeVariationModalIndex, setActiveVariationModalIndex] = useState<number | null>(null);
+  const [expandedProductIds, setExpandedProductIds] = useState<Set<string>>(new Set());
+  const [attachPopoverAnchor, setAttachPopoverAnchor] = useState<{ index: number; rect: DOMRect } | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanIndex, setScanIndex] = useState<number | null>(null);
   const [showSearchScanner, setShowSearchScanner] = useState(false);
@@ -552,6 +559,186 @@ export default function AdminStockBulkEdit({
     });
   };
 
+  const toggleExpandProduct = (productId: string) => {
+    setExpandedProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  };
+
+  const handleVariationFieldChange = (
+    productIndex: number,
+    variationIndex: number,
+    field: string,
+    value: any
+  ) => {
+    const product = editableProducts[productIndex];
+    const newVariations = [...(product.variations || [])];
+    newVariations[variationIndex] = { ...newVariations[variationIndex], [field]: value };
+    handleFieldChange(productIndex, "variations", newVariations);
+  };
+
+  // Attribute type (e.g. "Color", "Size") is defined per-product via the
+  // Attributes column; each variation only holds the value for that type.
+  // Recompose the backend's combined name/value fields (e.g. name="Color/Size",
+  // value="Red/M") whenever one of the per-attribute inputs changes, so the
+  // storefront's "Type: Value" label keeps working.
+  const handleVariationAttributeChange = (
+    productIndex: number,
+    variationIndex: number,
+    attrName: string,
+    attrValue: string
+  ) => {
+    const product = editableProducts[productIndex];
+    const selectedAttributes = product.attributes || [];
+    const newVariations = [...(product.variations || [])];
+    const current: any = { ...newVariations[variationIndex], [attrName]: attrValue };
+    if (selectedAttributes.length > 0) {
+      current.name = selectedAttributes.join("/");
+      current.value = selectedAttributes.map((a: string) => current[a] || "-").join("/");
+    }
+    newVariations[variationIndex] = current;
+    handleFieldChange(productIndex, "variations", newVariations);
+  };
+
+  const handleAddVariation = (productIndex: number) => {
+    const product = editableProducts[productIndex];
+    const blankVariation = {
+      _id: undefined,
+      name: "",
+      value: "",
+      price: 0,
+      compareAtPrice: 0,
+      discPrice: 0,
+      wholesalePrice: 0,
+      purchasePrice: 0,
+      stock: 0,
+      sku: "",
+      barcode: [],
+      customBlockRack: false,
+    };
+    const newVariations = [blankVariation, ...(product.variations || [])];
+    handleFieldChange(productIndex, "variations", newVariations);
+    setExpandedProductIds((prev) => new Set(prev).add(product.id));
+  };
+
+  const handleRemoveVariation = (productIndex: number, variationIndex: number) => {
+    const product = editableProducts[productIndex];
+    const variations = product.variations || [];
+    if (variations.length <= 1) {
+      alert("A product must have at least one variation.");
+      return;
+    }
+    const newVariations = variations.filter((_: any, i: number) => i !== variationIndex);
+    handleFieldChange(productIndex, "variations", newVariations);
+  };
+
+  const mapProductToVariation = (p: any) => ({
+    _id: undefined,
+    name: p.variationName || p.productName || "",
+    value: p.variationName || p.productName || "",
+    price: p.price || 0,
+    compareAtPrice: p.compareAtPrice || 0,
+    discPrice: p.discPrice || 0,
+    wholesalePrice: p.wholesalePrice || 0,
+    purchasePrice: p.purchasePrice || 0,
+    stock: p.stock || 0,
+    sku: p.sku || p.itemCode || "",
+    barcode: Array.isArray(p.barcode) ? p.barcode : p.barcode ? [p.barcode] : [],
+    blockNumber: p.blockNumber || "",
+    rackNumber: p.rackNumber || "",
+    // Preserve the attached product's own block/rack instead of silently
+    // adopting the target product's - it's real data, not a placeholder.
+    customBlockRack: !!(p.blockNumber || p.rackNumber),
+    hsnCode: p.hsnCode || "",
+    mainImage: p.mainImage || "",
+    galleryImages: p.galleryImages || [],
+  });
+
+  // Products without real variants still carry one synthesized "Default"/
+  // "Standard" placeholder variation (see backend variantHelpers.ts /
+  // productNormalizer.ts) - that placeholder name/value must not overwrite
+  // the picked product's real name when attaching it as a variation.
+  const isPlaceholderVariantLabel = (v: any) => {
+    const val = String(v?.value || v?.title || v?.name || "").trim().toLowerCase();
+    return !val || val === "default" || val === "standard";
+  };
+
+  const handleAttachExistingProduct = async (productIndex: number, searchResult: any) => {
+    const pickedId = searchResult._id || searchResult.id;
+    setAttachPopoverAnchor(null);
+
+    // The fuzzy search endpoint returns a trimmed projection (e.g. no
+    // hsnCode/gst/tax) - fetch the full product so nothing is lost when
+    // it's converted into a variation and the original is deactivated.
+    let picked: any = searchResult;
+    try {
+      const detail = await getProductById(pickedId);
+      if (detail?.success && detail.data) picked = detail.data;
+    } catch (err) {
+      console.error("Failed to load full product details before attaching, using search result data", err);
+    }
+
+    const product = editableProducts[productIndex];
+    const newVariations =
+      Array.isArray(picked.variations) && picked.variations.length > 0
+        ? picked.variations.map((v: any) => {
+            const base = mapProductToVariation(picked);
+            const merged = { ...base, ...v, _id: undefined };
+            if (isPlaceholderVariantLabel(v)) {
+              merged.name = base.name;
+              merged.value = base.value;
+            }
+            merged.customBlockRack = !!(v.blockNumber || v.rackNumber || base.blockNumber || base.rackNumber);
+            return merged;
+          })
+        : [mapProductToVariation(picked)];
+
+    handleFieldChange(productIndex, "variations", [...newVariations, ...(product.variations || [])]);
+    setExpandedProductIds((prev) => new Set(prev).add(product.id));
+
+    // Don't delete the original - deactivate it instead, so it's recoverable
+    // if this merge is ever undone. Its barcode(s) are stripped in the same
+    // call, since they now belong to the copied-in variation and would
+    // otherwise collide with this product's own save as a duplicate. It
+    // stays hidden from customers (publish: false) but is still visible to
+    // admins, who can manually reactivate it - removing the variation later
+    // never does this automatically.
+    const deactivation = (async () => {
+      try {
+        const originalVariations = Array.isArray(picked.variations) && picked.variations.length > 0
+          ? picked.variations.map((v: any) => ({ ...v, barcode: [] }))
+          : undefined;
+        const res = await updateProduct(pickedId, {
+          publish: false,
+          barcode: [],
+          ...(originalVariations ? { variations: originalVariations } : {}),
+        } as any);
+        if (!res?.success) {
+          alert(`Attached "${picked.productName}" as a variation, but failed to deactivate the original standalone product. Please deactivate it manually, then save.`);
+          return;
+        }
+        editedCacheRef.current.delete(pickedId);
+        setEditableProducts((prev) => prev.filter((p) => p.id !== pickedId));
+        setSelectedProductIds((prev) => {
+          if (!prev.has(pickedId)) return prev;
+          const next = new Set(prev);
+          next.delete(pickedId);
+          return next;
+        });
+      } catch (err: any) {
+        console.error("Failed to deactivate attached product", err);
+        alert(`Attached "${picked.productName}" as a variation, but failed to deactivate the original standalone product: ${err?.response?.data?.message || err?.message || "Unknown error"}. Please deactivate it manually, then save.`);
+      }
+    })();
+    pendingAttachDeactivationsRef.current.add(deactivation);
+    deactivation.finally(() => {
+      pendingAttachDeactivationsRef.current.delete(deactivation);
+    });
+  };
+
   const handleImageChange = (index: number, files: FileList | null) => {
       if (!files || files.length === 0) return;
       setImageCropQueue((prev) => [
@@ -603,6 +790,14 @@ export default function AdminStockBulkEdit({
   };
 
   const handleSave = async () => {
+    // Let any in-flight "Attach Existing Product" deactivations finish first -
+    // otherwise a fast click here could send this save before the original's
+    // barcode (which we just copied) is actually cleared, causing a false
+    // "barcode already in use" conflict against it.
+    if (pendingAttachDeactivationsRef.current.size > 0) {
+      await Promise.allSettled(Array.from(pendingAttachDeactivationsRef.current));
+    }
+
     const allEdited = Array.from(editedCacheRef.current.values());
     const changedExisting = allEdited.filter((p) => p.isChanged && !p.isNew);
     const newProducts = allEdited.filter((p) => p.isNew && p.isChanged);
@@ -687,8 +882,8 @@ export default function AdminStockBulkEdit({
                  wholesalePrice: p.wholesalePrice || 0,
                  purchasePrice: p.purchasePrice || 0,
                  sku: p.itemCode || undefined,
-                 blockNumber: p.blockNumber || undefined,
-                 rackNumber: p.rackNumber || undefined,
+                 blockNumber: v.customBlockRack ? (v.blockNumber || undefined) : (p.blockNumber || undefined),
+                 rackNumber: v.customBlockRack ? (v.rackNumber || undefined) : (p.rackNumber || undefined),
                  barcode: p.barcode || [],
                  tieredPrices: p.unitPricing || [],
                  mainImage: mainImage || undefined,
@@ -704,11 +899,11 @@ export default function AdminStockBulkEdit({
                  wholesalePrice: v.wholesalePrice || 0,
                  purchasePrice: v.purchasePrice || 0,
                  sku: v.sku,
-                 // The bulk-edit grid only has one Block/Rack input per product
-                 // row (mapped to the first variation) - apply the edited
-                 // value there, leave other variants' own values untouched.
-                 blockNumber: vIdx === 0 ? (p.blockNumber || undefined) : v.blockNumber,
-                 rackNumber: vIdx === 0 ? (p.rackNumber || undefined) : v.rackNumber,
+                 // Every variation defaults to the parent row's Block/Rack
+                 // (locked); a variation can opt out via customBlockRack to
+                 // pick its own instead.
+                 blockNumber: v.customBlockRack ? (v.blockNumber || undefined) : (p.blockNumber || undefined),
+                 rackNumber: v.customBlockRack ? (v.rackNumber || undefined) : (p.rackNumber || undefined),
                  barcode: v.barcode || [],
                  tieredPrices: v.tieredPrices || v.unitPricing || [],
                  mainImage: v.mainImage || undefined,
@@ -787,8 +982,8 @@ export default function AdminStockBulkEdit({
                       wholesalePrice: p.wholesalePrice || 0,
                       purchasePrice: p.purchasePrice || 0,
                       sku: p.itemCode || undefined,
-                      blockNumber: p.blockNumber || undefined,
-                      rackNumber: p.rackNumber || undefined,
+                      blockNumber: v.customBlockRack ? (v.blockNumber || undefined) : (p.blockNumber || undefined),
+                      rackNumber: v.customBlockRack ? (v.rackNumber || undefined) : (p.rackNumber || undefined),
                       barcode: p.barcode || [],
                       tieredPrices: p.unitPricing || [],
                       mainImage: mainImage || undefined,
@@ -804,8 +999,8 @@ export default function AdminStockBulkEdit({
                       wholesalePrice: v.wholesalePrice || 0,
                       purchasePrice: v.purchasePrice || 0,
                       sku: v.sku,
-                      blockNumber: vIdx === 0 ? (p.blockNumber || undefined) : v.blockNumber,
-                      rackNumber: vIdx === 0 ? (p.rackNumber || undefined) : v.rackNumber,
+                      blockNumber: v.customBlockRack ? (v.blockNumber || undefined) : (p.blockNumber || undefined),
+                      rackNumber: v.customBlockRack ? (v.rackNumber || undefined) : (p.rackNumber || undefined),
                       barcode: v.barcode || [],
                       tieredPrices: v.tieredPrices || v.unitPricing || [],
                       mainImage: v.mainImage || undefined,
@@ -1453,11 +1648,8 @@ export default function AdminStockBulkEdit({
         );
       case "variations":
         return (
-            <td key={key} className="p-0 border-r border-neutral-200 bg-white">
-                <VariationDropdown
-                    variations={product.variations || []}
-                    onEdit={() => setActiveVariationModalIndex(originalIndex)}
-                />
+            <td key={key} className="p-2 border-r border-neutral-200 bg-white text-xs text-gray-600 align-top">
+                {(product.variations || []).length} Variation{(product.variations || []).length === 1 ? "" : "s"}
             </td>
         );
       case "variationName":
@@ -1485,7 +1677,7 @@ export default function AdminStockBulkEdit({
       case "subSubCategory":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.subSubCategory} onChange={(e) => handleFieldChange(originalIndex, 'subSubCategory', e.target.value)} /></td>;
       case "sku":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.itemCode} onChange={(e) => handleFieldChange(originalIndex, 'itemCode', e.target.value)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm font-mono tracking-tight" value={product.itemCode} onChange={(e) => handleFieldChange(originalIndex, 'itemCode', e.target.value)} /></td>;
       case "blockNumber":
         return (
           <td key={key} className="p-0 border-r border-neutral-200">
@@ -1539,14 +1731,14 @@ export default function AdminStockBulkEdit({
         return (
           <td key={key} className="p-1 border-r border-neutral-200 align-top overflow-hidden">
             <div className="flex flex-col gap-1 w-full min-w-0">
-                <div className="flex flex-wrap gap-1 px-1 w-full min-w-0">
+                <div className="flex flex-wrap content-start gap-1 px-1 w-full min-w-0 max-h-16 overflow-y-auto">
                     {(product.barcode || []).map(b => (
-                        <span key={b} className="bg-pink-50 text-pink-700 px-1.5 py-0.5 rounded text-[10px] border border-pink-100 flex items-center gap-1 group/chip max-w-full break-all">
+                        <span key={b} className="inline-flex items-center gap-1 bg-stone-50 text-neutral-700 pl-2 pr-1 py-0.5 rounded-sm text-[10px] font-mono tabular-nums border border-neutral-200 border-l-2 border-l-[var(--primary-color)] [border-left-style:dashed] max-w-full break-all group/chip">
                             <span className="min-w-0 break-all">{b}</span>
                             <button onClick={() => {
                                 const newBarcodes = (product.barcode || []).filter(item => item !== b);
                                 handleFieldChange(originalIndex, 'barcode', newBarcodes);
-                            }} className="text-pink-400 hover:text-red-500 transition-colors">&times;</button>
+                            }} className="text-neutral-400 hover:text-red-500 transition-colors">&times;</button>
                         </span>
                     ))}
                 </div>
@@ -1601,7 +1793,7 @@ export default function AdminStockBulkEdit({
       case "gst":
         return <td key={key} className="p-2 border-r border-neutral-200 text-sm text-neutral-600">-</td>;
       case "purchasePrice":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right" value={product.purchasePrice} onChange={(e) => handleFieldChange(originalIndex, 'purchasePrice', parseFloat(e.target.value))} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.purchasePrice} onChange={(e) => handleFieldChange(originalIndex, 'purchasePrice', parseFloat(e.target.value))} /></td>;
       case "mfgDate":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="date" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.mfgDate || ""} onChange={(e) => handleFieldChange(originalIndex, 'mfgDate', e.target.value)} /></td>;
       case "expiryDate":
@@ -1609,19 +1801,19 @@ export default function AdminStockBulkEdit({
       case "weight":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.weight || ""} onChange={(e) => handleFieldChange(originalIndex, 'weight', e.target.value)} /></td>;
       case "compareAtPrice":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right" value={product.compareAtPrice} onChange={(e) => handleFieldChange(originalIndex, "compareAtPrice", parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={product.compareAtPrice} onChange={(e) => handleFieldChange(originalIndex, "compareAtPrice", parseFloat(e.target.value) || 0)} /></td>;
       case "price":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-medium" value={product.price} onChange={(e) => handleFieldChange(originalIndex, "price", parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums font-medium" value={product.price} onChange={(e) => handleFieldChange(originalIndex, "price", parseFloat(e.target.value) || 0)} /></td>;
       case "deliveryTime":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.deliveryTime} onChange={(e) => handleFieldChange(originalIndex, 'deliveryTime', e.target.value)} /></td>;
       case "stock":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right" value={product.stock} onChange={(e) => handleFieldChange(originalIndex, "stock", parseInt(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={product.stock} onChange={(e) => handleFieldChange(originalIndex, "stock", parseInt(e.target.value) || 0)} /></td>;
       case "offerPrice":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right" value={product.offerPrice} onChange={(e) => handleFieldChange(originalIndex, 'offerPrice', parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.offerPrice} onChange={(e) => handleFieldChange(originalIndex, 'offerPrice', parseFloat(e.target.value) || 0)} /></td>;
       case "wholesalePrice":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right" value={product.wholesalePrice} onChange={(e) => handleFieldChange(originalIndex, 'wholesalePrice', parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.wholesalePrice} onChange={(e) => handleFieldChange(originalIndex, 'wholesalePrice', parseFloat(e.target.value) || 0)} /></td>;
       case "lowStockQuantity":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right" value={product.lowStockQuantity} onChange={(e) => handleFieldChange(originalIndex, 'lowStockQuantity', parseInt(e.target.value))} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.lowStockQuantity} onChange={(e) => handleFieldChange(originalIndex, 'lowStockQuantity', parseInt(e.target.value))} /></td>;
       case "brand":
         return (
           <td key={key} className="p-0 border-r border-neutral-200">
@@ -1678,6 +1870,231 @@ export default function AdminStockBulkEdit({
         );
       default:
         return <td key={key} className="p-2"></td>;
+    }
+  };
+
+  const NA_VARIATION_COLUMNS = new Set([
+    "image", "category", "subCategory", "subSubCategory", "description", "hsnCode",
+    "mfgDate", "expiryDate", "deliveryTime", "brand", "lowStockQuantity", "tax", "gst",
+    "valMrp", "valPur", "unitPrice", "status", "variationName", "pack",
+  ]);
+
+  const renderVariationBodyCell = (
+    key: string,
+    product: EditableProduct,
+    variation: any,
+    originalIndex: number,
+    variationIndex: number
+  ) => {
+    if (hiddenColumns.includes(key)) return null;
+
+    if (NA_VARIATION_COLUMNS.has(key)) {
+      return <td key={key} className="p-2 border-r border-neutral-200 text-center text-xs text-neutral-300">—</td>;
+    }
+
+    // When a product has only one (synthesized) variation, handleSave's
+    // single-variation branch always writes the parent row's own
+    // price/stock/sku/etc. into that lone variation, ignoring whatever the
+    // variation subdocument itself holds. Editing those fields here would
+    // silently be discarded on save, so proxy them straight to the parent
+    // row's field instead - same value, same save path, no dead inputs.
+    // Block/Rack are handled separately below via a lock/custom toggle,
+    // since they have their own "same as parent" default regardless of
+    // variation count.
+    const isSingleVariation = (product.variations || []).length <= 1;
+    const SINGLE_VARIATION_FIELD_MAP: Record<string, keyof EditableProduct> = {
+      price: "price",
+      compareAtPrice: "compareAtPrice",
+      stock: "stock",
+      discPrice: "offerPrice",
+      wholesalePrice: "wholesalePrice",
+      purchasePrice: "purchasePrice",
+      sku: "itemCode",
+      barcode: "barcode",
+    };
+    const getFieldValue = (field: string) =>
+      isSingleVariation && SINGLE_VARIATION_FIELD_MAP[field]
+        ? (product as any)[SINGLE_VARIATION_FIELD_MAP[field]]
+        : variation[field];
+    const onChange = (field: string, value: any) => {
+      if (isSingleVariation && SINGLE_VARIATION_FIELD_MAP[field]) {
+        handleFieldChange(originalIndex, SINGLE_VARIATION_FIELD_MAP[field], value);
+        return;
+      }
+      handleVariationFieldChange(originalIndex, variationIndex, field, value);
+    };
+
+    switch (key) {
+      case "index":
+        return <td key={key} className="p-2 border-r border-neutral-200 text-center text-xs text-neutral-400">↳</td>;
+      case "productName":
+      case "attributes": {
+        const selectedAttributes = product.attributes || [];
+        if (selectedAttributes.length === 0) {
+          return (
+            <td key={key} className="p-0 border-r border-neutral-200">
+              <input
+                type="text"
+                className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm"
+                placeholder="Variation value (e.g. Red / M)"
+                value={variation.value || ""}
+                onChange={(e) => onChange("value", e.target.value)}
+              />
+            </td>
+          );
+        }
+        return (
+          <td key={key} className="p-1 border-r border-neutral-200 align-top">
+            <div className="flex flex-col gap-1">
+              {selectedAttributes.map((attr: string) => (
+                <div key={attr} className="flex items-center gap-1">
+                  <span className="text-[9px] text-gray-400 w-10 shrink-0 truncate" title={attr}>{attr}</span>
+                  <input
+                    type="text"
+                    className="flex-1 min-w-0 px-1.5 py-1 border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[var(--primary-color)] focus:outline-none"
+                    placeholder={attr}
+                    value={variation[attr] || ""}
+                    onChange={(e) => handleVariationAttributeChange(originalIndex, variationIndex, attr, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+          </td>
+        );
+      }
+      case "sku":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm font-mono tracking-tight" value={getFieldValue("sku") || ""} onChange={(e) => onChange("sku", e.target.value)} /></td>;
+      case "blockNumber": {
+        const isCustom = !!variation.customBlockRack;
+        const blockValue = isCustom ? (variation.blockNumber || "") : (product.blockNumber || "");
+        return (
+          <td key={key} className="p-0 border-r border-neutral-200">
+            <div className="flex items-center h-full">
+              <button
+                type="button"
+                onClick={() => handleVariationFieldChange(originalIndex, variationIndex, "customBlockRack", !isCustom)}
+                className="px-1 shrink-0 text-gray-400 hover:text-[var(--primary-color)] transition-colors"
+                title={isCustom ? "Custom block/rack - click to lock to parent product" : "Locked to parent product's block/rack - click to customize"}
+              >
+                {isCustom ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                )}
+              </button>
+              <select
+                disabled={!isCustom}
+                className="flex-1 h-full px-1 py-2 bg-transparent border-none text-sm disabled:text-neutral-400 disabled:cursor-not-allowed"
+                value={blockValue}
+                onChange={(e) => handleVariationFieldChange(originalIndex, variationIndex, "blockNumber", e.target.value)}
+              >
+                <option value="">-</option>
+                {Array.from({ length: 50 }, (_, i) => String(i + 1)).map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+          </td>
+        );
+      }
+      case "rackNumber": {
+        const isCustom = !!variation.customBlockRack;
+        const rackSource = isCustom ? (variation.rackNumber || "") : (product.rackNumber || "");
+        const rackLetter = (rackSource.match(/^[A-Za-z]+/)?.[0] || "").toUpperCase();
+        const rackDigits = rackSource.replace(/^[A-Za-z]+/, "");
+        const setRack = (letter: string, digits: string) =>
+          handleVariationFieldChange(originalIndex, variationIndex, "rackNumber", `${letter}${digits}`);
+        return (
+          <td key={key} className="p-0 border-r border-neutral-200">
+            <div className="flex items-center h-full">
+              <button
+                type="button"
+                onClick={() => handleVariationFieldChange(originalIndex, variationIndex, "customBlockRack", !isCustom)}
+                className="px-1 shrink-0 text-gray-400 hover:text-[var(--primary-color)] transition-colors"
+                title={isCustom ? "Custom block/rack - click to lock to parent product" : "Locked to parent product's block/rack - click to customize"}
+              >
+                {isCustom ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                )}
+              </button>
+              <select
+                disabled={!isCustom}
+                className="w-1/2 h-full px-1 py-2 bg-transparent border-none text-sm border-r border-neutral-200 disabled:text-neutral-400 disabled:cursor-not-allowed"
+                value={rackLetter}
+                onChange={(e) => setRack(e.target.value, rackDigits)}
+              >
+                <option value="">-</option>
+                {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map((letter) => (
+                  <option key={letter} value={letter}>{letter}</option>
+                ))}
+              </select>
+              <select
+                disabled={!isCustom}
+                className="w-1/2 h-full px-1 py-2 bg-transparent border-none text-sm disabled:text-neutral-400 disabled:cursor-not-allowed"
+                value={rackDigits}
+                onChange={(e) => setRack(rackLetter, e.target.value)}
+              >
+                <option value="">-</option>
+                {Array.from({ length: 50 }, (_, i) => String(i + 1)).map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+          </td>
+        );
+      }
+      case "barcode": {
+        const barcodes: string[] = getFieldValue("barcode") || [];
+        return (
+          <td key={key} className="p-1 border-r border-neutral-200 align-top overflow-hidden">
+            <div className="flex flex-col gap-1 w-full min-w-0">
+              <div className="flex flex-wrap content-start gap-1 px-1 w-full min-w-0 max-h-16 overflow-y-auto">
+                {barcodes.map((b: string) => (
+                  <span key={b} className="inline-flex items-center gap-1 bg-stone-50 text-neutral-700 pl-2 pr-1 py-0.5 rounded-sm text-[10px] font-mono tabular-nums border border-neutral-200 border-l-2 border-l-[var(--primary-color)] [border-left-style:dashed] max-w-full break-all">
+                    <span className="min-w-0 break-all">{b}</span>
+                    <button onClick={() => onChange("barcode", barcodes.filter((item: string) => item !== b))} className="text-neutral-400 hover:text-red-500 transition-colors">&times;</button>
+                  </span>
+                ))}
+              </div>
+              <input
+                type="text"
+                className="flex-1 min-w-0 w-full px-2 py-1 border border-gray-200 rounded text-[11px] focus:ring-1 focus:ring-[var(--primary-color)] focus:outline-none"
+                placeholder="Add barcode"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const val = (e.currentTarget as HTMLInputElement).value.trim();
+                    if (val && !barcodes.includes(val)) {
+                      onChange("barcode", [...barcodes, val]);
+                      (e.currentTarget as HTMLInputElement).value = "";
+                    }
+                  }
+                }}
+              />
+            </div>
+          </td>
+        );
+      }
+      case "purchasePrice":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={getFieldValue("purchasePrice") || 0} onChange={(e) => onChange("purchasePrice", parseFloat(e.target.value) || 0)} /></td>;
+      case "compareAtPrice":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={getFieldValue("compareAtPrice") || 0} onChange={(e) => onChange("compareAtPrice", parseFloat(e.target.value) || 0)} /></td>;
+      case "price":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums font-medium" value={getFieldValue("price") || 0} onChange={(e) => onChange("price", parseFloat(e.target.value) || 0)} /></td>;
+      case "stock":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={getFieldValue("stock") || 0} onChange={(e) => onChange("stock", parseInt(e.target.value) || 0)} /></td>;
+      case "offerPrice":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={getFieldValue("discPrice") || 0} onChange={(e) => onChange("discPrice", parseFloat(e.target.value) || 0)} /></td>;
+      case "wholesalePrice":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={getFieldValue("wholesalePrice") || 0} onChange={(e) => onChange("wholesalePrice", parseFloat(e.target.value) || 0)} /></td>;
+      case "variations":
+        // Removing a variation is handled by the trash icon in the leading
+        // column (left of the row) - avoid a second, inconsistent control here.
+        return <td key={key} className="p-2 border-r border-neutral-200 text-center text-xs text-neutral-300">—</td>;
+      default:
+        return <td key={key} className="p-2 border-r border-neutral-200 text-center text-xs text-neutral-300">—</td>;
     }
   };
 
@@ -1810,7 +2227,7 @@ export default function AdminStockBulkEdit({
         {/* Content (Spreadsheet) */}
         <div className="flex-1 overflow-auto p-0">
           <table className="w-full text-left border-collapse table-fixed">
-            <thead className="bg-neutral-100 sticky top-0 z-10 shadow-sm">
+            <thead className="bg-stone-100 sticky top-0 z-10 shadow-sm border-b-2 border-stone-300">
               <tr>
                 <th className="w-12 p-2 border-r border-neutral-200 text-center">
                   <input
@@ -1826,21 +2243,105 @@ export default function AdminStockBulkEdit({
             <tbody>
               {filteredProducts.map((product, index) => {
                 const originalIndex = editableProducts.findIndex(p => p.id === product.id);
+                const isExpanded = expandedProductIds.has(product.id);
                 return (
-                  <tr
-                    key={product.id}
-                    className={`border-b border-neutral-200 hover:bg-neutral-50 ${product.isChanged ? "bg-yellow-50" : ""}`}
-                  >
-                    <td className="p-2 border-r border-neutral-200 text-center align-top">
-                      <input
-                        type="checkbox"
-                        checked={selectedProductIds.has(product.id)}
-                        onChange={() => toggleSelectProduct(product.id)}
-                        aria-label={`Select ${product.productName}`}
-                      />
-                    </td>
-                    {columnOrder.map((key) => renderBodyCell(key, product, originalIndex, index))}
-                  </tr>
+                  <React.Fragment key={product.id}>
+                    <tr
+                      className={`border-b border-neutral-200 hover:bg-neutral-50 ${product.isChanged ? "bg-yellow-50" : ""}`}
+                    >
+                      <td className="p-2 border-r border-neutral-200 text-center align-top">
+                        <div className="flex flex-col items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            checked={selectedProductIds.has(product.id)}
+                            onChange={() => toggleSelectProduct(product.id)}
+                            aria-label={`Select ${product.productName}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => toggleExpandProduct(product.id)}
+                            className={`flex items-center justify-center w-6 h-6 rounded-full border transition-all duration-150 ${
+                              isExpanded
+                                ? "bg-[var(--primary-color)] border-[var(--primary-color)] text-white shadow-sm"
+                                : "bg-white border-neutral-300 text-neutral-400 hover:border-[var(--primary-color)] hover:text-[var(--primary-color)]"
+                            }`}
+                            title={isExpanded ? "Hide variations" : `Show ${(product.variations || []).length} variation${(product.variations || []).length === 1 ? "" : "s"}`}
+                          >
+                            <svg
+                              className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                              viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                            >
+                              <path d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                      {columnOrder.map((key) => renderBodyCell(key, product, originalIndex, index))}
+                    </tr>
+                    {isExpanded && (product.variations || []).map((variation: any, vIdx: number) => (
+                      <tr
+                        key={variation._id || variation.id || `${product.id}-var-${vIdx}`}
+                        className="border-b border-neutral-100 bg-[var(--primary-color)]/[0.04] border-l-[3px] border-l-[var(--primary-color)]/50 hover:bg-[var(--primary-color)]/[0.07] transition-colors"
+                      >
+                        <td className="p-2 border-r border-neutral-200 text-center align-middle">
+                          {vIdx > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveVariation(originalIndex, vIdx)}
+                              className="inline-flex items-center justify-center w-6 h-6 rounded-full border border-red-300 bg-red-50 text-red-500 hover:border-red-500 hover:text-red-600 hover:bg-red-100 transition-colors"
+                              title="Remove this variation"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                              </svg>
+                            </button>
+                          )}
+                        </td>
+                        {columnOrder.map((key) => renderVariationBodyCell(key, product, variation, originalIndex, vIdx))}
+                      </tr>
+                    ))}
+                    {isExpanded && (
+                      <tr className="border-b border-neutral-200 bg-[var(--primary-color)]/[0.03] border-l-[3px] border-l-[var(--primary-color)]/50">
+                        <td colSpan={columnOrder.length + 1} className="p-0">
+                          <div className="sticky left-2 w-fit flex gap-2 p-2">
+                            <button
+                              type="button"
+                              onClick={() => handleAddVariation(originalIndex)}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-white border border-[var(--primary-color)]/40 text-[var(--primary-color)] rounded-full hover:bg-pink-50 hover:border-[var(--primary-color)] transition-colors shadow-sm"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                              Blank Variation
+                            </button>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(e) =>
+                                  setAttachPopoverAnchor(
+                                    attachPopoverAnchor?.index === originalIndex
+                                      ? null
+                                      : { index: originalIndex, rect: e.currentTarget.getBoundingClientRect() }
+                                  )
+                                }
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-[var(--primary-color)] text-white rounded-full hover:bg-[var(--primary-dark)] transition-colors shadow-sm"
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                Attach Existing Product
+                              </button>
+                              {attachPopoverAnchor?.index === originalIndex && (
+                                <AttachProductPopover
+                                  excludeProductId={product.id}
+                                  anchorRect={attachPopoverAnchor.rect}
+                                  onAttach={(picked) => handleAttachExistingProduct(originalIndex, picked)}
+                                  onClose={() => setAttachPopoverAnchor(null)}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -1972,19 +2473,6 @@ export default function AdminStockBulkEdit({
               slabs={editableProducts[activePricingModalIndex].unitPricing || []}
               onClose={() => setActivePricingModalIndex(null)}
               onSave={(newSlabs) => handleFieldChange(activePricingModalIndex, 'unitPricing', newSlabs)}
-          />
-      )}
-      {/* Variation Editor Modal */}
-      {activeVariationModalIndex !== null && (
-          <VariationEditor
-            productName={editableProducts[activeVariationModalIndex].productName}
-            isOpen={true}
-            onClose={() => setActiveVariationModalIndex(null)}
-            variations={editableProducts[activeVariationModalIndex].variations || []}
-            selectedAttributes={editableProducts[activeVariationModalIndex].attributes || []}
-            variationName={editableProducts[activeVariationModalIndex].variationName || ""}
-            onVariationNameChange={(name) => handleFieldChange(activeVariationModalIndex, 'variationName', name)}
-            onSave={(newVariations) => handleFieldChange(activeVariationModalIndex, 'variations', newVariations)}
           />
       )}
       {showSearchScanner && (

@@ -196,6 +196,7 @@ export interface IProduct extends Document {
     deliveryTime: {
       type: String,
       trim: true,
+      default: "24 hours",
     },
 
     // Variations (required sellable SKUs)
