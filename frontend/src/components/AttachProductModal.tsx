@@ -91,25 +91,25 @@ const AttachProductModal: React.FC<AttachProductModalProps> = ({
   const selectedList = Array.from(selected.values());
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 sm:p-4">
       <div
         role="dialog"
         aria-label="Attach existing products as variations"
-        className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden"
+        className="bg-white w-full h-full sm:h-[85vh] sm:max-w-4xl sm:rounded-xl shadow-2xl flex flex-col overflow-hidden"
       >
-        <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-b border-neutral-100 bg-stone-50/80">
+        <div className="flex items-center justify-between gap-2 px-3.5 sm:px-5 py-3 sm:py-3.5 border-b border-neutral-100 bg-stone-50/80 shrink-0">
           <h3 className="text-sm font-semibold text-neutral-800">Attach Existing Products</h3>
           <button
             type="button"
             onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-700 transition-colors"
+            className="text-neutral-400 hover:text-neutral-700 transition-colors p-1"
             aria-label="Close"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
 
-        <div className="px-5 py-3 border-b border-neutral-100 flex gap-2 shrink-0">
+        <div className="px-3.5 sm:px-5 py-3 border-b border-neutral-100 flex gap-2 shrink-0">
           <input
             ref={inputRef}
             type="text"
@@ -132,8 +132,8 @@ const AttachProductModal: React.FC<AttachProductModalProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 flex divide-x divide-neutral-100">
-          <div className="flex-1 min-w-0 overflow-y-auto p-2">
+        <div className="flex-1 min-h-0 flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-neutral-100 overflow-hidden">
+          <div className="flex-1 min-w-0 min-h-0 overflow-y-auto p-2">
             {loading && (
               <div className="p-4 text-xs text-neutral-500 text-center flex items-center justify-center gap-2">
                 <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
@@ -190,7 +190,7 @@ const AttachProductModal: React.FC<AttachProductModalProps> = ({
             })}
           </div>
 
-          <div className="w-64 shrink-0 overflow-y-auto p-2 bg-stone-50/60">
+          <div className="sm:w-64 shrink-0 max-h-40 sm:max-h-none overflow-y-auto p-2 bg-stone-50/60">
             <div className="px-1.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
               Selected ({selectedList.length})
             </div>
@@ -217,11 +217,11 @@ const AttachProductModal: React.FC<AttachProductModalProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-neutral-100 bg-stone-50/80 shrink-0">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 px-3.5 sm:px-5 py-3 border-t border-neutral-100 bg-stone-50/80 shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-white border border-neutral-200 hover:bg-neutral-50 rounded-lg text-sm font-medium text-neutral-700 transition-colors"
+            className="w-full sm:w-auto px-4 py-2 bg-white border border-neutral-200 hover:bg-neutral-50 rounded-lg text-sm font-medium text-neutral-700 transition-colors"
           >
             Cancel
           </button>
@@ -229,7 +229,7 @@ const AttachProductModal: React.FC<AttachProductModalProps> = ({
             type="button"
             onClick={handleSave}
             disabled={selectedList.length === 0}
-            className="px-4 py-2 bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
+            className="w-full sm:w-auto px-4 py-2 bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
           >
             Save{selectedList.length > 0 ? ` (${selectedList.length})` : ""}
           </button>

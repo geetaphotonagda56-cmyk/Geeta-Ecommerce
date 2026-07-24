@@ -162,6 +162,8 @@ export default function SellerStockBulkEdit({
   const [redundantFilter, setRedundantFilter] = useState<string | null>(null);
   const [showRedundantDropdown, setShowRedundantDropdown] = useState(false);
   const [activePricingModalIndex, setActivePricingModalIndex] = useState<number | null>(null); // For modal
+  // Same modal, but for a variation's own tiered pricing instead of the parent row's.
+  const [activeVariationPricingTarget, setActiveVariationPricingTarget] = useState<{ productIndex: number; variationIndex: number } | null>(null);
 
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -629,7 +631,10 @@ export default function SellerStockBulkEdit({
       barcode: [],
       customBlockRack: false,
     };
-    const newVariations = [blankVariation, ...(product.variations || [])];
+    // Appended, never prepended - index 0 is always the product's own
+    // default variation and must stay there so the "can't delete the
+    // default variation" trash-icon rule (vIdx === 0) keeps pointing at it.
+    const newVariations = [...(product.variations || []), blankVariation];
     handleFieldChange(productIndex, "variations", newVariations);
     setExpandedProductIds((prev) => new Set(prev).add(product.id));
   };
@@ -713,9 +718,11 @@ export default function SellerStockBulkEdit({
     setEditableProducts((prev) => {
       const updated = [...prev];
       const oldProd = updated[productIndex];
+      // Appended, never prepended - index 0 must stay the product's own
+      // default variation (see handleAddVariation for why).
       const newProd = {
         ...oldProd,
-        variations: [...newVariations, ...(oldProd.variations || [])],
+        variations: [...(oldProd.variations || []), ...newVariations],
         isChanged: true,
       };
       updated[productIndex] = newProd;
@@ -1846,7 +1853,7 @@ export default function SellerStockBulkEdit({
   const NA_VARIATION_COLUMNS = new Set([
     "image", "category", "subCategory", "subSubCategory", "description", "hsnCode",
     "mfgDate", "expiryDate", "deliveryTime", "brand", "lowStockQuantity", "tax", "gst",
-    "valMrp", "valPur", "unitPrice", "status", "variationName", "pack",
+    "valMrp", "valPur", "status", "variationName", "pack",
   ]);
 
   const renderVariationBodyCell = (
@@ -2006,6 +2013,42 @@ export default function SellerStockBulkEdit({
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={getFieldValue("discPrice") || 0} onChange={(e) => onChange("discPrice", parseFloat(e.target.value) || 0)} /></td>;
       case "wholesalePrice":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={getFieldValue("wholesalePrice") || 0} onChange={(e) => onChange("wholesalePrice", parseFloat(e.target.value) || 0)} /></td>;
+      case "unitPrice": {
+        // A single-variation product's lone (default) variation has its
+        // pricing fields proxied to/from the parent row on save (see the
+        // isSingleVariation comment above) - so its tiered pricing must be
+        // edited via the parent row's own Unit Price modal, not a separate
+        // per-variation one that save would silently discard.
+        const tieredPrices = isSingleVariation ? (product.unitPricing || []) : (variation.tieredPrices || []);
+        return (
+            <td key={key} className="p-1 border-r border-neutral-200 align-top">
+                <div className="flex justify-between items-start h-full gap-1">
+                     <div className="flex flex-col gap-0.5 w-full">
+                        {tieredPrices.length > 0 ? (
+                            tieredPrices.map((slab: { minQty: number; price: number }, idx: number) => (
+                                <div key={idx} className="text-[10px] text-gray-700 bg-gray-50 px-1 rounded flex justify-between border border-gray-100">
+                                    <span>{slab.minQty}+</span>
+                                    <span className="font-bold">₹{slab.price}</span>
+                                </div>
+                            ))
+                        ) : (
+                            <span className="text-[10px] text-gray-400 italic p-1">No rules</span>
+                        )}
+                     </div>
+                     <button
+                        onClick={() => isSingleVariation ? setActivePricingModalIndex(originalIndex) : setActiveVariationPricingTarget({ productIndex: originalIndex, variationIndex })}
+                        className="text-[var(--primary-color)] hover:text-[var(--primary-dark)] p-1 hover:bg-[var(--primary-color)]/10 rounded shrink-0"
+                        title="Edit Pricing Rules"
+                     >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                     </button>
+                </div>
+            </td>
+        );
+      }
       case "variations":
         // Removing a variation is handled by the trash icon in the leading
         // column (left of the row) - avoid a second, inconsistent control here.
@@ -2143,7 +2186,7 @@ export default function SellerStockBulkEdit({
 
         {/* Content (Spreadsheet) */}
         <div className="flex-1 overflow-auto p-0">
-          <table className="w-full text-left border-collapse table-fixed">
+          <table className="min-w-full text-left border-collapse table-fixed">
             <thead className="bg-stone-100 sticky top-0 z-10 shadow-sm border-b-2 border-stone-300">
               <tr>
                 <th className="w-12 p-2 border-r border-neutral-200 text-center">
@@ -2362,6 +2405,18 @@ export default function SellerStockBulkEdit({
               onClose={() => setAttachModalProductIndex(null)}
           />
       )}
+      {activeVariationPricingTarget !== null && (() => {
+          const { productIndex, variationIndex } = activeVariationPricingTarget;
+          const variation = editableProducts[productIndex]?.variations?.[variationIndex];
+          if (!variation) return null;
+          return (
+              <PricingSlabsModal
+                  slabs={variation.tieredPrices || []}
+                  onClose={() => setActiveVariationPricingTarget(null)}
+                  onSave={(newSlabs) => handleVariationFieldChange(productIndex, variationIndex, 'tieredPrices', newSlabs)}
+              />
+          );
+      })()}
       {showSearchScanner && (
           <QRScannerModal
             onClose={stopSearchScanning}
