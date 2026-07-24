@@ -520,11 +520,12 @@ export const generateUniqueBarcode = asyncHandler(
         continue;
       }
 
+      // Barcodes only ever live on variations.barcode in the current schema
+      // - a stray top-level `barcode` field left on old documents from
+      // before the variant-model migration must not be checked, or a
+      // barcode freed up on one product can never be reused anywhere else.
       const existing = await Product.findOne({
-        $or: [
-          { barcode: uniqueBarcode },
-          { "variations.barcode": uniqueBarcode }
-        ]
+        "variations.barcode": uniqueBarcode
       });
       if (!existing) {
         isUnique = true;
@@ -551,10 +552,7 @@ export const checkBarcodeUnique = asyncHandler(
     }
 
     const query: Record<string, any> = {
-      $or: [
-        { barcode: trimmed },
-        { "variations.barcode": trimmed }
-      ]
+      "variations.barcode": trimmed
     };
 
     if (productId && mongoose.Types.ObjectId.isValid(productId as string)) {

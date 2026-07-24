@@ -95,6 +95,12 @@ const AttachProductModal: React.FC<AttachProductModalProps> = ({
       <div
         role="dialog"
         aria-label="Attach existing products as variations"
+        // This panel (and the rest of the bulk-edit UI) is only styled for
+        // light mode - without this, browsers auto-dark-theme native
+        // controls (checkboxes, scrollbars) under a dark OS/browser
+        // preference, clashing with the hardcoded white/light Tailwind
+        // classes everywhere else in the card.
+        style={{ colorScheme: "light" }}
         className="bg-white w-full h-full sm:h-[85vh] sm:max-w-4xl sm:rounded-xl shadow-2xl flex flex-col overflow-hidden"
       >
         <div className="flex items-center justify-between gap-2 px-3.5 sm:px-5 py-3 sm:py-3.5 border-b border-neutral-100 bg-stone-50/80 shrink-0">

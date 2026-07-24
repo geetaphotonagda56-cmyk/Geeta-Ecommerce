@@ -167,11 +167,16 @@ export class ProductWriteService {
     }
 
     if (payloadBarcodes.length > 0) {
+      // Barcodes only ever live on variations.barcode in the current schema
+      // (see IProduct in models/Product.ts) - there is no top-level barcode
+      // field to write to or read from. A stray top-level `barcode` array
+      // left over on old documents from before the variant-model migration
+      // (see scripts/migrateProductVariantModel.ts) must not be checked
+      // here, or a barcode that was migrated off a product and reused
+      // elsewhere gets permanently, falsely blocked by data nothing can
+      // ever clear again.
       const otherProduct = await Product.findOne({
-        $or: [
-          { barcode: { $in: payloadBarcodes } },
-          { "variations.barcode": { $in: payloadBarcodes } }
-        ]
+        "variations.barcode": { $in: payloadBarcodes }
       });
       if (otherProduct) {
         throw new ProductWriteError(
@@ -272,12 +277,14 @@ export class ProductWriteService {
     }
 
     if (payloadBarcodes.length > 0) {
+      // See the matching comment in createProduct above - the top-level
+      // barcode field is legacy/unwritable dead data and must not be
+      // checked, or a barcode freed up on one product (e.g. by the bulk
+      // edit "Attach Existing Product" deactivation flow) can never be
+      // reused anywhere else.
       const otherProduct = await Product.findOne({
         _id: { $ne: productId },
-        $or: [
-          { barcode: { $in: payloadBarcodes } },
-          { "variations.barcode": { $in: payloadBarcodes } }
-        ]
+        "variations.barcode": { $in: payloadBarcodes }
       });
       if (otherProduct) {
         throw new ProductWriteError(
