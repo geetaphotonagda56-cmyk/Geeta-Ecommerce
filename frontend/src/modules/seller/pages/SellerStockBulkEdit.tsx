@@ -18,7 +18,7 @@ import { getSellerOwnSubcategories } from "../../../services/api/seller/sellerPu
 import { getAttributes } from "../../../services/api/seller/sellerAttributeService";
 import AttributeDropdown from "../../../components/AttributeDropdown";
 import SearchableSelect from "../../../components/SearchableSelect";
-import AttachProductPopover from "../../../components/AttachProductPopover";
+import AttachProductModal from "../../../components/AttachProductModal";
 
 interface SellerStockBulkEditProps {
   products: Product[];
@@ -168,7 +168,7 @@ export default function SellerStockBulkEdit({
   const [availableAttributes, setAvailableAttributes] = useState<{_id: string, name: string}[]>([]);
   const [taxCategories, setTaxCategories] = useState<{_id: string, name: string}[]>([]);
   const [expandedProductIds, setExpandedProductIds] = useState<Set<string>>(new Set());
-  const [attachPopoverAnchor, setAttachPopoverAnchor] = useState<{ index: number; rect: DOMRect } | null>(null);
+  const [attachModalProductIndex, setAttachModalProductIndex] = useState<number | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanIndex, setScanIndex] = useState<number | null>(null);
   const [showSearchScanner, setShowSearchScanner] = useState(false);
@@ -676,9 +676,13 @@ export default function SellerStockBulkEdit({
     return !val || val === "default" || val === "standard";
   };
 
+  // Attaches a single picked product as a variation. Merges variations via a
+  // functional state update (not a read of the render-time `editableProducts`
+  // closure) so that calling this repeatedly in a tight loop - as
+  // handleAttachExistingProducts does for a multi-select save - never drops
+  // an earlier iteration's variation.
   const handleAttachExistingProduct = async (productIndex: number, searchResult: any) => {
     const pickedId = searchResult._id || searchResult.id;
-    setAttachPopoverAnchor(null);
 
     // The fuzzy search endpoint returns a trimmed projection (e.g. no
     // hsnCode/gst/tax) - fetch the full product so nothing is lost when
@@ -691,7 +695,6 @@ export default function SellerStockBulkEdit({
       console.error("Failed to load full product details before attaching, using search result data", err);
     }
 
-    const product = editableProducts[productIndex];
     const newVariations =
       Array.isArray(picked.variations) && picked.variations.length > 0
         ? picked.variations.map((v: any) => {
@@ -706,7 +709,19 @@ export default function SellerStockBulkEdit({
           })
         : [mapProductToVariation(picked)];
 
-    handleFieldChange(productIndex, "variations", [...newVariations, ...(product.variations || [])]);
+    const product = editableProducts[productIndex];
+    setEditableProducts((prev) => {
+      const updated = [...prev];
+      const oldProd = updated[productIndex];
+      const newProd = {
+        ...oldProd,
+        variations: [...newVariations, ...(oldProd.variations || [])],
+        isChanged: true,
+      };
+      updated[productIndex] = newProd;
+      upsertEditedCache(newProd);
+      return updated;
+    });
     setExpandedProductIds((prev) => new Set(prev).add(product.id));
 
     // Don't delete the original - deactivate it instead, so it's recoverable
@@ -747,6 +762,14 @@ export default function SellerStockBulkEdit({
     deactivation.finally(() => {
       pendingAttachDeactivationsRef.current.delete(deactivation);
     });
+  };
+
+  // Multi-select save from the Attach Existing Product modal - attaches each
+  // picked product one by one, reusing the same merge/deactivate pipeline.
+  const handleAttachExistingProducts = async (productIndex: number, searchResults: any[]) => {
+    for (const searchResult of searchResults) {
+      await handleAttachExistingProduct(productIndex, searchResult);
+    }
   };
 
   const handleImageChange = (index: number, files: FileList | null) => {
@@ -2210,26 +2233,12 @@ export default function SellerStockBulkEdit({
                             <div className="relative">
                               <button
                                 type="button"
-                                onClick={(e) =>
-                                  setAttachPopoverAnchor(
-                                    attachPopoverAnchor?.index === originalIndex
-                                      ? null
-                                      : { index: originalIndex, rect: e.currentTarget.getBoundingClientRect() }
-                                  )
-                                }
+                                onClick={() => setAttachModalProductIndex(originalIndex)}
                                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-[var(--primary-color)] text-white rounded-full hover:bg-[var(--primary-dark)] transition-colors shadow-sm"
                               >
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                                 Attach Existing Product
                               </button>
-                              {attachPopoverAnchor?.index === originalIndex && (
-                                <AttachProductPopover
-                                  excludeProductId={product.id}
-                                  anchorRect={attachPopoverAnchor.rect}
-                                  onAttach={(picked) => handleAttachExistingProduct(originalIndex, picked)}
-                                  onClose={() => setAttachPopoverAnchor(null)}
-                                />
-                              )}
                             </div>
                           </div>
                         </td>
@@ -2345,6 +2354,13 @@ export default function SellerStockBulkEdit({
             onClose={() => setActivePricingModalIndex(null)}
             onSave={(newSlabs) => handleFieldChange(activePricingModalIndex, 'unitPricing', newSlabs)}
         />
+      )}
+      {attachModalProductIndex !== null && editableProducts[attachModalProductIndex] && (
+          <AttachProductModal
+              excludeProductId={editableProducts[attachModalProductIndex].id}
+              onAttach={(picked) => handleAttachExistingProducts(attachModalProductIndex, picked)}
+              onClose={() => setAttachModalProductIndex(null)}
+          />
       )}
       {showSearchScanner && (
           <QRScannerModal
