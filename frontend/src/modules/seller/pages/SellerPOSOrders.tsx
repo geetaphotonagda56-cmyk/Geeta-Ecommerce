@@ -4104,8 +4104,8 @@ const SellerPOSOrders = () => {
                                                <div className="col-span-1">
                                                      <input
                                                          type="number"
-                                                         value={mrp}
-                                                         onChange={(e) => updateItemDetails(getCartLineId(item), { compareAtPrice: parseFloat(e.target.value) || 0 })}
+                                                         value={mrp === 0 ? "" : mrp}
+                                                         onChange={(e) => updateItemDetails(getCartLineId(item), { compareAtPrice: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                                                          className="w-full text-center text-base border border-transparent hover:border-gray-200 focus:border-[var(--primary-color)] bg-transparent focus:bg-white rounded px-1 py-1 outline-none transition-all"
                                                      />
                                                 </div>
@@ -4131,8 +4131,8 @@ const SellerPOSOrders = () => {
                                                <div className="col-span-2">
                                                     <input
                                                          type="number"
-                                                         value={sp}
-                                                         onChange={(e) => updateItemDetails(getCartLineId(item), { customPrice: parseFloat(e.target.value) || 0 })}
+                                                         value={sp === 0 ? "" : sp}
+                                                         onChange={(e) => updateItemDetails(getCartLineId(item), { customPrice: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                                                          className="w-full text-center text-base font-bold text-gray-900 border border-green-200 bg-[var(--primary-alpha-10)]/30 focus:bg-white focus:border-[var(--primary-color)] rounded px-1 py-1 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                      />
                                                 </div>

@@ -909,7 +909,13 @@ export default function AdminStockManagement() {
 
           variations.push({
             ...baseVariation,
-            id: `${product._id}-${v._id || index}`,
+            // Must be the array index, not v._id - the Quick Edit save
+            // handler below does `parseInt(id.split('-')[1])` to find which
+            // variation to patch, and parseInt on a Mongo ObjectId hex
+            // string (e.g. "671f0e2f...") silently truncates to whatever
+            // leading digits it has (671), landing edits on a bogus/missing
+            // array slot instead of the real variation.
+            id: `${product._id}-${index}`,
             variation: `${variationType}: ${variationValue}`,
             stock: currentStock,
             price: Number(v.price) || baseVariation.price,
@@ -2197,11 +2203,15 @@ export default function AdminStockManagement() {
                           })}
                         </select>
                       ) : (
-                        <input 
+                        <input
                           type={item.type || 'text'}
                           className={`w-full text-sm font-medium border-none p-0 focus:ring-0 bg-transparent ${item.color || 'text-neutral-800'}`}
-                          value={item.value === "-" ? "" : item.value}
-                          onChange={(e) => setSelectedProductDetails({...selectedProductDetails, [item.key!]: item.type === 'number' ? Number(e.target.value) : e.target.value})}
+                          // For number fields, show blank instead of "0" - otherwise
+                          // clearing the field to type a fresh value snaps straight
+                          // back to a literal "0" on every keystroke (Number("") is
+                          // 0, not NaN) and the field can never actually be cleared.
+                          value={item.value === "-" ? "" : (item.type === 'number' && item.value === 0 ? "" : item.value)}
+                          onChange={(e) => setSelectedProductDetails({...selectedProductDetails, [item.key!]: item.type === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value) || 0) : e.target.value})}
                           placeholder="-"
                         />
                       )}
@@ -2306,7 +2316,10 @@ export default function AdminStockManagement() {
                               price: Number(selectedProductDetails.price),
                               stock: typeof selectedProductDetails.stock === 'number' ? selectedProductDetails.stock : (newVariations[vIndex] as any).stock,
                               compareAtPrice: Number(selectedProductDetails.compareAtPrice),
+                              purchasePrice: Number(selectedProductDetails.purchasePrice),
+                              wholesalePrice: Number(selectedProductDetails.wholesalePrice),
                               sku: selectedProductDetails.sku,
+                              barcode: updateData.barcode,
                               discPrice: Number(selectedProductDetails.offerPrice),
                               blockNumber: selectedProductDetails.blockNumber,
                               rackNumber: selectedProductDetails.rackNumber,

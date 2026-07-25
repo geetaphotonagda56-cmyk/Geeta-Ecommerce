@@ -466,8 +466,8 @@ export default function AdminPromoStrip() {
                         />
                         <input
                           type="number"
-                          value={card.discountPercentage}
-                          onChange={(e) => updateCategoryCard(index, "discountPercentage", parseFloat(e.target.value) || 0)}
+                          value={card.discountPercentage === 0 ? "" : card.discountPercentage}
+                          onChange={(e) => updateCategoryCard(index, "discountPercentage", e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
                           placeholder="Discount %"
                           min="0"
                           max="100"
@@ -584,8 +584,8 @@ export default function AdminPromoStrip() {
                 <label className="block text-sm font-medium text-neutral-700 mb-2">Order</label>
                 <input
                   type="number"
-                  value={order}
-                  onChange={(e) => setOrder(parseInt(e.target.value) || 0)}
+                  value={order === 0 ? "" : order}
+                  onChange={(e) => setOrder(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))}
                   className="w-full px-3 py-2 border border-neutral-300 rounded bg-white focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] outline-none"
                 />
               </div>

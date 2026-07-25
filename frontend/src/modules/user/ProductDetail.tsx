@@ -361,7 +361,20 @@ export default function ProductDetail() {
   }, [customerVariations]);
 
   // If user changes the main image gallery (click/swipe), sync selected variant when the image uniquely matches a variant image.
+  //
+  // This must NOT fire just because effectiveVariantIndex itself changed -
+  // switching variants resets selectedImageIndex to 0 (see the effect
+  // above), which changes currentImage too. A variant with no gallery of
+  // its own falls back to the product's root image (allImages, above),
+  // which is usually identical to variant 0's own image - so without this
+  // guard, clicking any variant that has no photo would immediately
+  // "uniquely match" variant 0 here and snap the selection straight back,
+  // making that variant look unselectable.
+  const prevEffectiveVariantIndexRef = useRef(effectiveVariantIndex);
   useEffect(() => {
+    const variantIndexChanged = prevEffectiveVariantIndexRef.current !== effectiveVariantIndex;
+    prevEffectiveVariantIndexRef.current = effectiveVariantIndex;
+    if (variantIndexChanged) return;
     if (!currentImage) return;
     if (!product?.variations || !hasRealVariants(product)) return;
     const matches = variationImageMatches.get(currentImage);

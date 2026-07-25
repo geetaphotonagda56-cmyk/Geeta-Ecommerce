@@ -43,7 +43,10 @@ const PricingSlabsModal = ({ slabs, onClose, onSave }: { slabs: {minQty: number,
 
     const handleChange = (index: number, field: string, val: string) => {
         const newSlabs = [...localSlabs];
-        newSlabs[index] = { ...newSlabs[index], [field]: Number(val) };
+        // Empty string must stay 0 in state but must NOT force the input's
+        // displayed value back to a literal "0" (see value bindings below) -
+        // otherwise clearing the field to type a fresh number gets stuck.
+        newSlabs[index] = { ...newSlabs[index], [field]: val === '' ? 0 : (Number(val) || 0) };
         setSlabs(newSlabs);
     };
 
@@ -66,11 +69,11 @@ const PricingSlabsModal = ({ slabs, onClose, onSave }: { slabs: {minQty: number,
                         <tbody>
                             {localSlabs.map((slab, i) => (
                                 <tr key={i} className="border-b">
-                                    <td className="p-1"><input type="number" className="border w-20 p-1 rounded" value={slab.minQty} onChange={e => handleChange(i, 'minQty', e.target.value)} /></td>
+                                    <td className="p-1"><input type="number" className="border w-20 p-1 rounded" value={slab.minQty === 0 ? "" : slab.minQty} onChange={e => handleChange(i, 'minQty', e.target.value)} /></td>
                                     <td className="p-1">
                                         <div className="relative">
                                             <span className="absolute left-1 top-1 text-gray-400">₹</span>
-                                            <input type="number" className="border w-24 p-1 pl-4 rounded" value={slab.price} onChange={e => handleChange(i, 'price', e.target.value)} />
+                                            <input type="number" className="border w-24 p-1 pl-4 rounded" value={slab.price === 0 ? "" : slab.price} onChange={e => handleChange(i, 'price', e.target.value)} />
                                         </div>
                                     </td>
                                     <td className="p-1 text-red-500 cursor-pointer font-bold px-2" onClick={() => removeSlab(i)}>✕</td>
@@ -140,9 +143,11 @@ export default function AdminStockBulkEdit({
   onSave,
 }: AdminStockBulkEditProps) {
   const [editableProducts, setEditableProducts] = useState<EditableProduct[]>([]);
-  // Serial crop queue for newly-added product images - multiple files/products
-  // can be queued at once, so we crop them one at a time via the shared modal.
-  const [imageCropQueue, setImageCropQueue] = useState<{ productIndex: number; file: File }[]>([]);
+  // Serial crop queue for newly-added product/variation images - multiple
+  // files/products can be queued at once, so we crop them one at a time via
+  // the shared modal. variationIndex is set only for images added from a
+  // variation row's own Image cell.
+  const [imageCropQueue, setImageCropQueue] = useState<{ productIndex: number; variationIndex?: number; file: File }[]>([]);
   const [page, setPage] = useState(initialPage);
   const [pageLimit, setPageLimit] = useState(initialLimit);
   const [serverPagination, setServerPagination] = useState<
@@ -181,6 +186,9 @@ export default function AdminStockBulkEdit({
   const lastSearchScanRef = useRef<{ code: string; time: number }>({ code: "", time: 0 });
 
   const [imageSourceModalRowIndex, setImageSourceModalRowIndex] = useState<number | null>(null);
+  // Set only when the "Choose Image" modal was opened from a variation row's
+  // own Image cell, rather than the parent product row's.
+  const [imageSourceModalVariationIndex, setImageSourceModalVariationIndex] = useState<number | null>(null);
   const [showImageSourceModal, setShowImageSourceModal] = useState(false);
   const [imageSearchQuery, setImageSearchQuery] = useState("");
   const [isSearchingImage, setIsSearchingImage] = useState(false);
@@ -208,6 +216,30 @@ export default function AdminStockBulkEdit({
 
   const applySearchedImage = () => {
       if (searchedImage && imageSourceModalRowIndex !== null) {
+          if (imageSourceModalVariationIndex !== null) {
+              const vIdx = imageSourceModalVariationIndex;
+              setEditableProducts((prev) => {
+                  const updated = [...prev];
+                  const oldProd = updated[imageSourceModalRowIndex];
+                  if (!oldProd) return prev;
+                  const variations = [...(oldProd.variations || [])];
+                  const targetVariation = { ...(variations[vIdx] || {}) };
+                  if (targetVariation.mainImage) {
+                      targetVariation.galleryImages = [...(targetVariation.galleryImages || []), searchedImage];
+                  } else {
+                      targetVariation.mainImage = searchedImage;
+                  }
+                  variations[vIdx] = targetVariation;
+                  const newProd = { ...oldProd, variations, isChanged: true };
+                  updated[imageSourceModalRowIndex] = newProd;
+                  upsertEditedCache(newProd);
+                  return updated;
+              });
+              setSearchedImage("");
+              setImageSearchQuery("");
+              return;
+          }
+
           const newImage: ProductImage = {
             id: Date.now().toString(),
             url: searchedImage
@@ -232,7 +264,7 @@ export default function AdminStockBulkEdit({
                   return current;
               });
           }, 0);
-          
+
           setSearchedImage("");
           setImageSearchQuery("");
       }
@@ -777,10 +809,54 @@ export default function AdminStockBulkEdit({
       ]);
   };
 
-  const handleQueuedImageCropped = (croppedFile: File) => {
+  const handleVariationImageChange = (productIndex: number, variationIndex: number, files: FileList | null) => {
+      if (!files || files.length === 0) return;
+      setImageCropQueue((prev) => [
+        ...prev,
+        ...Array.from(files).map((file) => ({ productIndex, variationIndex, file })),
+      ]);
+  };
+
+  const handleQueuedImageCropped = async (croppedFile: File) => {
       const [current, ...rest] = imageCropQueue;
       setImageCropQueue(rest);
       if (!current) return;
+
+      if (current.variationIndex != null) {
+        // Variations don't have a local pending-upload staging array like
+        // product.images does - upload right away so the thumbnail and the
+        // eventual save both end up using the same hosted URL.
+        try {
+          const uploadRes = await uploadImage(croppedFile);
+          if (!uploadRes.success) {
+            alert("Failed to upload image");
+            return;
+          }
+          const url = uploadRes.data.url;
+          const vIdx = current.variationIndex;
+          setEditableProducts((prev) => {
+            const updated = [...prev];
+            const oldProd = updated[current.productIndex];
+            if (!oldProd) return prev;
+            const variations = [...(oldProd.variations || [])];
+            const targetVariation = { ...(variations[vIdx] || {}) };
+            if (targetVariation.mainImage) {
+              targetVariation.galleryImages = [...(targetVariation.galleryImages || []), url];
+            } else {
+              targetVariation.mainImage = url;
+            }
+            variations[vIdx] = targetVariation;
+            const newProd = { ...oldProd, variations, isChanged: true };
+            updated[current.productIndex] = newProd;
+            upsertEditedCache(newProd);
+            return updated;
+          });
+        } catch (err) {
+          console.error("Failed to upload variation image", err);
+          alert("Failed to upload image");
+        }
+        return;
+      }
 
       const newImage: ProductImage = {
         id: URL.createObjectURL(croppedFile),
@@ -1646,7 +1722,7 @@ export default function AdminStockBulkEdit({
                   {i === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] py-[1px]">Main</span>}
                 </div>
               ))}
-              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
+              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
                 <span className="text-xl leading-none font-light">+</span>
               </button>
               <input id={`file-input-${originalIndex}`} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { handleImageChange(originalIndex, e.target.files); e.target.value = ""; }} />
@@ -1823,7 +1899,7 @@ export default function AdminStockBulkEdit({
       case "gst":
         return <td key={key} className="p-2 border-r border-neutral-200 text-sm text-neutral-600">-</td>;
       case "purchasePrice":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.purchasePrice} onChange={(e) => handleFieldChange(originalIndex, 'purchasePrice', parseFloat(e.target.value))} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.purchasePrice === 0 ? "" : product.purchasePrice} onChange={(e) => handleFieldChange(originalIndex, 'purchasePrice', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} /></td>;
       case "mfgDate":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="date" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.mfgDate || ""} onChange={(e) => handleFieldChange(originalIndex, 'mfgDate', e.target.value)} /></td>;
       case "expiryDate":
@@ -1831,19 +1907,19 @@ export default function AdminStockBulkEdit({
       case "weight":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.weight || ""} onChange={(e) => handleFieldChange(originalIndex, 'weight', e.target.value)} /></td>;
       case "compareAtPrice":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={product.compareAtPrice} onChange={(e) => handleFieldChange(originalIndex, "compareAtPrice", parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={product.compareAtPrice === 0 ? "" : product.compareAtPrice} onChange={(e) => handleFieldChange(originalIndex, "compareAtPrice", e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} /></td>;
       case "price":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums font-medium" value={product.price} onChange={(e) => handleFieldChange(originalIndex, "price", parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums font-medium" value={product.price === 0 ? "" : product.price} onChange={(e) => handleFieldChange(originalIndex, "price", e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} /></td>;
       case "deliveryTime":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.deliveryTime} onChange={(e) => handleFieldChange(originalIndex, 'deliveryTime', e.target.value)} /></td>;
       case "stock":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={product.stock} onChange={(e) => handleFieldChange(originalIndex, "stock", parseInt(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={product.stock === 0 ? "" : product.stock} onChange={(e) => handleFieldChange(originalIndex, "stock", e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))} /></td>;
       case "offerPrice":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.offerPrice} onChange={(e) => handleFieldChange(originalIndex, 'offerPrice', parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.offerPrice === 0 ? "" : product.offerPrice} onChange={(e) => handleFieldChange(originalIndex, 'offerPrice', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} /></td>;
       case "wholesalePrice":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.wholesalePrice} onChange={(e) => handleFieldChange(originalIndex, 'wholesalePrice', parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.wholesalePrice === 0 ? "" : product.wholesalePrice} onChange={(e) => handleFieldChange(originalIndex, 'wholesalePrice', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} /></td>;
       case "lowStockQuantity":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.lowStockQuantity} onChange={(e) => handleFieldChange(originalIndex, 'lowStockQuantity', parseInt(e.target.value))} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.lowStockQuantity === 0 ? "" : product.lowStockQuantity} onChange={(e) => handleFieldChange(originalIndex, 'lowStockQuantity', e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))} /></td>;
       case "brand":
         return (
           <td key={key} className="p-0 border-r border-neutral-200">
@@ -1904,7 +1980,7 @@ export default function AdminStockBulkEdit({
   };
 
   const NA_VARIATION_COLUMNS = new Set([
-    "image", "category", "subCategory", "subSubCategory", "description", "hsnCode",
+    "category", "subCategory", "subSubCategory", "description", "hsnCode",
     "mfgDate", "expiryDate", "deliveryTime", "brand", "lowStockQuantity", "tax", "gst",
     "valMrp", "valPur", "status", "variationName", "pack",
   ]);
@@ -1957,6 +2033,78 @@ export default function AdminStockBulkEdit({
     switch (key) {
       case "index":
         return <td key={key} className="p-2 border-r border-neutral-200 text-center text-xs text-neutral-400">↳</td>;
+      case "image": {
+        // Attaching an existing product as a variation (or copying a
+        // variation over from it) already carries its mainImage/
+        // galleryImages onto this variation and save already persists
+        // them (see the multi-variation branch of handleSave) - this cell
+        // was just never rendering them, showing a misleading "N/A" dash
+        // even though the images were there.
+        //
+        // A single-variation product's lone (default) variation has its
+        // images proxied to/from the parent row's own Image column on save
+        // (see the isSingleVariation comment above) - so this must show and
+        // edit product.images there, not variation.mainImage/galleryImages,
+        // which save would silently discard.
+        if (isSingleVariation) {
+          return (
+            <td key={key} className="p-1 border-r border-neutral-200 text-center align-middle">
+              <div className="flex flex-wrap justify-center items-center gap-2 p-1 min-w-[140px]">
+                {product.images.map((img, i) => (
+                  <div key={img.id} className="relative group w-12 h-12 border border-gray-200 rounded overflow-hidden bg-white shrink-0">
+                    <img src={img.url} alt={`Img-${i}`} className="w-full h-full object-cover" />
+                    <button onClick={() => handleRemoveImage(originalIndex, img.id)} className="absolute top-0 right-0 bg-red-600 text-white w-4 h-4 flex items-center justify-center rounded-bl opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 z-10" title="Remove">
+                      <span className="text-[10px] font-bold leading-none">&times;</span>
+                    </button>
+                    {i === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] py-[1px]">Main</span>}
+                  </div>
+                ))}
+                <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
+                  <span className="text-xl leading-none font-light">+</span>
+                </button>
+              </div>
+            </td>
+          );
+        }
+        const images: string[] = [variation.mainImage, ...((variation.galleryImages || []) as string[])].filter(Boolean);
+        const removeVariationImage = (idx: number) => {
+          const gallery = [...(variation.galleryImages || [])];
+          if (idx === 0) {
+            const newMain = gallery.shift() || "";
+            handleVariationFieldChange(originalIndex, variationIndex, "mainImage", newMain);
+            handleVariationFieldChange(originalIndex, variationIndex, "galleryImages", gallery);
+          } else {
+            gallery.splice(idx - 1, 1);
+            handleVariationFieldChange(originalIndex, variationIndex, "galleryImages", gallery);
+          }
+        };
+        return (
+          <td key={key} className="p-1 border-r border-neutral-200 text-center align-middle">
+            <div className="flex flex-wrap justify-center items-center gap-2 p-1 min-w-[140px]">
+              {images.map((url, i) => (
+                <div key={`${url}-${i}`} className="relative group w-12 h-12 border border-gray-200 rounded overflow-hidden bg-white shrink-0">
+                  <img src={url} alt={`Img-${i}`} className="w-full h-full object-cover" />
+                  <button onClick={() => removeVariationImage(i)} className="absolute top-0 right-0 bg-red-600 text-white w-4 h-4 flex items-center justify-center rounded-bl opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 z-10" title="Remove">
+                    <span className="text-[10px] font-bold leading-none">&times;</span>
+                  </button>
+                  {i === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] py-[1px]">Main</span>}
+                </div>
+              ))}
+              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(variationIndex); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
+                <span className="text-xl leading-none font-light">+</span>
+              </button>
+              <input
+                id={`file-input-var-${originalIndex}-${variationIndex}`}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => { handleVariationImageChange(originalIndex, variationIndex, e.target.files); e.target.value = ""; }}
+              />
+            </div>
+          </td>
+        );
+      }
       case "productName":
       case "attributes": {
         const selectedAttributes = product.attributes || [];
@@ -2108,17 +2256,17 @@ export default function AdminStockBulkEdit({
         );
       }
       case "purchasePrice":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={getFieldValue("purchasePrice") || 0} onChange={(e) => onChange("purchasePrice", parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={(getFieldValue("purchasePrice") || 0) === 0 ? "" : getFieldValue("purchasePrice")} onChange={(e) => onChange("purchasePrice", e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} /></td>;
       case "compareAtPrice":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={getFieldValue("compareAtPrice") || 0} onChange={(e) => onChange("compareAtPrice", parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={(getFieldValue("compareAtPrice") || 0) === 0 ? "" : getFieldValue("compareAtPrice")} onChange={(e) => onChange("compareAtPrice", e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} /></td>;
       case "price":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums font-medium" value={getFieldValue("price") || 0} onChange={(e) => onChange("price", parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums font-medium" value={(getFieldValue("price") || 0) === 0 ? "" : getFieldValue("price")} onChange={(e) => onChange("price", e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} /></td>;
       case "stock":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={getFieldValue("stock") || 0} onChange={(e) => onChange("stock", parseInt(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={(getFieldValue("stock") || 0) === 0 ? "" : getFieldValue("stock")} onChange={(e) => onChange("stock", e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))} /></td>;
       case "offerPrice":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={getFieldValue("discPrice") || 0} onChange={(e) => onChange("discPrice", parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={(getFieldValue("discPrice") || 0) === 0 ? "" : getFieldValue("discPrice")} onChange={(e) => onChange("discPrice", e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} /></td>;
       case "wholesalePrice":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={getFieldValue("wholesalePrice") || 0} onChange={(e) => onChange("wholesalePrice", parseFloat(e.target.value) || 0)} /></td>;
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={(getFieldValue("wholesalePrice") || 0) === 0 ? "" : getFieldValue("wholesalePrice")} onChange={(e) => onChange("wholesalePrice", e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} /></td>;
       case "unitPrice": {
         // A single-variation product's lone (default) variation has its
         // pricing fields proxied to/from the parent row on save (see the
@@ -2173,42 +2321,42 @@ export default function AdminStockBulkEdit({
   const endEntry = Math.min(page * pageLimit, totalEntries);
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4">
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-[98vw] sm:max-w-7xl h-[94vh] sm:h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center sm:p-4">
+        <div className="bg-white w-full h-full sm:h-[90vh] sm:max-w-7xl sm:rounded-lg shadow-xl flex flex-col">
           {/* Header */}
-          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-neutral-200 bg-[var(--primary-color)] text-white rounded-t-lg">
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-lg font-semibold leading-snug">Bulk Edit Products</h2>
+          <div className="px-3 py-2 sm:px-6 sm:py-4 border-b border-neutral-200 bg-[var(--primary-color)] text-white sm:rounded-t-lg shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm sm:text-lg font-semibold leading-snug">Bulk Edit Products</h2>
               <button
                 onClick={onClose}
-                className="text-white hover:bg-[var(--primary-dark)] p-2 rounded transition-colors shrink-0"
+                className="text-white hover:bg-[var(--primary-dark)] p-1.5 sm:p-2 rounded transition-colors shrink-0"
                 aria-label="Close"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-5 sm:h-5">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
               </button>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-1.5 sm:mt-3 flex flex-wrap items-center gap-1.5 sm:gap-2">
               <button
                 onClick={() => setEditableProducts((prev) => [createEmptyProduct(), ...prev])}
-                className="px-3 py-1.5 text-sm bg-white text-[var(--primary-color)] rounded hover:bg-pink-50 transition-colors whitespace-nowrap"
+                className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm bg-white text-[var(--primary-color)] rounded hover:bg-pink-50 transition-colors whitespace-nowrap"
               >
                 + Add Row
               </button>
               <div className="relative">
                 <button
                   onClick={() => setShowRedundantDropdown(!showRedundantDropdown)}
-                  className={`px-3 py-1.5 text-sm rounded transition-colors flex items-center gap-2 font-medium shadow-sm border-2 ${
-                    redundantFilter 
-                      ? "bg-[var(--primary-color)] text-white border-white" 
+                  className={`px-2.5 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm rounded transition-colors flex items-center gap-1.5 sm:gap-2 font-medium shadow-sm border-2 ${
+                    redundantFilter
+                      ? "bg-[var(--primary-color)] text-white border-white"
                       : "bg-white text-[var(--primary-color)] border-transparent hover:bg-pink-50"
                   }`}
                   title="Filter products by redundancy criteria"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                   </svg>
                   {redundantFilter ? `Redundant: ${redundantFilter}` : "Redundant"}
@@ -2264,7 +2412,7 @@ export default function AdminStockBulkEdit({
                 <input
                   type="text"
                   placeholder="Search products..."
-                  className="w-full px-3 pr-10 py-1.5 text-sm text-black rounded border-none focus:ring-2 focus:ring-[var(--primary-color)]"
+                  className="w-full px-2.5 sm:px-3 pr-9 sm:pr-10 py-1 sm:py-1.5 text-xs sm:text-sm text-black rounded border-none focus:ring-2 focus:ring-[var(--primary-color)]"
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
@@ -2406,7 +2554,7 @@ export default function AdminStockBulkEdit({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-neutral-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-neutral-50 rounded-b-lg">
+        <div className="px-3 py-3 sm:px-6 sm:py-4 border-t border-neutral-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-neutral-50 sm:rounded-b-lg shrink-0">
           <div className="flex flex-wrap items-center gap-2 text-sm text-neutral-700 w-full sm:w-auto">
             <div className="flex items-center gap-2">
               <span className="text-sm text-neutral-600">Show</span>
@@ -2561,7 +2709,11 @@ export default function AdminStockBulkEdit({
       )}
 
       {/* Image Source Selection Modal */}
-      {showImageSourceModal && (
+      {showImageSourceModal && (() => {
+          const uploadTargetInputId = imageSourceModalVariationIndex !== null
+            ? `file-input-var-${imageSourceModalRowIndex}-${imageSourceModalVariationIndex}`
+            : `file-input-${imageSourceModalRowIndex}`;
+          return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
               <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden transform transition-all scale-100">
                   <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-pink-50/30">
@@ -2628,7 +2780,7 @@ export default function AdminStockBulkEdit({
 
                       <div className="grid grid-cols-2 gap-4">
                           <button
-                              onClick={() => { setShowImageSourceModal(false); setTimeout(() => document.getElementById(`file-input-${imageSourceModalRowIndex}`)?.click(), 200); }}
+                              onClick={() => { setShowImageSourceModal(false); setTimeout(() => document.getElementById(uploadTargetInputId)?.click(), 200); }}
                               className="flex flex-col items-center justify-center gap-3 p-4 border border-gray-100 rounded-2xl bg-gray-50 hover:bg-pink-50 hover:border-pink-200 hover:text-[var(--primary-color)] transition-all group active:scale-[0.98]"
                           >
                               <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-600 group-hover:text-[var(--primary-color)] group-hover:scale-110 transition-transform">
@@ -2638,7 +2790,7 @@ export default function AdminStockBulkEdit({
                           </button>
 
                           <button
-                              onClick={() => { setShowImageSourceModal(false); setTimeout(() => document.getElementById(`file-input-${imageSourceModalRowIndex}`)?.click(), 200); }}
+                              onClick={() => { setShowImageSourceModal(false); setTimeout(() => document.getElementById(uploadTargetInputId)?.click(), 200); }}
                               className="flex flex-col items-center justify-center gap-3 p-4 border border-gray-100 rounded-2xl bg-gray-50 hover:bg-pink-50 hover:border-pink-200 hover:text-[var(--primary-color)] transition-all group active:scale-[0.98]"
                           >
                               <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-600 group-hover:text-[var(--primary-color)] group-hover:scale-110 transition-transform">
@@ -2650,7 +2802,8 @@ export default function AdminStockBulkEdit({
                   </div>
               </div>
           </div>
-      )}
+          );
+      })()}
 
       <ImageCropperModal
         file={imageCropQueue[0]?.file || null}

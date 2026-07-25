@@ -278,8 +278,8 @@ const AdminPOSSuppliers = () => {
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
                                             <input
                                                 type="number"
-                                                value={newSupplier.openingBalance}
-                                                onChange={(e) => setNewSupplier({...newSupplier, openingBalance: parseFloat(e.target.value) || 0})}
+                                                value={newSupplier.openingBalance === 0 ? "" : newSupplier.openingBalance}
+                                                onChange={(e) => setNewSupplier({...newSupplier, openingBalance: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0)})}
                                                 className="w-full bg-gray-50 border-none rounded-xl px-8 py-3 text-sm focus:ring-2 focus:ring-[var(--primary-color)]/20 outline-none transition-all font-bold"
                                                 placeholder="0.00"
                                             />

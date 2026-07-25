@@ -16,16 +16,21 @@ import { authenticate, requireUserType, checkEnabled } from "../middleware/auth"
 
 const router = Router();
 
-// All routes require authentication and seller user type
+// All routes require authentication
 router.use(authenticate);
+
+// Search image tool - shared by both the seller and admin bulk-edit UIs, so
+// unlike the rest of this router it isn't seller-only. Must be registered
+// before the blanket requireUserType("Seller") below, since that runs for
+// every request on this router regardless of which route matches.
+router.post("/search-image", requireUserType("Seller", "Admin"), checkEnabled, searchProductImage);
+
+// Everything else on this router requires seller user type
 router.use(requireUserType("Seller"));
 router.use(checkEnabled);
 
 // Get all brands - sellers need this for product creation
 router.get("/brands", getBrands);
-
-// Search image tool
-router.post("/search-image", searchProductImage);
 
 // Get all active shops - sellers need this for shop-by-store-only products
 router.get("/shops", getShops);

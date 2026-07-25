@@ -136,6 +136,7 @@ export interface Product {
     wholesalePrice?: number;
     discPrice?: number;
     compareAtPrice?: number;
+    purchasePrice?: number;
     stock?: number;
     sku?: string;
     status?: string;
