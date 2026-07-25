@@ -144,6 +144,8 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
       { hsnCode: { $regex: search, $options: "i" } },
       { "variations.sku": { $regex: search, $options: "i" } },
       { "variations.barcode": { $regex: search, $options: "i" } },
+      { "variations.name": { $regex: search, $options: "i" } },
+      { "variations.value": { $regex: search, $options: "i" } },
     ];
 
     if (query.$or) {

@@ -279,8 +279,8 @@ export const getShops = async (): Promise<ApiResponse<Shop[]>> => {
 /**
  * Search for product image using AI/Web
  */
- export const searchProductImage = async (query: string): Promise<ApiResponse<{ imageUrl: string }>> => {
-    const response = await api.post<ApiResponse<{ imageUrl: string }>>("/products/search-image", { query });
+ export const searchProductImage = async (query: string): Promise<ApiResponse<{ imageUrl: string; images: string[] }>> => {
+    const response = await api.post<ApiResponse<{ imageUrl: string; images: string[] }>>("/products/search-image", { query });
     return response.data;
  };
 

@@ -193,6 +193,7 @@ export default function AdminStockBulkEdit({
   const [imageSearchQuery, setImageSearchQuery] = useState("");
   const [isSearchingImage, setIsSearchingImage] = useState(false);
   const [searchedImage, setSearchedImage] = useState("");
+  const [searchedImages, setSearchedImages] = useState<string[]>([]);
 
   const handleImageSearch = async () => {
     if (!imageSearchQuery.trim()) {
@@ -202,9 +203,10 @@ export default function AdminStockBulkEdit({
     setIsSearchingImage(true);
     try {
         const res = await searchProductImage(imageSearchQuery);
-      if (res.success && res.data?.imageUrl) {
-          setSearchedImage(res.data.imageUrl);
+      if (res.success && (res.data?.images?.length || res.data?.imageUrl)) {
+          setSearchedImages(res.data.images?.length ? res.data.images : [res.data.imageUrl]);
       } else {
+          setSearchedImages([]);
           alert("No image found for this keyword");
       }
     } catch (error: any) {
@@ -214,8 +216,10 @@ export default function AdminStockBulkEdit({
     }
   };
 
-  const applySearchedImage = () => {
-      if (searchedImage && imageSourceModalRowIndex !== null) {
+  const applySearchedImage = (url?: string) => {
+      if (url) setSearchedImage(url);
+      const imageToApply = url || searchedImage;
+      if (imageToApply && imageSourceModalRowIndex !== null) {
           if (imageSourceModalVariationIndex !== null) {
               const vIdx = imageSourceModalVariationIndex;
               setEditableProducts((prev) => {
@@ -225,9 +229,9 @@ export default function AdminStockBulkEdit({
                   const variations = [...(oldProd.variations || [])];
                   const targetVariation = { ...(variations[vIdx] || {}) };
                   if (targetVariation.mainImage) {
-                      targetVariation.galleryImages = [...(targetVariation.galleryImages || []), searchedImage];
+                      targetVariation.galleryImages = [...(targetVariation.galleryImages || []), imageToApply];
                   } else {
-                      targetVariation.mainImage = searchedImage;
+                      targetVariation.mainImage = imageToApply;
                   }
                   variations[vIdx] = targetVariation;
                   const newProd = { ...oldProd, variations, isChanged: true };
@@ -236,13 +240,14 @@ export default function AdminStockBulkEdit({
                   return updated;
               });
               setSearchedImage("");
+              setSearchedImages([]);
               setImageSearchQuery("");
               return;
           }
 
           const newImage: ProductImage = {
             id: Date.now().toString(),
-            url: searchedImage
+            url: imageToApply
           };
           setEditableProducts((prev) => {
               const updated = [...prev];
@@ -266,6 +271,7 @@ export default function AdminStockBulkEdit({
           }, 0);
 
           setSearchedImage("");
+          setSearchedImages([]);
           setImageSearchQuery("");
       }
   };
@@ -1185,7 +1191,14 @@ export default function AdminStockBulkEdit({
       if (p.isNew) return true;
 
       const barcodeMatch = norm(getColumnText("barcode", p)).includes(term);
-      const nameMatch = norm(p.productName).includes(term) || barcodeMatch;
+      const variationsMatch = term !== "" && Array.isArray(p.variations) && p.variations.some((v: any) => {
+        if (norm(String(v?.name || "")).includes(term)) return true;
+        if (norm(String(v?.value || "")).includes(term)) return true;
+        if (norm(String(v?.sku || "")).includes(term)) return true;
+        const vBarcodes = Array.isArray(v?.barcode) ? v.barcode : (v?.barcode ? [v.barcode] : []);
+        return vBarcodes.some((b: string) => norm(String(b)).includes(term));
+      });
+      const nameMatch = norm(p.productName).includes(term) || barcodeMatch || variationsMatch;
       const colProductNameMatch = norm(p.productName).includes(productTerm);
 
       // Resolve category name for filtering
@@ -1722,7 +1735,7 @@ export default function AdminStockBulkEdit({
                   {i === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] py-[1px]">Main</span>}
                 </div>
               ))}
-              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
+              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setSearchedImages([]); setSearchedImage(""); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
                 <span className="text-xl leading-none font-light">+</span>
               </button>
               <input id={`file-input-${originalIndex}`} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { handleImageChange(originalIndex, e.target.files); e.target.value = ""; }} />
@@ -2059,7 +2072,7 @@ export default function AdminStockBulkEdit({
                     {i === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] py-[1px]">Main</span>}
                   </div>
                 ))}
-                <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
+                <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setSearchedImages([]); setSearchedImage(""); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
                   <span className="text-xl leading-none font-light">+</span>
                 </button>
               </div>
@@ -2090,7 +2103,7 @@ export default function AdminStockBulkEdit({
                   {i === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] py-[1px]">Main</span>}
                 </div>
               ))}
-              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(variationIndex); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
+              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(variationIndex); setSearchedImages([]); setSearchedImage(""); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
                 <span className="text-xl leading-none font-light">+</span>
               </button>
               <input
@@ -2718,7 +2731,7 @@ export default function AdminStockBulkEdit({
               <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden transform transition-all scale-100">
                   <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-pink-50/30">
                       <h3 className="font-bold text-gray-800 text-lg">Choose Image</h3>
-                      <button onClick={() => setShowImageSourceModal(false)} className="text-gray-400 hover:text-gray-600 p-1 bg-white rounded-full shadow-sm border border-gray-100">
+                      <button onClick={() => { setShowImageSourceModal(false); setSearchedImages([]); }} className="text-gray-400 hover:text-gray-600 p-1 bg-white rounded-full shadow-sm border border-gray-100">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
                   </div>
@@ -2752,21 +2765,26 @@ export default function AdminStockBulkEdit({
                               </button>
                            </div>
 
-                           {/* Search Result Preview */}
-                           {searchedImage && (
-                              <div className="mt-3 p-3 bg-pink-50 rounded-xl border border-pink-100 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-                                  <img src={searchedImage} className="w-14 h-14 object-cover rounded-lg bg-white shadow-sm" alt="Result" />
-                                  <div className="flex-1 min-w-0">
-                                      <p className="text-xs text-[var(--primary-dark)] font-medium mb-1 truncate">Image Found!</p>
-                                      <button
-                                          onClick={() => {
-                                              applySearchedImage();
-                                              setShowImageSourceModal(false);
-                                          }}
-                                          className="text-xs bg-[var(--primary-color)] text-white px-3 py-1.5 rounded-lg font-bold hover:bg-[var(--primary-dark)] w-full shadow-sm hover:shadow"
-                                      >
-                                          Use This Image
-                                      </button>
+                           {/* Search Results Grid */}
+                           {searchedImages.length > 0 && (
+                              <div className="mt-3 animate-in fade-in slide-in-from-top-2">
+                                  <p className="text-xs text-[var(--primary-dark)] font-medium mb-2">
+                                      {searchedImages.length} image{searchedImages.length > 1 ? "s" : ""} found — tap one to use it
+                                  </p>
+                                  <div className="grid grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1">
+                                      {searchedImages.map((url, idx) => (
+                                          <button
+                                              key={`${url}-${idx}`}
+                                              onClick={() => {
+                                                  applySearchedImage(url);
+                                                  setShowImageSourceModal(false);
+                                              }}
+                                              className="aspect-square rounded-lg overflow-hidden border border-pink-100 bg-white shadow-sm hover:ring-2 hover:ring-[var(--primary-color)] transition-all"
+                                              title="Use this image"
+                                          >
+                                              <img src={url} className="w-full h-full object-cover" alt={`Result ${idx + 1}`} loading="lazy" />
+                                          </button>
+                                      ))}
                                   </div>
                               </div>
                            )}

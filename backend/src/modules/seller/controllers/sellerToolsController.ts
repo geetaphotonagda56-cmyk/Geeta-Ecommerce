@@ -33,11 +33,45 @@ export const searchProductImage = asyncHandler(
     const googleCxId = process.env.GOOGLE_CX_ID || settings?.googleCxId || "933cd3189f86843e3";
 
     let imageUrl = "";
+    let images: string[] = [];
 
     let debugInfo = "";
 
-    // Strategy A: Google Custom Search
-    if (googleApiKey && googleCxId) {
+    // Strategy A: serpapi.org Images Search API - preferred, no CX setup needed
+    const serpApiKey = process.env.SERP_IMAGE_SEARCH_API;
+    if (serpApiKey) {
+        try {
+            const response = await axios.get(`https://serpapi.org/api/v1/images-search`, {
+                params: {
+                    keyword: query + " product",
+                    token: serpApiKey,
+                    gl: "IN",
+                    hl: "en",
+                    size: 100,
+                    page: 1,
+                },
+            });
+
+            const results = response.data?.data;
+            if (Array.isArray(results) && results.length > 0) {
+                images = results
+                    .map((r: any) => r.image_url || r.thumbnail)
+                    .filter(Boolean);
+                imageUrl = images[0] || "";
+                console.log(`[Image Search] SerpApi Found ${images.length} results`);
+            } else {
+                console.warn(`[Image Search] SerpApi returned 0 results.`);
+                debugInfo += ` | SerpApi: No Results`;
+            }
+        } catch (error: any) {
+            const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message;
+            console.error("[Image Search] SerpApi Error:", errorMsg);
+            debugInfo += ` | SerpApi Error: ${errorMsg}`;
+        }
+    }
+
+    // Strategy B: Google Custom Search
+    if (!imageUrl && googleApiKey && googleCxId) {
         try {
              const keyPrefix = googleApiKey.length > 5 ? googleApiKey.substring(0, 5) + "..." : "HIDDEN";
              console.log(`[Image Search] Using Google Custom Search. Key: ${keyPrefix} CX: ${googleCxId}`);
@@ -57,6 +91,7 @@ export const searchProductImage = asyncHandler(
 
              if (response.data.items && response.data.items.length > 0) {
                  imageUrl = response.data.items[0].link;
+                 images = [imageUrl];
                  console.log(`[Image Search] Google Found: ${imageUrl}`);
              } else {
                  console.warn(`[Image Search] Google returned 0 results.`);
@@ -69,7 +104,7 @@ export const searchProductImage = asyncHandler(
         }
     }
 
-    // Strategy B: Unsplash (Disabled by user request for "Original Images")
+    // Strategy C: Unsplash (Disabled by user request for "Original Images")
     // User explicitly requested to blocking unsplash/pexels/pixabay.
 
     // if (!imageUrl && unsplashKey) { ... }
@@ -77,7 +112,7 @@ export const searchProductImage = asyncHandler(
     if (imageUrl) {
         return res.status(200).json({
             success: true,
-            data: { imageUrl },
+            data: { imageUrl, images },
             message: "Image found successfully"
         });
     }
