@@ -831,7 +831,36 @@ export const getSalesSummaryReport = asyncHandler(
 
           // Costs/MRP
           mrp: { $ifNull: ["$productDoc.compareAtPrice", "$unitPrice"] },
-          purchasePrice: { $ifNull: ["$productDoc.purchasePrice", 0] },
+          // purchasePrice only exists per-variation on Product, not at the
+          // top level - match the ordered variant by its snapshotted
+          // variantId, falling back to the first variation for legacy
+          // orders placed before variantId was captured.
+          purchasePrice: {
+            $let: {
+              vars: {
+                matchedVariant: {
+                  $first: {
+                    $filter: {
+                      input: { $ifNull: ["$productDoc.variations", []] },
+                      as: "v",
+                      cond: { $eq: ["$$v._id", "$variantId"] }
+                    }
+                  }
+                }
+              },
+              in: {
+                $ifNull: [
+                  "$$matchedVariant.purchasePrice",
+                  {
+                    $ifNull: [
+                      { $arrayElemAt: ["$productDoc.variations.purchasePrice", 0] },
+                      { $ifNull: ["$productDoc.purchasePrice", 0] }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
 
           // Mode
           mode: {
@@ -1211,7 +1240,34 @@ export const getStockSalesSummary = asyncHandler(
           taxPercent: { $first: { $ifNull: ["$taxDoc.percentage", 0] } },
 
           unitsSold: { $sum: "$quantity" },
-          purchasePrice: { $first: { $ifNull: ["$productDoc.purchasePrice", 0] } },
+          purchasePrice: {
+            $first: {
+              $let: {
+                vars: {
+                  matchedVariant: {
+                    $first: {
+                      $filter: {
+                        input: { $ifNull: ["$productDoc.variations", []] },
+                        as: "v",
+                        cond: { $eq: ["$$v._id", "$variantId"] }
+                      }
+                    }
+                  }
+                },
+                in: {
+                  $ifNull: [
+                    "$$matchedVariant.purchasePrice",
+                    {
+                      $ifNull: [
+                        { $arrayElemAt: ["$productDoc.variations.purchasePrice", 0] },
+                        { $ifNull: ["$productDoc.purchasePrice", 0] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
           averageSellingPrice: { $avg: "$unitPrice" },
           totalSellingPrice: { $sum: "$total" }
         }

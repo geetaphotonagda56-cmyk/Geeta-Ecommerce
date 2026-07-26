@@ -944,9 +944,17 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     status,
     publish,
     redundant,
+    minVariations,
   } = req.query;
 
   const query: any = {};
+
+  if (minVariations) {
+    const minCount = Number(minVariations);
+    if (!Number.isNaN(minCount) && minCount > 0) {
+      query.$expr = { $gte: [{ $size: { $ifNull: ["$variations", []] } }, minCount] };
+    }
+  }
 
   // Redundant filter (products with same name or barcode within same seller)
   if (redundant) {

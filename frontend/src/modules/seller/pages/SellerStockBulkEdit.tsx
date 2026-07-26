@@ -176,6 +176,10 @@ export default function SellerStockBulkEdit({
   const [attachModalProductIndex, setAttachModalProductIndex] = useState<number | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanIndex, setScanIndex] = useState<number | null>(null);
+  // Set only when the barcode scanner was opened from a variation row's own
+  // Barcode cell, so onInlineScanSuccess knows to write into that variation
+  // instead of the parent product.
+  const [scanVariationIndex, setScanVariationIndex] = useState<number | null>(null);
   const [showSearchScanner, setShowSearchScanner] = useState(false);
   const [searchScannerKey, setSearchScannerKey] = useState(0);
   const lastSearchScanRef = useRef<{ code: string; time: number }>({ code: "", time: 0 });
@@ -187,8 +191,8 @@ export default function SellerStockBulkEdit({
   const [showImageSourceModal, setShowImageSourceModal] = useState(false);
   const [imageSearchQuery, setImageSearchQuery] = useState("");
   const [isSearchingImage, setIsSearchingImage] = useState(false);
-  const [searchedImage, setSearchedImage] = useState("");
   const [searchedImages, setSearchedImages] = useState<string[]>([]);
+  const [selectedSearchImages, setSelectedSearchImages] = useState<string[]>([]);
 
   const handleImageSearch = async () => {
     if (!imageSearchQuery.trim()) {
@@ -196,6 +200,7 @@ export default function SellerStockBulkEdit({
         return;
     }
     setIsSearchingImage(true);
+    setSelectedSearchImages([]);
     try {
         const res = await searchProductImage(imageSearchQuery);
       if (res.success && (res.data?.images?.length || res.data?.imageUrl)) {
@@ -211,10 +216,14 @@ export default function SellerStockBulkEdit({
     }
   };
 
-  const applySearchedImage = (url?: string) => {
-      if (url) setSearchedImage(url);
-      const imageToApply = url || searchedImage;
-      if (imageToApply && imageSourceModalRowIndex !== null) {
+  const toggleSearchImageSelection = (url: string) => {
+      setSelectedSearchImages((prev) =>
+          prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]
+      );
+  };
+
+  const applySearchedImages = (urls: string[]) => {
+      if (urls.length && imageSourceModalRowIndex !== null) {
           if (imageSourceModalVariationIndex !== null) {
               const vIdx = imageSourceModalVariationIndex;
               setEditableProducts((prev) => {
@@ -223,10 +232,13 @@ export default function SellerStockBulkEdit({
                   if (!oldProd) return prev;
                   const variations = [...(oldProd.variations || [])];
                   const targetVariation = { ...(variations[vIdx] || {}) };
-                  if (targetVariation.mainImage) {
-                      targetVariation.galleryImages = [...(targetVariation.galleryImages || []), imageToApply];
-                  } else {
-                      targetVariation.mainImage = imageToApply;
+                  const [first, ...rest] = urls;
+                  const galleryAdditions = targetVariation.mainImage ? urls : rest;
+                  if (!targetVariation.mainImage) {
+                      targetVariation.mainImage = first;
+                  }
+                  if (galleryAdditions.length) {
+                      targetVariation.galleryImages = [...(targetVariation.galleryImages || []), ...galleryAdditions];
                   }
                   variations[vIdx] = targetVariation;
                   const newProd = { ...oldProd, variations, isChanged: true };
@@ -234,22 +246,22 @@ export default function SellerStockBulkEdit({
                   upsertEditedCache(newProd);
                   return updated;
               });
-              setSearchedImage("");
               setSearchedImages([]);
+              setSelectedSearchImages([]);
               setImageSearchQuery("");
               return;
           }
 
-          const newImage = {
-            id: Date.now().toString(),
-            url: imageToApply
-          };
+          const newImages = urls.map((url, i) => ({
+            id: `${Date.now()}-${i}`,
+            url
+          }));
           setEditableProducts((prev) => {
               const updated = [...prev];
               const currentProduct = updated[imageSourceModalRowIndex];
               updated[imageSourceModalRowIndex] = {
                   ...currentProduct,
-                  images: [...currentProduct.images, newImage],
+                  images: [...currentProduct.images, ...newImages],
                   isChanged: true
               };
               return updated;
@@ -263,8 +275,8 @@ export default function SellerStockBulkEdit({
               });
           }, 0);
 
-          setSearchedImage("");
           setSearchedImages([]);
+          setSelectedSearchImages([]);
           setImageSearchQuery("");
       }
   };
@@ -453,16 +465,24 @@ export default function SellerStockBulkEdit({
     isNew: true,
   });
 
-  const startScanning = (index: number) => {
+  const startScanning = (index: number, variationIndex?: number) => {
     setScanIndex(index);
+    setScanVariationIndex(variationIndex ?? null);
     openBarcodeScanner(() => setIsScanning(true));
   };
 
   const onInlineScanSuccess = (decodedText: string) => {
       if (scanIndex !== null) {
-          const currentBarcodes = editableProducts[scanIndex].barcode || [];
-          if (!currentBarcodes.includes(decodedText)) {
-              handleFieldChange(scanIndex, 'barcode', [...currentBarcodes, decodedText]);
+          if (scanVariationIndex !== null) {
+              const currentBarcodes = editableProducts[scanIndex].variations?.[scanVariationIndex]?.barcode || [];
+              if (!currentBarcodes.includes(decodedText)) {
+                  handleVariationFieldChange(scanIndex, scanVariationIndex, 'barcode', [...currentBarcodes, decodedText]);
+              }
+          } else {
+              const currentBarcodes = editableProducts[scanIndex].barcode || [];
+              if (!currentBarcodes.includes(decodedText)) {
+                  handleFieldChange(scanIndex, 'barcode', [...currentBarcodes, decodedText]);
+              }
           }
       }
       setIsScanning(false);
@@ -470,6 +490,7 @@ export default function SellerStockBulkEdit({
 
   const stopScanning = () => {
     setIsScanning(false);
+    setScanVariationIndex(null);
   };
 
   useEffect(() => {
@@ -667,10 +688,34 @@ export default function SellerStockBulkEdit({
       barcode: [],
       customBlockRack: false,
     };
+    const existingVariations = product.variations || [];
+    // A product with <=1 variations is in "single variation" proxy mode
+    // (see isSingleVariation in renderVariationBodyCell): price/stock/sku/
+    // barcode/purchasePrice edits are written straight to the parent row's
+    // own fields, not into variations[0], leaving that lone variation's own
+    // object blank underneath. The moment a second variation is added here,
+    // proxy mode turns off for every row - including the first - so without
+    // backfilling variations[0] from the parent fields first, whatever the
+    // user already typed appears to vanish.
+    const firstVariation = existingVariations.length <= 1
+      ? {
+          ...(existingVariations[0] || {}),
+          price: product.price,
+          compareAtPrice: product.compareAtPrice,
+          discPrice: product.offerPrice,
+          wholesalePrice: product.wholesalePrice,
+          purchasePrice: product.purchasePrice,
+          stock: product.stock,
+          sku: product.itemCode,
+          barcode: product.barcode,
+        }
+      : existingVariations[0];
     // Appended, never prepended - index 0 is always the product's own
     // default variation and must stay there so the "can't delete the
     // default variation" trash-icon rule (vIdx === 0) keeps pointing at it.
-    const newVariations = [...(product.variations || []), blankVariation];
+    const newVariations = existingVariations.length <= 1
+      ? [firstVariation, blankVariation]
+      : [...existingVariations, blankVariation];
     handleFieldChange(productIndex, "variations", newVariations);
     setExpandedProductIds((prev) => new Set(prev).add(product.id));
   };
@@ -1715,7 +1760,7 @@ export default function SellerStockBulkEdit({
                   {i === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] py-[1px]">Main</span>}
                 </div>
               ))}
-              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setSearchedImages([]); setSearchedImage(""); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
+              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setSearchedImages([]); setSelectedSearchImages([]); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
                 <span className="text-xl leading-none font-light">+</span>
               </button>
               <input id={`file-input-${originalIndex}`} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { handleImageChange(originalIndex, e.target.files); e.target.value = ""; }} />
@@ -1930,11 +1975,12 @@ export default function SellerStockBulkEdit({
     }
   };
 
-  const NA_VARIATION_COLUMNS = new Set([
-    "category", "subCategory", "subSubCategory", "description", "hsnCode",
-    "mfgDate", "expiryDate", "deliveryTime", "brand", "lowStockQuantity", "tax", "gst",
-    "valMrp", "valPur", "status", "variationName", "pack",
-  ]);
+  // gst has no input anywhere, even on the parent row (it's a read-only "-").
+  // Everything else here is a product-level field (there's no per-variation
+  // column for it in the schema), so these render the same control as the
+  // parent row and write straight to the parent product via
+  // handleFieldChange - never forked per variation.
+  const NA_VARIATION_COLUMNS = new Set(["gst"]);
 
   const renderVariationBodyCell = (
     key: string,
@@ -2009,7 +2055,7 @@ export default function SellerStockBulkEdit({
                     {i === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] py-[1px]">Main</span>}
                   </div>
                 ))}
-                <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setSearchedImages([]); setSearchedImage(""); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
+                <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setSearchedImages([]); setSelectedSearchImages([]); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
                   <span className="text-xl leading-none font-light">+</span>
                 </button>
               </div>
@@ -2040,7 +2086,7 @@ export default function SellerStockBulkEdit({
                   {i === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] py-[1px]">Main</span>}
                 </div>
               ))}
-              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(variationIndex); setSearchedImages([]); setSearchedImage(""); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
+              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(variationIndex); setSearchedImages([]); setSelectedSearchImages([]); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
                 <span className="text-xl leading-none font-light">+</span>
               </button>
               <input
@@ -2134,21 +2180,40 @@ export default function SellerStockBulkEdit({
                   </span>
                 ))}
               </div>
-              <input
-                type="text"
-                className="flex-1 min-w-0 w-full px-2 py-1 border border-gray-200 rounded text-[11px] focus:ring-1 focus:ring-[var(--primary-color)] focus:outline-none"
-                placeholder="Add barcode"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    const val = (e.currentTarget as HTMLInputElement).value.trim();
-                    if (val && !barcodes.includes(val)) {
-                      onChange("barcode", [...barcodes, val]);
-                      (e.currentTarget as HTMLInputElement).value = "";
+              <div className="flex gap-1 w-full min-w-0">
+                <input
+                  type="text"
+                  className="flex-1 min-w-0 w-full px-2 py-1 border border-gray-200 rounded text-[11px] focus:ring-1 focus:ring-[var(--primary-color)] focus:outline-none"
+                  placeholder="Add barcode"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const val = (e.currentTarget as HTMLInputElement).value.trim();
+                      if (val && !barcodes.includes(val)) {
+                        onChange("barcode", [...barcodes, val]);
+                        (e.currentTarget as HTMLInputElement).value = "";
+                      }
                     }
-                  }
-                }}
-              />
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const newB = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+                    onChange("barcode", [...barcodes, newB]);
+                  }}
+                  className="p-1.5 bg-pink-50 border border-pink-200 rounded text-[var(--primary-color)] hover:bg-pink-100 transition-colors"
+                  title="Auto Generate"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </button>
+                <button
+                  onClick={() => startScanning(originalIndex, isSingleVariation ? undefined : variationIndex)}
+                  className="p-1.5 bg-pink-50 border border-pink-200 rounded text-[var(--primary-color)] hover:bg-pink-100 transition-colors"
+                  title="Scan Barcode"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 012-2h2m10 0h2a2 2 0 012 2v2m0 10v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
+                </button>
+              </div>
             </div>
           </td>
         );
@@ -2205,6 +2270,89 @@ export default function SellerStockBulkEdit({
         // Removing a variation is handled by the trash icon in the leading
         // column (left of the row) - avoid a second, inconsistent control here.
         return <td key={key} className="p-2 border-r border-neutral-200 text-center text-xs text-neutral-300">—</td>;
+      // Everything below is a product-level field - there's no per-variation
+      // column for it in the schema, so it mirrors the parent row's own
+      // control exactly and writes straight to the parent via
+      // handleFieldChange(originalIndex, ...), same as the parent row does.
+      case "category":
+        return (
+          <td key={key} className="p-0 border-r border-neutral-200">
+            <SearchableSelect
+              options={categories.map(cat => ({ value: cat._id, label: cat.name || "Unnamed Category" }))}
+              value={product.categoryId}
+              onChange={(val) => handleFieldChange(originalIndex, "categoryId", val)}
+              placeholder="Category"
+            />
+          </td>
+        );
+      case "subCategory":
+        return (
+          <td key={key} className="p-0 border-r border-neutral-200">
+             <SearchableSelect
+              options={subCategories
+                .filter(sub => !product.categoryId || sub.parentId === product.categoryId || (sub as any).category === product.categoryId)
+                .map(sub => ({ value: sub._id || (sub as any).id, label: (sub as any).subcategoryName || (sub as any).name || "Unnamed Subcategory" }))
+              }
+              value={product.subCategoryId || ""}
+              onChange={(val) => handleFieldChange(originalIndex, 'subCategoryId', val)}
+              placeholder="-"
+            />
+          </td>
+        );
+      case "subSubCategory":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.subSubCategory} onChange={(e) => handleFieldChange(originalIndex, 'subSubCategory', e.target.value)} /></td>;
+      case "brand":
+        return (
+          <td key={key} className="p-0 border-r border-neutral-200">
+            <SearchableSelect
+              options={brands.map(brand => ({ value: brand._id, label: brand.name || "Unnamed Brand" }))}
+              value={product.brandId || ""}
+              onChange={(val) => handleFieldChange(originalIndex, 'brandId', val)}
+              placeholder="-Select Brand-"
+            />
+          </td>
+        );
+      case "tax":
+        return (
+          <td key={key} className="p-0 border-r border-neutral-200 min-w-[120px]">
+            <SearchableSelect
+              options={taxCategories.map(tax => ({ value: tax._id, label: tax.name || "Unnamed Tax" }))}
+              value={product.tax || ""}
+              onChange={(val) => handleFieldChange(originalIndex, 'tax', val)}
+              placeholder="-Select Tax-"
+            />
+          </td>
+        );
+      case "hsnCode":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.hsnCode} onChange={(e) => handleFieldChange(originalIndex, 'hsnCode', e.target.value)} /></td>;
+      case "description":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.description} onChange={(e) => handleFieldChange(originalIndex, 'description', e.target.value)} /></td>;
+      case "deliveryTime":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.deliveryTime} onChange={(e) => handleFieldChange(originalIndex, 'deliveryTime', e.target.value)} /></td>;
+      case "lowStockQuantity":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.lowStockQuantity === 0 ? "" : product.lowStockQuantity} onChange={(e) => handleFieldChange(originalIndex, 'lowStockQuantity', e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))} /></td>;
+      case "mfgDate":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="date" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.mfgDate || ""} onChange={(e) => handleFieldChange(originalIndex, 'mfgDate', e.target.value)} /></td>;
+      case "expiryDate":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="date" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.expiryDate || ""} onChange={(e) => handleFieldChange(originalIndex, 'expiryDate', e.target.value)} /></td>;
+      case "pack":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.pack} onChange={(e) => handleFieldChange(originalIndex, 'pack', e.target.value)} /></td>;
+      case "variationName":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.variationName} onChange={(e) => handleFieldChange(originalIndex, 'variationName', e.target.value)} /></td>;
+      case "valMrp":
+        return <td key={key} className="p-2 border-r border-neutral-200 text-sm text-neutral-600 text-right">{(product.compareAtPrice * product.stock).toLocaleString()}</td>;
+      case "valPur":
+        return <td key={key} className="p-2 border-r border-neutral-200 text-sm text-neutral-600 text-right">{(product.purchasePrice * product.stock).toLocaleString()}</td>;
+      case "status":
+        return (
+          <td key={key} className="p-2 text-center">
+            <label className="inline-flex items-center cursor-pointer">
+              <input type="checkbox" checked={product.publish} onChange={(e) => handleFieldChange(originalIndex, "publish", e.target.checked)} className="sr-only peer" />
+              <div className="relative w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--primary-color)]/50 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-[var(--primary-color)]"></div>
+              <span className="ms-2 text-xs font-medium text-gray-900">{product.publish ? "Active" : "Inactive"}</span>
+            </label>
+          </td>
+        );
       default:
         return <td key={key} className="p-2 border-r border-neutral-200 text-center text-xs text-neutral-300">—</td>;
     }
@@ -2593,7 +2741,7 @@ export default function SellerStockBulkEdit({
               <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden transform transition-all scale-100">
                   <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-pink-50/30">
                       <h3 className="font-bold text-gray-800 text-lg">Choose Image</h3>
-                      <button onClick={() => { setShowImageSourceModal(false); setSearchedImages([]); }} className="text-gray-400 hover:text-gray-600 p-1 bg-white rounded-full shadow-sm border border-gray-100">
+                      <button onClick={() => { setShowImageSourceModal(false); setSearchedImages([]); setSelectedSearchImages([]); }} className="text-gray-400 hover:text-gray-600 p-1 bg-white rounded-full shadow-sm border border-gray-100">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
                   </div>
@@ -2631,23 +2779,38 @@ export default function SellerStockBulkEdit({
                            {searchedImages.length > 0 && (
                               <div className="mt-3 animate-in fade-in slide-in-from-top-2">
                                   <p className="text-xs text-[var(--primary-dark)] font-medium mb-2">
-                                      {searchedImages.length} image{searchedImages.length > 1 ? "s" : ""} found — tap one to use it
+                                      {searchedImages.length} image{searchedImages.length > 1 ? "s" : ""} found — tap to select one or more
                                   </p>
                                   <div className="grid grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1">
-                                      {searchedImages.map((url, idx) => (
-                                          <button
-                                              key={`${url}-${idx}`}
-                                              onClick={() => {
-                                                  applySearchedImage(url);
-                                                  setShowImageSourceModal(false);
-                                              }}
-                                              className="aspect-square rounded-lg overflow-hidden border border-pink-100 bg-white shadow-sm hover:ring-2 hover:ring-[var(--primary-color)] transition-all"
-                                              title="Use this image"
-                                          >
-                                              <img src={url} className="w-full h-full object-cover" alt={`Result ${idx + 1}`} loading="lazy" />
-                                          </button>
-                                      ))}
+                                      {searchedImages.map((url, idx) => {
+                                          const isSelected = selectedSearchImages.includes(url);
+                                          return (
+                                              <button
+                                                  key={`${url}-${idx}`}
+                                                  onClick={() => toggleSearchImageSelection(url)}
+                                                  className={`relative aspect-square rounded-lg overflow-hidden border-2 bg-white shadow-sm transition-all ${isSelected ? "border-[var(--primary-color)] ring-2 ring-[var(--primary-color)]" : "border-pink-100 hover:ring-2 hover:ring-[var(--primary-color)]"}`}
+                                                  title={isSelected ? "Selected" : "Tap to select"}
+                                              >
+                                                  <img src={url} className="w-full h-full object-cover" alt={`Result ${idx + 1}`} loading="lazy" />
+                                                  {isSelected && (
+                                                      <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[var(--primary-color)] text-white flex items-center justify-center text-[10px] font-bold shadow">
+                                                          ✓
+                                                      </span>
+                                                  )}
+                                              </button>
+                                          );
+                                      })}
                                   </div>
+                                  <button
+                                      onClick={() => {
+                                          applySearchedImages(selectedSearchImages);
+                                          setShowImageSourceModal(false);
+                                      }}
+                                      disabled={selectedSearchImages.length === 0}
+                                      className="mt-3 w-full bg-[var(--primary-color)] text-white px-3 py-2 rounded-lg font-bold text-xs uppercase tracking-wide hover:bg-[var(--primary-dark)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  >
+                                      Done{selectedSearchImages.length > 0 ? ` — Use ${selectedSearchImages.length} Image${selectedSearchImages.length > 1 ? "s" : ""}` : ""}
+                                  </button>
                               </div>
                            )}
                       </div>

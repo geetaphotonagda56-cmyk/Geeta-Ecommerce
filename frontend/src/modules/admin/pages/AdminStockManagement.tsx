@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Fragment } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Html5Qrcode } from "html5-qrcode";
 import {
@@ -166,6 +166,7 @@ export default function AdminStockManagement() {
   const [filterSeller, setFilterSeller] = useState("All Sellers");
   const [filterStatus, setFilterStatus] = useState("All Products");
   const [filterStock, setFilterStock] = useState("All Products");
+  const [filterMultiVariationOnly, setFilterMultiVariationOnly] = useState(false);
   const [filterRedundant, setFilterRedundant] = useState("None");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [selectedProductDetails, setSelectedProductDetails] = useState<ProductVariation | null>(null);
@@ -174,6 +175,15 @@ export default function AdminStockManagement() {
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
   const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [selectedProductIdsForShare, setSelectedProductIdsForShare] = useState<Set<string>>(new Set());
+  const [expandedProductIds, setExpandedProductIds] = useState<Set<string>>(new Set());
+  const toggleExpandProduct = (productId: string) => {
+    setExpandedProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  };
 
   const LIVE_BASE_URL = "https://geeta.today";
   const buildLiveProductUrl = (productId: string) => `${LIVE_BASE_URL}/product/${productId}`;
@@ -212,7 +222,7 @@ export default function AdminStockManagement() {
   const fetchData = async (opts?: { force?: boolean; silent?: boolean }) => {
     const force = Boolean(opts?.force);
     const silent = Boolean(opts?.silent);
-    const cacheKey = `${token || ""}|${debouncedSearchTerm}|${filterCategory}|${filterSeller}|${filterStatus}|${currentPage}|${rowsPerPage}|${filterRedundant}`;
+    const cacheKey = `${token || ""}|${debouncedSearchTerm}|${filterCategory}|${filterSeller}|${filterStatus}|${currentPage}|${rowsPerPage}|${filterRedundant}|${filterMultiVariationOnly}`;
     const cached = productsCache.get(cacheKey);
     if (
       !force &&
@@ -270,6 +280,10 @@ export default function AdminStockManagement() {
         params.redundant = filterRedundant === "All Redundant" ? "true" : filterRedundant.toLowerCase();
       }
 
+      if (filterMultiVariationOnly) {
+        params.minVariations = 2;
+      }
+
       const response = await getProducts({
         ...params,
         page: currentPage,
@@ -323,7 +337,15 @@ export default function AdminStockManagement() {
         setError("Failed to load products. Please try again.");
       }
     } finally {
-      if (!silent && fetchSeqRef.current === seq) setLoading(false);
+      // Whichever call is the latest (by seq) to resolve must always clear
+      // the spinner, even if that particular call happens to be a silent
+      // background refresh - otherwise a non-silent call that gets
+      // superseded by a silent one mid-flight (e.g. the stale-while-
+      // revalidate refetch right after a cache hit) skips this because its
+      // own seq no longer matches, the silent one skips it because of the
+      // !silent check, and loading is stuck true forever even though data
+      // already arrived.
+      if (fetchSeqRef.current === seq) setLoading(false);
     }
   };
 
@@ -339,7 +361,7 @@ export default function AdminStockManagement() {
       fetchStaticData();
     }
 
-    const fetchKey = `${token || ""}|${debouncedSearchTerm}|${filterCategory}|${filterSeller}|${filterStatus}|${currentPage}|${rowsPerPage}|${filterRedundant}|${location.key}`;
+    const fetchKey = `${token || ""}|${debouncedSearchTerm}|${filterCategory}|${filterSeller}|${filterStatus}|${currentPage}|${rowsPerPage}|${filterRedundant}|${filterMultiVariationOnly}|${location.key}`;
     if (lastFetchKeyRef.current === fetchKey) return;
     lastFetchKeyRef.current = fetchKey;
 
@@ -373,6 +395,7 @@ export default function AdminStockManagement() {
     currentPage,
     rowsPerPage,
     filterRedundant,
+    filterMultiVariationOnly,
     location.key,
   ]);
 
@@ -879,7 +902,7 @@ export default function AdminStockManagement() {
         unit: p.pack || "-", // Unit (10)
         taxCategory: taxName,
         gst: gstVal,
-        purchasePrice: Number(p.purchasePrice) || 0,
+        purchasePrice: Number(p.variations?.[0]?.purchasePrice) || Number(p.purchasePrice) || 0,
         compareAtPrice: Number(p.compareAtPrice) || 0, // MRP (17)
         price: Number(p.price) || 0, // Selling Price (18),
         deliveryTime: p.deliveryTime || "-",
@@ -906,6 +929,8 @@ export default function AdminStockManagement() {
             : v.barcode
               ? [v.barcode]
               : [];
+          const variantPurchasePrice =
+            Number(v.purchasePrice) || baseVariation.purchasePrice;
 
           variations.push({
             ...baseVariation,
@@ -921,6 +946,7 @@ export default function AdminStockManagement() {
             price: Number(v.price) || baseVariation.price,
             compareAtPrice:
               Number(v.compareAtPrice) || baseVariation.compareAtPrice,
+            purchasePrice: variantPurchasePrice,
             offerPrice:
               Number(v.discPrice) || Number((p as any).discPrice) || 0,
             status: product.publish ? "Published" : "Unpublished",
@@ -936,8 +962,7 @@ export default function AdminStockManagement() {
               (Number(v.compareAtPrice) ||
                 Number(baseVariation.compareAtPrice) ||
                 0) * currentStock,
-            valuePurchase:
-              (Number(baseVariation.purchasePrice) || 0) * currentStock,
+            valuePurchase: variantPurchasePrice * currentStock,
           });
         });
       } else {
@@ -991,6 +1016,26 @@ export default function AdminStockManagement() {
 
   // Filter products
   const filteredProducts = useMemo(() => {
+    const term = (searchTerm || "").toLowerCase().trim();
+
+    const rowMatchesSearch = (product: (typeof productVariations)[number]) =>
+      (product.name || "").toLowerCase().includes(term) ||
+      (product.seller || "").toLowerCase().includes(term) ||
+      (product.sku || "").toLowerCase().includes(term) ||
+      (product.variation || "").toLowerCase().includes(term) ||
+      (product.sizeName || "").toLowerCase().includes(term) ||
+      (product.colorName || "").toLowerCase().includes(term) ||
+      (Array.isArray(product.barcode)
+        ? product.barcode.some((b: string) => String(b).toLowerCase().includes(term))
+        : (product.barcode && String(product.barcode).toLowerCase().includes(term)));
+
+    // A search hit on any one variation should surface the whole product -
+    // parent row plus every sibling variation - not just the matching row,
+    // so the accordion always has the full picture to expand into.
+    const matchingProductIds = term
+      ? new Set(productVariations.filter(rowMatchesSearch).map((p) => p.productId))
+      : null;
+
     return productVariations.filter((product) => {
       const matchesCategory =
         filterCategory === "All Category" ||
@@ -1010,20 +1055,17 @@ export default function AdminStockManagement() {
           product.stock !== "Unlimited" &&
           typeof product.stock === "number" &&
           product.stock === 0);
-      const matchesSearch =
-        (product.name || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
-        (product.seller || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
-        (product.sku || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
-        (Array.isArray(product.barcode)
-          ? product.barcode.some((b: string) => String(b).toLowerCase().includes(searchTerm.toLowerCase()))
-          : (product.barcode && String(product.barcode).toLowerCase().includes(searchTerm.toLowerCase())));
+      const matchesSearch = !term || matchingProductIds!.has(product.productId);
+      const matchesMultiVariation =
+        !filterMultiVariationOnly || (product.allVariations?.length || 0) >= 2;
 
       return (
         matchesCategory &&
         matchesSeller &&
         matchesStatus &&
         matchesStock &&
-        matchesSearch
+        matchesSearch &&
+        matchesMultiVariation
       );
     });
   }, [
@@ -1032,6 +1074,7 @@ export default function AdminStockManagement() {
     filterSeller,
     filterStatus,
     filterStock,
+    filterMultiVariationOnly,
     searchTerm,
   ]);
 
@@ -1083,6 +1126,24 @@ export default function AdminStockManagement() {
     Number(serverPagination?.pages || Math.ceil(sortedProducts.length / rowsPerPage) || 1)
   );
   const displayedProducts = sortedProducts;
+
+  // Group the flattened per-variation rows back by parent product so
+  // multi-variation products can render as a single collapsible row with
+  // its variations nested underneath, instead of one flat row per variant.
+  const groupedDisplayRows = useMemo(() => {
+    const order: string[] = [];
+    const groups = new Map<string, typeof displayedProducts>();
+    for (const row of displayedProducts) {
+      if (!groups.has(row.productId)) {
+        groups.set(row.productId, []);
+        order.push(row.productId);
+      }
+      groups.get(row.productId)!.push(row);
+    }
+    return order.map((productId) => groups.get(productId)!);
+  }, [displayedProducts]);
+
+  const isSearchActive = searchTerm.trim() !== "";
 
   const totalCount = Number(serverPagination?.total ?? sortedProducts.length);
   const startIndex = (currentPage - 1) * rowsPerPage;
@@ -1368,6 +1429,20 @@ export default function AdminStockManagement() {
                   <option value="SKU">Duplicate SKU</option>
                 </select>
               </div>
+              <div className="flex items-end pb-2">
+                <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={filterMultiVariationOnly}
+                    onChange={(e) => {
+                      setFilterMultiVariationOnly(e.target.checked);
+                      setCurrentPage(1);
+                    }}
+                    className="rounded border-neutral-300 text-[var(--primary-color)] focus:ring-[var(--primary-color)]"
+                  />
+                  2+ Variations Only
+                </label>
+              </div>
             </div>
 
             {/* Table Controls */}
@@ -1564,18 +1639,60 @@ export default function AdminStockManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {displayedProducts.map((product) => (
+                  {groupedDisplayRows.map((group) => {
+                    const productId = group[0].productId;
+                    const isMulti = group.length > 1;
+                    const isExpanded = expandedProductIds.has(productId) || (isMulti && isSearchActive);
+                    const rowsToRender = isMulti && !isExpanded ? [group[0]] : group;
+                    return (
+                      <Fragment key={productId}>
+                        {rowsToRender.map((product, idx) => (
                     <tr
                       key={product.id}
-                      className="hover:bg-neutral-50 transition-colors text-sm text-neutral-700 border-b border-neutral-200"
+                      className={`hover:bg-neutral-50 transition-colors text-sm text-neutral-700 border-b border-neutral-200 ${idx > 0 ? "bg-[var(--primary-color)]/[0.04] border-l-[3px] border-l-[var(--primary-color)]/40" : ""}`}
                     >
                       <td className="p-4 align-middle">
-                        <input
-                          type="checkbox"
-                          checked={selectedProductIdsForShare.has(product.productId)}
-                          onChange={() => toggleSelectOne(product.productId)}
-                          aria-label={`Select ${product.name}`}
-                        />
+                        <div className="flex flex-col items-center gap-1.5">
+                          {idx === 0 ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedProductIdsForShare.has(product.productId)}
+                              onChange={() => toggleSelectOne(product.productId)}
+                              aria-label={`Select ${product.name}`}
+                            />
+                          ) : (
+                            <span className="w-4 h-4 flex items-center justify-center text-neutral-300 text-xs" title="Variant of the product above">↳</span>
+                          )}
+                          {idx === 0 && isMulti && (
+                            <button
+                              type="button"
+                              onClick={() => toggleExpandProduct(productId)}
+                              className="shrink-0 flex flex-col items-center gap-0.5 p-0.5 rounded hover:bg-neutral-200 text-neutral-500"
+                              title={isExpanded ? "Collapse variations" : `Show ${group.length} variations`}
+                            >
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                              >
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                              </svg>
+                              {/* group.length is the TOTAL variation count (the
+                                  already-visible first row counts as one of them),
+                                  but showing that total here reads as "how many
+                                  rows will appear when I click" - which is off by
+                                  one, since only the remaining group.length - 1
+                                  actually get revealed. Show that instead. */}
+                              <span className="text-[9px] font-semibold leading-none text-[var(--primary-color)]">+{group.length - 1} more</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="p-4 align-middle">
                         {product.image ? (
@@ -1597,7 +1714,13 @@ export default function AdminStockManagement() {
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.category}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.subCategory}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.subSubCategory}</td>
-                      <td className="p-4 align-middle text-sm font-medium text-neutral-800">{product.name}</td>
+                      <td className={idx === 0 ? "p-4 align-middle text-sm font-medium text-neutral-800" : "py-4 pr-4 pl-8 align-middle text-sm text-neutral-600 border-l-2 border-l-[var(--primary-color)]/30"}>
+                        {idx === 0 ? (
+                          <span>{product.name}</span>
+                        ) : (
+                          <span className="italic">{product.variation || product.name}</span>
+                        )}
+                      </td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.sku}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.blockNumber}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.rackNumber}</td>
@@ -1768,7 +1891,10 @@ export default function AdminStockManagement() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                        ))}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

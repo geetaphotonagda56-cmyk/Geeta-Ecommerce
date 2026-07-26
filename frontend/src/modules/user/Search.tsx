@@ -101,7 +101,10 @@ export default function Search() {
   // debounce it so each refinement doesn't re-trigger and cancel the search.
   const debouncedLatitude = useDebouncedValue(location?.latitude, 500);
   const debouncedLongitude = useDebouncedValue(location?.longitude, 500);
-  const activeQuery = selectedQuery || debouncedQuery;
+  // inputValue is checked directly (not the debounced value) so clearing the
+  // box - via the X button or deleting all text - drops the query instantly
+  // instead of waiting out the debounce window with the stale prior query.
+  const activeQuery = inputValue.trim() === "" ? "" : (selectedQuery || debouncedQuery);
   const suggestionBoxRef = useRef<HTMLDivElement>(null);
   const inputValueRef = useRef(inputValue);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -398,7 +401,7 @@ export default function Search() {
     setResults([]);
     setSuggestions([]);
     setPage(1);
-    setSearchParams({});
+    setSearchParams({}, { replace: true });
   };
 
   return (

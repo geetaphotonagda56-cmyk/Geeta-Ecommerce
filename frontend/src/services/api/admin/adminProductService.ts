@@ -267,6 +267,7 @@ export interface GetProductsParams {
   status?: "Active" | "Inactive" | "Pending" | "Rejected";
   publish?: boolean;
   redundant?: boolean | string;
+  minVariations?: number;
 }
 
 export interface BulkImportProductsData {
