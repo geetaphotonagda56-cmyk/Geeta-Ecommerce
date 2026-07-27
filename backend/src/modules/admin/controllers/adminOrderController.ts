@@ -1252,7 +1252,21 @@ export const exportOrders = asyncHandler(
 export const createPOSOrder = asyncHandler(
   async (req: Request, res: Response) => {
     try {
-        const { items, paymentMethod, paymentStatus } = req.body;
+        const {
+          items,
+          paymentMethod,
+          paymentStatus,
+          // "Discount and Charges" popup extras - all optional, absent when
+          // the cashier never opened that popup (the common case).
+          discountType,
+          discountValue,
+          deliveryCharge,
+          salesPersonId,
+          salesPersonName,
+          salesPersonPhone,
+          isPartialPayment,
+          amountPaid: amountPaidInput,
+        } = req.body;
         let { customerId } = req.body;
 
         // Validate request
@@ -1421,15 +1435,45 @@ export const createPOSOrder = asyncHandler(
         }
 
         // 3. Update Order with correct totals
-        const shipping = 0;
-        const discount = 0;
+        const shipping = Number(deliveryCharge) > 0 ? Number(deliveryCharge) : 0;
+        const discount =
+          discountType === "%"
+            ? (subtotal * (Number(discountValue) || 0)) / 100
+            : Number(discountValue) > 0
+              ? Number(discountValue)
+              : 0;
         // GST is inclusive in unitPrice, so subtotal already contains tax — don't add it again to the grand total.
-        const total = subtotal + shipping - discount;
+        const total = Math.max(0, subtotal + shipping - discount);
 
         order.items = orderItemsIds;
         order.subtotal = subtotal;
         order.tax = Number(taxTotal.toFixed(2));
+        order.shipping = shipping;
+        order.discount = discount;
+        if (discountType) {
+          order.discountType = discountType;
+          order.discountValue = Number(discountValue) || 0;
+        }
         order.total = total;
+
+        if (salesPersonName) {
+          order.salesPerson = {
+            id: salesPersonId && mongoose.Types.ObjectId.isValid(salesPersonId) ? salesPersonId : undefined,
+            name: salesPersonName,
+            phone: salesPersonPhone || undefined,
+          };
+        }
+
+        // Partial cash payment: only meaningful for Cash - Credit/Online are
+        // already their own "not fully settled in hand" concepts.
+        if (paymentMethod === "Cash" && isPartialPayment) {
+          const paid = Math.min(Number(amountPaidInput) || 0, total);
+          order.isPartialPayment = true;
+          order.amountPaid = paid;
+          order.paymentStatus = paid >= total ? "Paid" : "Partial";
+        } else {
+          order.amountPaid = total;
+        }
 
         if (paymentMethod === 'Credit') {
             order.paymentStatus = 'Pending';
@@ -1529,7 +1573,16 @@ export const createPOSOrder = asyncHandler(
  */
 export const initiatePOSOnlineOrder = asyncHandler(
   async (req: Request, res: Response) => {
-    const { items, gateway } = req.body;
+    const {
+      items,
+      gateway,
+      discountType,
+      discountValue,
+      deliveryCharge,
+      salesPersonId,
+      salesPersonName,
+      salesPersonPhone,
+    } = req.body;
     let { customerId } = req.body;
 
     if (!customerId || !items || !items.length || !gateway) {
@@ -1654,6 +1707,18 @@ export const initiatePOSOnlineOrder = asyncHandler(
        orderItemsPayload.push(payload);
     }
 
+    // "Discount and Charges" popup extras - optional, absent when the
+    // cashier never opened that popup.
+    const shipping = Number(deliveryCharge) > 0 ? Number(deliveryCharge) : 0;
+    const discount =
+      discountType === "%"
+        ? (subtotal * (Number(discountValue) || 0)) / 100
+        : Number(discountValue) > 0
+          ? Number(discountValue)
+          : 0;
+    // GST is inclusive in unit prices, so grand total is subtotal + delivery - discount.
+    const total = Math.max(0, subtotal + shipping - discount);
+
     // Create Pending Order
     const order = await Order.create({
       customer: customer._id,
@@ -1669,7 +1734,20 @@ export const initiatePOSOnlineOrder = asyncHandler(
       items: [], // Will populate after creating items
       subtotal: subtotal,
       tax: Number(taxTotal.toFixed(2)),
-      total: subtotal, // GST is inclusive in unit prices, so grand total stays at subtotal.
+      shipping,
+      discount,
+      ...(discountType ? { discountType, discountValue: Number(discountValue) || 0 } : {}),
+      ...(salesPersonName
+        ? {
+            salesPerson: {
+              id: salesPersonId && mongoose.Types.ObjectId.isValid(salesPersonId) ? salesPersonId : undefined,
+              name: salesPersonName,
+              phone: salesPersonPhone || undefined,
+            },
+          }
+        : {}),
+      total,
+      amountPaid: total,
       paymentMethod: gateway,
       paymentStatus: "Pending",
       status: "Pending",
@@ -1687,7 +1765,7 @@ export const initiatePOSOnlineOrder = asyncHandler(
     await order.save();
 
     // Initiate PhonePe payment
-    const amountInPaise = Math.round(subtotal * 100);
+    const amountInPaise = Math.round(total * 100);
     const normalizedGateway = String(gateway || "").toLowerCase();
     const usePhonePe =
       normalizedGateway === "phonepe" ||

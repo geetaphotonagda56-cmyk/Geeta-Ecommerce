@@ -11,9 +11,11 @@ interface SearchableSelectProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  /** When provided, shows a "+ Add '{search}'" row if nothing matches the typed text. */
+  onCreate?: (text: string) => void;
 }
 
-const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, value, onChange, placeholder = "Select...", className = "" }) => {
+const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, value, onChange, placeholder = "Select...", className = "", onCreate }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -94,14 +96,25 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, value, onC
             ) : (
               <div className="px-3 py-6 text-center">
                 <p className="text-sm text-gray-400 italic">No results found</p>
-                {search && (
-                   <button 
+                {search && onCreate ? (
+                  <button
+                    onClick={() => {
+                      onCreate(search);
+                      setIsOpen(false);
+                      setSearch("");
+                    }}
+                    className="mt-2 text-xs bg-[#f187b5] text-white font-semibold px-3 py-1.5 rounded-full hover:bg-[#e5679e] transition-colors"
+                  >
+                    + Add "{search}"
+                  </button>
+                ) : search ? (
+                   <button
                     onClick={() => setSearch("")}
                     className="mt-2 text-xs text-[#f187b5] font-semibold hover:underline"
                    >
                      Clear Search
                    </button>
-                )}
+                ) : null}
               </div>
             )}
           </div>

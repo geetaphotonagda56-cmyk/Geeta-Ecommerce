@@ -45,6 +45,7 @@ import {
 } from '../../../utils/gstUtils';
 import { SimpleInvoice } from '../components/SimpleInvoice';
 import { GSTInvoice } from '../components/GSTInvoice';
+import DiscountChargesModal, { PosCharges, DEFAULT_POS_CHARGES, hasActiveCharges, computeFinalTotal, computeDiscountAmount, isPartialPaymentActive } from '../components/DiscountChargesModal';
 
 // Interface for Cart Item extending Product
 export interface CartItem extends Product {
@@ -652,6 +653,11 @@ const AdminPOSOrders = () => {
   // Modals
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  // Optional "Discount and Charges" popup - pre-stages special discount,
+  // partial-cash-payment, delivery charge, and salesman/delivery-person
+  // data that the payment picker/checkout functions below read from.
+  const [showChargesModal, setShowChargesModal] = useState(false);
+  const [posCharges, setPosCharges] = useState<PosCharges>(DEFAULT_POS_CHARGES);
   const [editingItem, setEditingItem] = useState<CartItem | null>(null);
   const [editingPurchaseItem, setEditingPurchaseItem] = useState<PurchaseItem | null>(null);
   const [billToRemove, setBillToRemove] = useState<string | null>(null);
@@ -698,7 +704,7 @@ const AdminPOSOrders = () => {
   // Success/Print Modal
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showModalBreakdown, setShowModalBreakdown] = useState(false);
-  const [lastBillDetails, setLastBillDetails] = useState<{total: number, invoiceNum: string, date: string, time: string, cart: CartItem[], isPaid: boolean, isQuotation?: boolean, quotationEntry?: PurchaseEntryRecord, paymentMethod?: string, isEdit?: boolean, orderId?: string, customerName?: string, customerPhone?: string} | null>(null);
+  const [lastBillDetails, setLastBillDetails] = useState<{total: number, invoiceNum: string, date: string, time: string, cart: CartItem[], isPaid: boolean, isQuotation?: boolean, quotationEntry?: PurchaseEntryRecord, paymentMethod?: string, isEdit?: boolean, orderId?: string, customerName?: string, customerPhone?: string, subtotal?: number, discountAmount?: number, deliveryCharge?: number, salesPersonName?: string, isPartialPayment?: boolean, amountPaid?: number} | null>(null);
 
   const captureBillCustomerFields = () => ({
     customerName: selectedCustomer?.name || customerSearch?.trim() || 'Walk-in Customer',
@@ -1819,6 +1825,20 @@ const AdminPOSOrders = () => {
         const price = getEffectivePrice(item);
         return acc + (price * item.qty);
     }, 0);
+  };
+
+  // The actual chargeable amount once the optional "Discount and Charges"
+  // popup has been used - calculateTotal() above stays the pure cart
+  // subtotal (still used correctly for MRP-savings displays elsewhere).
+  const calculateFinalTotal = () => computeFinalTotal(calculateTotal(), posCharges);
+
+  // Sum of purchasePrice * qty across the cart, for the Discount tab's
+  // profit preview - undefined (hides the line) when no cart item carries
+  // cost data at all, rather than showing a misleading 100% profit.
+  const calculateCostTotal = (): number | undefined => {
+    const hasAnyCost = cart.some((item) => Number((item as any).purchasePrice) > 0);
+    if (!hasAnyCost) return undefined;
+    return cart.reduce((acc, item) => acc + (Number((item as any).purchasePrice) || 0) * item.qty, 0);
   };
 
   const calculatePurchaseTotal = () => {
@@ -3305,10 +3325,34 @@ const AdminPOSOrders = () => {
     doc.setLineWidth(0.3);
     doc.line(14, y, 196, y);
     y += 6;
+
+    // Discount/delivery charge from the "Discount and Charges" popup, when
+    // this download reflects a just-completed bill rather than a live cart
+    // preview (lastBillDetails.cart is the post-checkout snapshot).
+    const chargesDiscount = lastBillDetails?.discountAmount || 0;
+    const chargesDelivery = lastBillDetails?.deliveryCharge || 0;
+    const finalBillTotal = lastBillDetails?.total ?? Math.max(0, totalBillAmount - chargesDiscount + chargesDelivery);
+
+    if (chargesDiscount > 0 || chargesDelivery > 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      if (chargesDiscount > 0) {
+        doc.text("Discount:", 14, y);
+        doc.text(`- ${chargesDiscount}`, 196, y, { align: 'right' });
+        y += 5;
+      }
+      if (chargesDelivery > 0) {
+        doc.text("Delivery Charge:", 14, y);
+        doc.text(`+ ${chargesDelivery}`, 196, y, { align: 'right' });
+        y += 5;
+      }
+      y += 1;
+    }
+
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.text("Total bill amount:", 14, y);
-    doc.text(totalBillAmount.toString(), 196, y, { align: 'right' });
+    doc.text(finalBillTotal.toString(), 196, y, { align: 'right' });
     y += 2;
     doc.line(14, y + 2, 196, y + 2);
 
@@ -3367,8 +3411,9 @@ const AdminPOSOrders = () => {
         return;
     }
 
-    const currentTotal = calculateTotal();
+    const currentTotal = calculateFinalTotal();
     const currentCart = [...cart]; // Snapshot of cart
+    const currentCharges = posCharges;
     let isPaid = false;
     let createdOrderId: string | undefined;
 
@@ -3390,6 +3435,16 @@ const AdminPOSOrders = () => {
         paymentMethod: paymentMethod,
         orderId: createdOrderId,
         ...captureBillCustomerFields(),
+        ...(hasActiveCharges(currentCharges)
+          ? {
+              subtotal: calculateTotal(),
+              discountAmount: computeDiscountAmount(calculateTotal(), currentCharges),
+              deliveryCharge: currentCharges.deliveryChargeEnabled ? currentCharges.deliveryCharge : 0,
+              salesPersonName: currentCharges.salesPersonName || undefined,
+              isPartialPayment: isPartialPaymentActive(currentCharges),
+              amountPaid: isPartialPaymentActive(currentCharges) ? currentCharges.cashCollected : undefined,
+            }
+          : {}),
     });
 
     setShowModalBreakdown(false);
@@ -3476,7 +3531,10 @@ const AdminPOSOrders = () => {
               })),
               gateway: 'PhonePe',
               createdBy: activeStaffSession?.id,
-              staffName: activeStaffSession?.name
+              staffName: activeStaffSession?.name,
+              ...(posCharges.discountValue > 0 ? { discountType: posCharges.discountType, discountValue: posCharges.discountValue } : {}),
+              ...(posCharges.deliveryChargeEnabled && posCharges.deliveryCharge > 0 ? { deliveryCharge: posCharges.deliveryCharge } : {}),
+              ...(posCharges.salesPersonName ? { salesPersonId: posCharges.salesPersonId, salesPersonName: posCharges.salesPersonName, salesPersonPhone: posCharges.salesPersonPhone } : {}),
           };
 
           const response = await initiatePOSOnlineOrder(orderData);
@@ -3568,7 +3626,11 @@ const AdminPOSOrders = () => {
             paymentMethod: 'Cash',
             paymentStatus: "Paid" as const,
             createdBy: activeStaffSession?.id,
-            staffName: activeStaffSession?.name
+            staffName: activeStaffSession?.name,
+            ...(posCharges.discountValue > 0 ? { discountType: posCharges.discountType, discountValue: posCharges.discountValue } : {}),
+            ...(posCharges.deliveryChargeEnabled && posCharges.deliveryCharge > 0 ? { deliveryCharge: posCharges.deliveryCharge } : {}),
+            ...(posCharges.salesPersonName ? { salesPersonId: posCharges.salesPersonId, salesPersonName: posCharges.salesPersonName, salesPersonPhone: posCharges.salesPersonPhone } : {}),
+            ...(isPartialPaymentActive(posCharges) ? { isPartialPayment: true, amountPaid: posCharges.cashCollected } : {}),
         };
 
         const response = await createPOSOrder(orderData);
@@ -3580,7 +3642,7 @@ const AdminPOSOrders = () => {
                 createdBy: activeStaffSession.id,
                 staffName: activeStaffSession.name,
                 paymentMode: 'Cash',
-                totalAmount: calculateTotal(),
+                totalAmount: calculateFinalTotal(),
                 numberOfProducts: cart.reduce((sum, item) => sum + (item.qty || 0), 0),
                 createdAt: new Date().toISOString(),
                 items: cart.map((item) => ({
@@ -3592,6 +3654,7 @@ const AdminPOSOrders = () => {
             }
             showToast("Order placed successfully!", "success");
             setCart([]);
+            setPosCharges(DEFAULT_POS_CHARGES);
             return { success: true, orderId: response?.data?._id || (response?.data as any)?.id };
         } else {
             showToast("Failed to place order", "error");
@@ -3637,7 +3700,10 @@ const AdminPOSOrders = () => {
                 paymentMethod: 'Credit',
                 paymentStatus: "Pending" as const,
                 createdBy: activeStaffSession?.id,
-                staffName: activeStaffSession?.name
+                staffName: activeStaffSession?.name,
+                ...(posCharges.discountValue > 0 ? { discountType: posCharges.discountType, discountValue: posCharges.discountValue } : {}),
+                ...(posCharges.deliveryChargeEnabled && posCharges.deliveryCharge > 0 ? { deliveryCharge: posCharges.deliveryCharge } : {}),
+                ...(posCharges.salesPersonName ? { salesPersonId: posCharges.salesPersonId, salesPersonName: posCharges.salesPersonName, salesPersonPhone: posCharges.salesPersonPhone } : {}),
             };
 
             const response = await createPOSOrder(orderData);
@@ -3650,7 +3716,7 @@ const AdminPOSOrders = () => {
                     createdBy: activeStaffSession.id,
                     staffName: activeStaffSession.name,
                     paymentMode: 'Credit',
-                    totalAmount: calculateTotal(),
+                    totalAmount: calculateFinalTotal(),
                     numberOfProducts: cart.reduce((sum, item) => sum + (item.qty || 0), 0),
                     createdAt: new Date().toISOString(),
                     items: cart.map((item) => ({
@@ -3662,6 +3728,7 @@ const AdminPOSOrders = () => {
                 }
                 showToast(`Credit Order Placed! Balance updated for ${selectedCustomer.name}`, "success");
                 setCart([]);
+                setPosCharges(DEFAULT_POS_CHARGES);
                 // Navigate to REAL customer credit page
                 navigate(`/admin/pos/customers/${selectedCustomer._id}`);
             } else {
@@ -4570,10 +4637,23 @@ const AdminPOSOrders = () => {
                               <div className="border-t border-white/10 pt-2 flex justify-between items-center">
                                  <div className="flex flex-col">
                                       <span className="text-white text-[7px] md:text-xs font-bold uppercase tracking-widest">Total Payable</span>
-                                     <span className="text-base font-black">₹{calculateTotal().toLocaleString()}</span>
+                                     <span className="text-base font-black">₹{calculateFinalTotal().toLocaleString()}</span>
                                  </div>
+                                 {hasActiveCharges(posCharges) && (
+                                   <span className="text-[9px] font-bold text-emerald-300 bg-white/10 px-2 py-0.5 rounded-full">Charges applied</span>
+                                 )}
                               </div>
                           </div>
+
+                           <button
+                              onClick={() => setShowChargesModal(true)}
+                              disabled={cart.length === 0}
+                              className="w-full relative flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-500 hover:text-[#0d055a] hover:border-[#0d055a] transition-colors text-[11px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                           >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></svg>
+                              More Options
+                              {hasActiveCharges(posCharges) && <span className="absolute top-0.5 right-2 w-1.5 h-1.5 rounded-full bg-[var(--primary-color)]" />}
+                           </button>
 
                            <div className="space-y-1.5">
                                 {!activeBillId.startsWith('edit_') && (
@@ -4616,11 +4696,20 @@ const AdminPOSOrders = () => {
                       {/* Left Side: Total */}
                       <div className="flex items-center gap-4">
                           <p className="text-gray-500 text-sm font-medium">Subtotal</p>
-                          <p className="text-3xl font-bold text-gray-800">₹{calculateTotal()}</p>
+                          <p className="text-3xl font-bold text-gray-800">₹{calculateFinalTotal()}</p>
                       </div>
 
                       {/* Right Side: Buttons */}
                       <div className="flex items-center gap-3">
+                           <button
+                             onClick={() => setShowChargesModal(true)}
+                             disabled={cart.length === 0}
+                             className="relative w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:text-[#0d055a] hover:border-[#0d055a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                             title="More Options"
+                           >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></svg>
+                              {hasActiveCharges(posCharges) && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[var(--primary-color)]" />}
+                           </button>
                            {!activeBillId.startsWith('edit_') && (
                              <button
                                onClick={handleGenerateBill}
@@ -4656,10 +4745,22 @@ const AdminPOSOrders = () => {
                   <div className="lg:hidden space-y-1 mt-1">
                       <div className="flex justify-between items-center px-1 py-1">
                           <span className="text-gray-600 font-medium text-xs md:text-base">Subtotal</span>
-                          <span className="text-sm font-bold text-gray-900">₹{calculateTotal().toLocaleString()}</span>
+                          <span className="text-sm font-bold text-gray-900">
+                            ₹{calculateFinalTotal().toLocaleString()}
+                            {hasActiveCharges(posCharges) && <span className="ml-1 text-[9px] font-bold text-[var(--primary-color)]">•</span>}
+                          </span>
                       </div>
 
-                      <div className={`grid gap-1 ${activeBillId.startsWith('edit_') ? 'grid-cols-2' : 'grid-cols-[0.75fr_0.75fr_1.3fr]'}`}>
+                      <div className={`grid gap-1 ${activeBillId.startsWith('edit_') ? 'grid-cols-[36px_1fr_1fr]' : 'grid-cols-[36px_0.75fr_0.75fr_1.3fr]'}`}>
+                          <button
+                            onClick={() => setShowChargesModal(true)}
+                            disabled={cart.length === 0}
+                            className="relative flex items-center justify-center rounded-lg bg-gray-100 text-gray-500 border border-gray-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="More Options"
+                          >
+                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></svg>
+                             {hasActiveCharges(posCharges) && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[var(--primary-color)]" />}
+                          </button>
                           <button
                             onClick={() => setShowQuickAdd(true)}
                             className="rounded-lg bg-[#f7d8e7] text-[#b34f7e] py-1 text-[11px] md:text-base font-semibold border border-[var(--primary-alpha-20)] active:scale-[0.98]"
@@ -5943,6 +6044,16 @@ const AdminPOSOrders = () => {
         </div>
       )}
 
+      {/* --- DISCOUNT AND CHARGES MODAL (optional pre-checkout step) --- */}
+      <DiscountChargesModal
+        open={showChargesModal}
+        onClose={() => setShowChargesModal(false)}
+        subtotal={calculateTotal()}
+        costTotal={calculateCostTotal()}
+        charges={posCharges}
+        onChange={setPosCharges}
+      />
+
       {/* --- PAYMENT MODAL --- */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -5954,7 +6065,16 @@ const AdminPOSOrders = () => {
                 <div className="p-6 space-y-4">
                      <div className="text-center mb-6">
                          <p className="text-gray-500 text-sm mb-1">Total Amount</p>
-                         <p className="text-3xl font-bold text-gray-900">₹{calculateTotal()}</p>
+                         <p className="text-3xl font-bold text-gray-900">
+                           ₹{calculateFinalTotal().toLocaleString()}
+                           {hasActiveCharges(posCharges) && (
+                             <span className="block text-xs font-medium text-gray-400 mt-1">
+                               {computeDiscountAmount(calculateTotal(), posCharges) > 0 && <>Discount applied · </>}
+                               {posCharges.deliveryChargeEnabled && posCharges.deliveryCharge > 0 && <>+₹{posCharges.deliveryCharge} delivery · </>}
+                               {isPartialPaymentActive(posCharges) && <>Partial payment</>}
+                             </span>
+                           )}
+                         </p>
                      </div>
 
                      <div className="space-y-3">
@@ -6050,6 +6170,26 @@ const AdminPOSOrders = () => {
                                 )
                             })}
                         </div>
+                        {lastBillDetails.subtotal !== undefined && (
+                          <div className="border-t border-gray-100 mt-2 pt-2 space-y-1 text-[10px] md:text-sm text-gray-600">
+                             <div className="flex justify-between"><span>Subtotal</span><span>₹{lastBillDetails.subtotal.toLocaleString()}</span></div>
+                             {!!lastBillDetails.discountAmount && (
+                               <div className="flex justify-between text-emerald-600"><span>Discount</span><span>− ₹{lastBillDetails.discountAmount.toLocaleString()}</span></div>
+                             )}
+                             {!!lastBillDetails.deliveryCharge && (
+                               <div className="flex justify-between"><span>Delivery Charge</span><span>+ ₹{lastBillDetails.deliveryCharge.toLocaleString()}</span></div>
+                             )}
+                             {lastBillDetails.salesPersonName && (
+                               <div className="flex justify-between"><span>Salesman</span><span>{lastBillDetails.salesPersonName}</span></div>
+                             )}
+                             {lastBillDetails.isPartialPayment && (
+                               <div className="flex justify-between text-amber-600 font-semibold">
+                                 <span>Paid ₹{(lastBillDetails.amountPaid || 0).toLocaleString()} - Due</span>
+                                 <span>₹{Math.max(0, lastBillDetails.total - (lastBillDetails.amountPaid || 0)).toLocaleString()}</span>
+                               </div>
+                             )}
+                          </div>
+                        )}
                         <div className="border-t border-gray-100 mt-2 pt-2 flex justify-between text-xs md:text-base font-bold text-slate-800">
                             <span>Total</span>
                             <span>₹{lastBillDetails.total}</span>
@@ -6394,11 +6534,33 @@ const AdminPOSOrders = () => {
 
               <div className="receipt-line-thick"></div>
 
+              {lastBillDetails?.subtotal !== undefined && (
+                <div className="text-sm space-y-0.5 py-1">
+                  <div className="flex justify-between"><span>Subtotal</span><span>{formatAmount(lastBillDetails.subtotal)}</span></div>
+                  {!!lastBillDetails.discountAmount && (
+                    <div className="flex justify-between"><span>Discount</span><span>- {formatAmount(lastBillDetails.discountAmount)}</span></div>
+                  )}
+                  {!!lastBillDetails.deliveryCharge && (
+                    <div className="flex justify-between"><span>Delivery Charge</span><span>+ {formatAmount(lastBillDetails.deliveryCharge)}</span></div>
+                  )}
+                  {lastBillDetails.salesPersonName && (
+                    <div className="flex justify-between"><span>Salesman</span><span>{lastBillDetails.salesPersonName}</span></div>
+                  )}
+                </div>
+              )}
+
               {/* Grand Total */}
               <div className="flex justify-between font-black text-xl py-1 border-y border-black mt-1">
                   <span>Total bill amount:</span>
                   <span>{formatAmount(lastBillDetails?.total || 0)}</span>
               </div>
+
+              {lastBillDetails?.isPartialPayment && (
+                <div className="flex justify-between font-bold text-sm py-1">
+                  <span>Paid {formatAmount(lastBillDetails.amountPaid || 0)} · Due</span>
+                  <span>{formatAmount(Math.max(0, lastBillDetails.total - (lastBillDetails.amountPaid || 0)))}</span>
+                </div>
+              )}
 
 
               {/* Footer / Notes */}

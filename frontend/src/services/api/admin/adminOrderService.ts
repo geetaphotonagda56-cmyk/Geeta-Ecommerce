@@ -315,7 +315,45 @@ export interface CreatePOSOrderData {
   }>;
   paymentMethod: string;
   paymentStatus?: "Pending" | "Paid" | "Failed";
+  // "Discount and Charges" popup extras - all optional, omitted when the
+  // cashier never opened that popup.
+  discountType?: "%" | "₹";
+  discountValue?: number;
+  deliveryCharge?: number;
+  salesPersonId?: string;
+  salesPersonName?: string;
+  salesPersonPhone?: string;
+  isPartialPayment?: boolean;
+  amountPaid?: number;
 }
+
+export interface SalesPerson {
+  _id: string;
+  name: string;
+  phone: string;
+}
+
+/**
+ * Search the salesman/delivery-person roster for the POS "More" tab.
+ */
+export const searchSalesPersons = async (search: string): Promise<ApiResponse<SalesPerson[]>> => {
+  const response = await api.get<ApiResponse<SalesPerson[]>>("/admin/sales-persons", {
+    params: search ? { search } : undefined,
+  });
+  return response.data;
+};
+
+/**
+ * Create a new salesman/delivery-person entry (or get back the existing one
+ * if the phone number is already on file).
+ */
+export const createSalesPerson = async (
+  name: string,
+  phone: string
+): Promise<ApiResponse<SalesPerson>> => {
+  const response = await api.post<ApiResponse<SalesPerson>>("/admin/sales-persons", { name, phone });
+  return response.data;
+};
 
 /**
  * Create POS Order

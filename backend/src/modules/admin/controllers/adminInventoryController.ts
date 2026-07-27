@@ -1807,6 +1807,10 @@ export const getStockSalesSummary = asyncHandler(
          }
       ] : []),
 
+      // Sort chronologically first so the $last accumulator below picks the
+      // most recently contributing order's salesperson, not an arbitrary one.
+      { $sort: { orderDate: 1 } },
+
       // Group by Product/Variant
       {
         $group: {
@@ -1852,6 +1856,10 @@ export const getStockSalesSummary = asyncHandler(
           },
           averageSellingPrice: { $avg: "$itemDoc.unitPrice" },
           totalSellingPrice: { $sum: "$itemDoc.total" },
+          // Multiple orders can roll into one product/variant row here, so
+          // there's no single "the" salesman - show whoever sold it most
+          // recently as a reasonable representative value.
+          salesman: { $last: { $ifNull: ["$salesPerson.name", "Admin"] } },
 
           // Debug/Extra
           orderDate: { $max: "$orderDate" },
@@ -1905,7 +1913,6 @@ export const getStockSalesSummary = asyncHandler(
         data: data.map((item: any) => ({
              ...item,
              _id: `${item._id.prodId}_${item._id.variant || 'std'}`, // Flatten ID for frontend
-             salesman: "Admin" // Default for now
         })),
         pagination: {
           page: pageNum,
@@ -1983,29 +1990,31 @@ export const getDueSummaryReport = asyncHandler(
           customerName: "$customerName",
           customerPhone: "$customerPhone",
           total: "$total",
+          amountPaid: "$amountPaid",
           reason: { $ifNull: ["$cancellationReason", "N/A"] },
           status: "$paymentStatus", // This is the payment status
           orderStatus: "$status",
           paymentMode: "$paymentMethod"
         }
       },
-      // Calculate Paid/Due based on status
+      // Calculate Paid/Due based on status - amountPaid only exists on
+      // orders created via the POS "Discount and Charges" partial-payment
+      // flow, so this falls back to the old full-total-or-zero behavior
+      // for every order that predates it.
       {
         $addFields: {
-          paid: {
-             $cond: {
-               if: { $eq: ["$status", "Paid"] },
-               then: "$total",
-               else: 0
-             }
-          },
           due: {
              $cond: {
                if: { $eq: ["$status", "Paid"] },
                then: 0,
-               else: "$total"
+               else: { $subtract: ["$total", { $ifNull: ["$amountPaid", 0] }] }
              }
           }
+        }
+      },
+      {
+        $addFields: {
+          paid: { $subtract: ["$total", "$due"] }
         }
       },
       ...(searchRegex ? [

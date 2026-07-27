@@ -1379,10 +1379,13 @@ export const getDueSummaryReport = asyncHandler(
       },
       { $unwind: "$orderDoc" },
 
-      // Filter by Pending/Failed Payment
+      // Filter by Pending/Failed/Partial Payment - Partial only ever occurs
+      // on orders created via the Admin POS partial-cash-payment flow, but
+      // an admin POS order can include this seller's products, so it must
+      // stay visible here too instead of silently disappearing.
       {
          $match: {
-           "orderDoc.paymentStatus": { $in: ["Pending", "Failed"] }
+           "orderDoc.paymentStatus": { $in: ["Pending", "Failed", "Partial"] }
          }
       },
 

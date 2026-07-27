@@ -22,6 +22,7 @@ import * as abandonedCartController from "../modules/admin/controllers/adminAban
 
 // Delivery Controllers
 import * as deliveryController from "../modules/admin/controllers/adminDeliveryController";
+import * as salesPersonController from "../modules/admin/controllers/adminSalesPersonController";
 
 // Settings Controllers
 import * as settingsController from "../modules/admin/controllers/adminSettingsController";
@@ -285,6 +286,10 @@ router.get(
   "/delivery/:id/cash-collections",
   deliveryController.getDeliveryBoyCashCollections
 );
+
+// ==================== Sales Person / POS Delivery Person Routes ====================
+router.get("/sales-persons", salesPersonController.searchSalesPersons);
+router.post("/sales-persons", salesPersonController.createSalesPerson);
 
 // ==================== Payment Routes ====================
 router.get("/payment-methods", paymentController.getPaymentMethods);

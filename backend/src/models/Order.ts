@@ -32,12 +32,28 @@ export interface IOrder extends Document {
   shipping: number;
   platformFee: number;
   discount: number;
+  // Set only when the discount came from the POS "Discount and Charges"
+  // popup - discount itself always holds the computed rupee amount either
+  // way, these just record how the seller entered it.
+  discountType?: "%" | "₹";
+  discountValue?: number;
   couponCode?: string;
   total: number;
 
+  // POS "Discount and Charges" extras - who handled the sale/delivery for
+  // this order (same combined concept, per business decision), and partial
+  // cash payment tracking.
+  salesPerson?: {
+    id?: mongoose.Types.ObjectId;
+    name: string;
+    phone?: string;
+  };
+  isPartialPayment?: boolean;
+  amountPaid?: number;
+
   // Payment
   paymentMethod: string;
-  paymentStatus: "Pending" | "Paid" | "Failed" | "Refunded";
+  paymentStatus: "Pending" | "Paid" | "Partial" | "Failed" | "Refunded";
   paymentId?: string;
 
   // Order Status
@@ -190,6 +206,14 @@ const OrderSchema = new Schema<IOrder>(
       default: 0,
       min: [0, "Discount cannot be negative"],
     },
+    discountType: {
+      type: String,
+      enum: ["%", "₹"],
+    },
+    discountValue: {
+      type: Number,
+      min: [0, "Discount value cannot be negative"],
+    },
     couponCode: {
       type: String,
       trim: true,
@@ -200,6 +224,21 @@ const OrderSchema = new Schema<IOrder>(
       min: [0, "Total cannot be negative"],
     },
 
+    // POS "Discount and Charges" extras
+    salesPerson: {
+      id: { type: Schema.Types.ObjectId, ref: "SalesPerson" },
+      name: { type: String, trim: true },
+      phone: { type: String, trim: true },
+    },
+    isPartialPayment: {
+      type: Boolean,
+      default: false,
+    },
+    amountPaid: {
+      type: Number,
+      min: [0, "Amount paid cannot be negative"],
+    },
+
     // Payment
     paymentMethod: {
       type: String,
@@ -208,7 +247,7 @@ const OrderSchema = new Schema<IOrder>(
     },
     paymentStatus: {
       type: String,
-      enum: ["Pending", "Paid", "Failed", "Refunded"],
+      enum: ["Pending", "Paid", "Partial", "Failed", "Refunded"],
       default: "Pending",
     },
     paymentId: {
