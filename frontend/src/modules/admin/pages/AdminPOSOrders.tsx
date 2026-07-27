@@ -3963,7 +3963,7 @@ const AdminPOSOrders = () => {
       </div>
 
 
-      <div className="flex-1 flex flex-col min-h-0 w-full md:w-max md:mx-auto md:pb-8 md:h-auto md:block md:overflow-visible">
+      <div className="flex-1 flex flex-col min-h-0 w-full md:pb-8 md:h-auto md:block md:overflow-visible">
         <div className="bg-white flex flex-col flex-1 h-full min-h-0 w-full relative transition-all duration-300 md:rounded-2xl md:shadow-xl md:border md:border-gray-200 md:h-[90vh] md:overflow-hidden">
 
           {/* Top Header Section */}
@@ -4648,11 +4648,11 @@ const AdminPOSOrders = () => {
                            <button
                               onClick={() => setShowChargesModal(true)}
                               disabled={cart.length === 0}
-                              className="w-full relative flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-[#0d055a] text-white hover:bg-[#0d055a]/90 transition-colors text-[11px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-full relative flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-[var(--primary-color)] text-white hover:bg-[var(--primary-dark)] transition-colors text-[11px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                            >
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></svg>
                               More Options
-                              {hasActiveCharges(posCharges) && <span className="absolute top-0.5 right-2 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-2 ring-[#0d055a]" />}
+                              {hasActiveCharges(posCharges) && <span className="absolute top-0.5 right-2 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-2 ring-[var(--primary-color)]" />}
                            </button>
 
                            <div className="space-y-1.5">
@@ -4704,11 +4704,11 @@ const AdminPOSOrders = () => {
                            <button
                              onClick={() => setShowChargesModal(true)}
                              disabled={cart.length === 0}
-                             className="relative w-10 h-10 flex items-center justify-center rounded-lg bg-[#0d055a] text-white hover:bg-[#0d055a]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                             className="relative w-10 h-10 flex items-center justify-center rounded-lg bg-[var(--primary-color)] text-white hover:bg-[var(--primary-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                              title="More Options"
                            >
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></svg>
-                              {hasActiveCharges(posCharges) && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#0d055a]" />}
+                              {hasActiveCharges(posCharges) && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[var(--primary-color)]" />}
                            </button>
                            {!activeBillId.startsWith('edit_') && (
                              <button
@@ -4755,11 +4755,11 @@ const AdminPOSOrders = () => {
                           <button
                             onClick={() => setShowChargesModal(true)}
                             disabled={cart.length === 0}
-                            className="relative flex items-center justify-center rounded-lg bg-[#0d055a] text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="relative flex items-center justify-center rounded-lg bg-[var(--primary-color)] text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                             title="More Options"
                           >
                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></svg>
-                             {hasActiveCharges(posCharges) && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-2 ring-[#0d055a]" />}
+                             {hasActiveCharges(posCharges) && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-2 ring-[var(--primary-color)]" />}
                           </button>
                           <button
                             onClick={() => setShowQuickAdd(true)}

@@ -180,7 +180,7 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="bg-[#0d055a] text-white px-5 py-4 flex items-center justify-between shrink-0">
+        <div className="bg-[var(--primary-color)] text-white px-5 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="9" y1="9" x2="15" y2="9" /><line x1="9" y1="13" x2="15" y2="13" />
@@ -218,7 +218,7 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
                 key={t.key}
                 onClick={() => setTab(t.key)}
                 className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${
-                  tab === t.key ? "bg-[#0d055a] text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  tab === t.key ? "bg-[var(--primary-color)] text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
                 }`}
               >
                 {t.icon}
@@ -247,7 +247,7 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
                     value={charges.cashCollected === 0 ? "" : charges.cashCollected}
                     onChange={(e) => onChange({ ...charges, cashCollected: e.target.value === "" ? 0 : Number(e.target.value) || 0 })}
                     placeholder="0"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-semibold focus:ring-2 focus:ring-[#0d055a]/30 focus:border-[#0d055a] outline-none"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-semibold focus:ring-2 focus:ring-[var(--primary-color)]/30 focus:border-[var(--primary-color)] outline-none"
                   />
                 </div>
                 <div>
@@ -274,7 +274,7 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
                 <button
                   type="button"
                   onClick={() => onChange({ ...charges, isPartialPayment: !charges.isPartialPayment })}
-                  className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${charges.isPartialPayment ? "bg-[#0d055a]" : "bg-gray-300"}`}
+                  className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${charges.isPartialPayment ? "bg-[var(--primary-color)]" : "bg-gray-300"}`}
                 >
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${charges.isPartialPayment ? "translate-x-5" : ""}`} />
                 </button>
@@ -293,7 +293,7 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
                     value={charges.discountValue === 0 ? "" : charges.discountValue}
                     onChange={(e) => onChange({ ...charges, discountValue: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value) || 0) })}
                     placeholder="0"
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-semibold focus:ring-2 focus:ring-[#0d055a]/30 focus:border-[#0d055a] outline-none"
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-semibold focus:ring-2 focus:ring-[var(--primary-color)]/30 focus:border-[var(--primary-color)] outline-none"
                   />
                   <div className="flex bg-gray-100 rounded-lg p-1 shrink-0">
                     {(["%", "₹"] as const).map((unit) => (
@@ -301,7 +301,7 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
                         key={unit}
                         onClick={() => onChange({ ...charges, discountType: unit })}
                         className={`w-10 rounded-md text-sm font-bold transition-colors ${
-                          charges.discountType === unit ? "bg-white text-[#0d055a] shadow-sm" : "text-gray-400"
+                          charges.discountType === unit ? "bg-white text-[var(--primary-color)] shadow-sm" : "text-gray-400"
                         }`}
                       >
                         {unit}
@@ -345,7 +345,7 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
                     }}
                     onFocus={() => setPersonDropdownOpen(true)}
                     placeholder="Search or type a name"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0d055a]/30 focus:border-[#0d055a] outline-none"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[var(--primary-color)]/30 focus:border-[var(--primary-color)] outline-none"
                   />
                   {personDropdownOpen && (
                     <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-10 max-h-52 overflow-y-auto">
@@ -363,7 +363,7 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
                       {personQuery.trim() && !creatingPerson && (
                         <button
                           onClick={() => setCreatingPerson(true)}
-                          className="w-full text-left px-3 py-2 text-sm text-[#0d055a] font-semibold hover:bg-gray-50 border-t border-gray-100"
+                          className="w-full text-left px-3 py-2 text-sm text-[var(--primary-color)] font-semibold hover:bg-gray-50 border-t border-gray-100"
                         >
                           + Add "{personQuery.trim()}" as new
                         </button>
@@ -376,12 +376,12 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
                             value={newPersonPhone}
                             onChange={(e) => setNewPersonPhone(e.target.value)}
                             placeholder="Phone number"
-                            className="w-full border border-gray-200 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-[#0d055a]"
+                            className="w-full border border-gray-200 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-[var(--primary-color)]"
                           />
                           <button
                             onClick={saveNewPerson}
                             disabled={savingPerson || !newPersonPhone.trim()}
-                            className="w-full bg-[#0d055a] text-white text-xs font-bold py-1.5 rounded-md disabled:opacity-50"
+                            className="w-full bg-[var(--primary-color)] text-white text-xs font-bold py-1.5 rounded-md disabled:opacity-50"
                           >
                             {savingPerson ? "Saving..." : "Save & Select"}
                           </button>
@@ -412,7 +412,7 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
                   <button
                     type="button"
                     onClick={() => onChange({ ...charges, deliveryChargeEnabled: !charges.deliveryChargeEnabled })}
-                    className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${charges.deliveryChargeEnabled ? "bg-[#0d055a]" : "bg-gray-300"}`}
+                    className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${charges.deliveryChargeEnabled ? "bg-[var(--primary-color)]" : "bg-gray-300"}`}
                   >
                     <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${charges.deliveryChargeEnabled ? "translate-x-5" : ""}`} />
                   </button>
@@ -429,7 +429,7 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
                       onChange={(e) => onChange({ ...charges, deliveryCharge: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value) || 0) })}
                       placeholder="0.0"
                       disabled={!charges.deliveryChargeEnabled}
-                      className="w-full border border-gray-300 rounded-lg pl-7 pr-3 py-2.5 text-sm font-semibold focus:ring-2 focus:ring-[#0d055a]/30 focus:border-[#0d055a] outline-none disabled:bg-gray-50"
+                      className="w-full border border-gray-300 rounded-lg pl-7 pr-3 py-2.5 text-sm font-semibold focus:ring-2 focus:ring-[var(--primary-color)]/30 focus:border-[var(--primary-color)] outline-none disabled:bg-gray-50"
                     />
                   </div>
                 </div>
@@ -440,7 +440,7 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
 
         {/* Footer */}
         <div className="p-4 border-t border-gray-100 shrink-0">
-          <button onClick={onClose} className="w-full bg-[#0d055a] text-white font-bold py-3 rounded-xl active:scale-[0.98] transition-transform">
+          <button onClick={onClose} className="w-full bg-[var(--primary-color)] text-white font-bold py-3 rounded-xl active:scale-[0.98] transition-transform">
             Done
           </button>
         </div>
