@@ -229,7 +229,7 @@ export default function DiscountChargesModal({ open, onClose, subtotal, costTota
         </div>
 
         {/* Body */}
-        <div className="p-5 space-y-4 overflow-y-auto">
+        <div className="p-5 space-y-4 overflow-y-auto min-h-[300px]">
           {tab === "payment" && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
