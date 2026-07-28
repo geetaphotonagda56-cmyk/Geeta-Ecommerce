@@ -1629,8 +1629,8 @@ export default function OrderDetail() {
                       <p className="text-sm text-gray-500">
                         Qty: {item.quantity}
                       </p>
-                      {item.variant && (
-                        <p className="text-xs text-gray-500">{item.variant}</p>
+                      {item.variation && (
+                        <p className="text-xs text-gray-500">{item.variation}</p>
                       )}
                       <p className="text-sm font-semibold text-gray-900 mt-1">
                         {isFree ? (

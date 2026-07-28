@@ -104,7 +104,7 @@ export default function OrderAgain() {
             name: productName,
             imageUrl: p.mainImage || p.imageUrl,
             mrp: p.mrp || p.price,
-            pack: p.variations?.[0]?.title || p.smallDescription || 'Standard'
+            pack: p.variations?.[0]?.value || p.smallDescription || 'Standard'
           };
         });
           setBestsellerProducts(mapped);

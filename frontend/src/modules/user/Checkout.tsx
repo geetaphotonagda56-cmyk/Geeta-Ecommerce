@@ -238,7 +238,7 @@ export default function Checkout() {
                 imageUrl: p.mainImage || p.imageUrl || p.mainImageUrl || '',
                 price: displayPrice,
                 mrp: mrp,
-                pack: p.pack || p.variations?.[0]?.title || p.variations?.[0]?.name || 'Standard',
+                pack: p.pack || p.variations?.[0]?.value || p.variations?.[0]?.name || 'Standard',
               };
             })
             .slice(0, 6);

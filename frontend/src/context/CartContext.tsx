@@ -10,7 +10,7 @@ import {
   removeFromCart as apiRemoveFromCart,
   clearCart as apiClearCart
 } from '../services/api/customerCartService';
-import { getApplicableUnitPrice, getCartItemVariantSelector, getCartLineUnitPrice } from '../utils/priceUtils';
+import { getApplicableUnitPrice, getCartItemVariantSelector, getCartLineUnitPrice, getCartLineVariantIdentity } from '../utils/priceUtils';
 import { getCustomerFreeGiftRules } from '../services/api/customerFreeGiftService';
 import { CartRewardRule, getGiftRules, normalizeCartRewardRule } from '../utils/freeGiftRuleUtils';
 
@@ -24,7 +24,7 @@ interface AddToCartEvent {
 interface CartContextType {
   cart: Cart;
   addToCart: (product: Product, sourceElement?: HTMLElement | null, options?: { source?: string, sourceId?: string }) => Promise<void>;
-  removeFromCart: (productId: string) => Promise<void>;
+  removeFromCart: (productId: string, variantId?: string, variantTitle?: string) => Promise<void>;
   updateQuantity: (productId: string, quantity: number, variantId?: string, variantTitle?: string) => Promise<void>;
   clearCart: () => Promise<void>;
   lastAddEvent: AddToCartEvent | null;
@@ -292,9 +292,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (hasChanges) {
         setItems(newItems);
     }
-    if (hasChanges) {
-        setItems(newItems);
-    }
   }, [items.map(i => {
       const p = i?.product;
       const pid = p?.id || p?._id || '';
@@ -343,14 +340,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setLastAddEvent({ product: normalizedProduct, sourcePosition });
     setTimeout(() => setLastAddEvent(null), 800);
 
+    // Check for variant ID or variant title if product has variants
+    const variantId = (product as any).variantId || (product as any).selectedVariant?._id;
+    const variantTitle = (product as any).variantTitle || (product as any).pack;
+
     // Optimistically update state
     setItems((prevItems) => {
       // Filter out null products and find existing item
       const validItems = prevItems.filter(item => item?.product);
-
-      // Check for variant ID or variant title if product has variants
-      const variantId = (product as any).variantId || (product as any).selectedVariant?._id;
-      const variantTitle = (product as any).variantTitle || (product as any).pack;
 
       // Find existing item - match by product ID and variant (if variant exists)
       const existingItem = validItems.find((item) => {
@@ -413,30 +410,40 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const removeFromCart = async (productId: string) => {
-    // Prevent concurrent operations on the same product
-    if (pendingOperationsRef.current.has(productId)) {
+  const removeFromCart = async (productId: string, variantId?: string, variantTitle?: string) => {
+    // Prevent concurrent operations on the same product/variant
+    const operationKey = variantId ? `${productId}-${variantId}` : (variantTitle ? `${productId}-${variantTitle}` : productId);
+    if (pendingOperationsRef.current.has(operationKey)) {
       return;
     }
-    pendingOperationsRef.current.add(productId);
+    pendingOperationsRef.current.add(operationKey);
 
-    // Find item matching either id or _id
+    // Find item matching product ID and variant (if provided) using the shared identity helper
     const itemToRemove = items.find(item => {
         const prod = item?.product;
         if (!prod) return false;
         const prodId = prod.id || prod._id;
-        return prodId === productId;
+        if (prodId !== productId) return false;
+        if (!variantId && !variantTitle) return true;
+        const identity = getCartLineVariantIdentity(item);
+        return identity.variantId === variantId || identity.variantTitle === variantTitle;
     });
 
     const previousItems = [...items];
-    setItems((prevItems) => prevItems.filter((item) => {
-        const prod = item?.product;
-        if (!prod) return false; // Filter out bad data
-        const prodId = prod.id || prod._id;
-        return prodId !== productId;
-    }));
 
-    if (isAuthenticated && (user as any)?.userType === 'Customer' && itemToRemove?.id) {
+    if (!itemToRemove) {
+      // Local state doesn't have a matching item (stale/out-of-sync cart) —
+      // resync from the server instead of silently doing nothing.
+      pendingOperationsRef.current.delete(operationKey);
+      if (isAuthenticated && (user as any)?.userType === 'Customer') {
+        await fetchCart();
+      }
+      return;
+    }
+
+    setItems((prevItems) => prevItems.filter((item) => item !== itemToRemove));
+
+    if (isAuthenticated && (user as any)?.userType === 'Customer' && itemToRemove.id) {
       try {
         const response = await apiRemoveFromCart(
           itemToRemove.id,
@@ -450,16 +457,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
         console.error("Remove from cart failed", error);
         setItems(previousItems);
       } finally {
-        pendingOperationsRef.current.delete(productId);
+        pendingOperationsRef.current.delete(operationKey);
       }
     } else {
-      pendingOperationsRef.current.delete(productId);
+      pendingOperationsRef.current.delete(operationKey);
     }
   };
 
   const updateQuantity = async (productId: string, quantity: number, variantId?: string, variantTitle?: string) => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(productId, variantId, variantTitle);
       return;
     }
 
@@ -472,52 +479,33 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
     pendingOperationsRef.current.add(operationKey);
 
-    // Find item matching product ID and variant (if variant info provided)
+    // Find item matching product ID and variant (if variant info provided) using the shared identity helper
     const itemToUpdate = items.find(item => {
       const prod = item?.product;
       if (!prod) return false;
       const itemProductId = prod.id || prod._id;
       if (itemProductId !== productId) return false;
 
-      // If variant info provided, match by variant
-      if (variantId || variantTitle) {
-        const itemVariantId = item.variantId || (prod as any).variantId || (prod as any).selectedVariant?._id;
-        const itemVariantTitle = item.variation || (prod as any).variantTitle || (prod as any).pack;
-        return itemVariantId === variantId || itemVariantTitle === variantTitle;
-      }
-
-      // If no variant info, match items without variants
-      const itemVariantId = item.variantId || (prod as any).variantId || (prod as any).selectedVariant?._id;
-      const itemVariantTitle = item.variation || (prod as any).variantTitle;
-      return !itemVariantId && !itemVariantTitle;
+      if (!variantId && !variantTitle) return true;
+      const identity = getCartLineVariantIdentity(item);
+      return identity.variantId === variantId || identity.variantTitle === variantTitle;
     });
+
+    if (!itemToUpdate) {
+      // Local state doesn't have a matching item (stale/out-of-sync cart) —
+      // resync from the server instead of silently doing nothing.
+      pendingOperationsRef.current.delete(operationKey);
+      if (isAuthenticated && (user as any)?.userType === 'Customer') {
+        await fetchCart();
+      }
+      return;
+    }
 
     const previousItems = [...items];
     setItems((prevItems) =>
       prevItems
         .filter(item => !!item?.product)
-        .map((item) => {
-          const prod = item.product!;
-        const itemProductId = prod.id || prod._id;
-        if (itemProductId !== productId) return item;
-
-        // If variant info provided, match by variant
-        if (variantId || variantTitle) {
-          const itemVariantId = item.variantId || (prod as any).variantId || (prod as any).selectedVariant?._id;
-          const itemVariantTitle = item.variation || (prod as any).variantTitle || (prod as any).pack;
-          if (itemVariantId === variantId || itemVariantTitle === variantTitle) {
-            return { ...item, quantity };
-          }
-        } else {
-          // If no variant info, match items without variants
-          const itemVariantId = item.variantId || (prod as any).variantId || (prod as any).selectedVariant?._id;
-          const itemVariantTitle = item.variation || (prod as any).variantTitle;
-          if (!itemVariantId && !itemVariantTitle) {
-            return { ...item, quantity };
-          }
-        }
-        return item;
-      })
+        .map((item) => (item === itemToUpdate ? { ...item, quantity } : item))
     );
 
     if (isAuthenticated && (user as any)?.userType === 'Customer' && itemToUpdate?.id) {

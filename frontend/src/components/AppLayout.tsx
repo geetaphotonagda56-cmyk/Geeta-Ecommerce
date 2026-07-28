@@ -32,20 +32,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Check if location is required for current route
+  // Only require location once the user is acting on their cart (viewing cart
+  // or going through checkout) — browsing the rest of the app is allowed
+  // without granting location first.
   const requiresLocation = () => {
-    const publicRoutes = ['/login', '/signup', '/seller/login', '/seller/signup', '/delivery/login', '/delivery/signup', '/admin/login'];
-    // Don't require location on login/signup pages
-    if (publicRoutes.includes(location.pathname)) {
-      return false;
-    }
-    // Require location for ALL routes (not just authenticated users)
-    // This ensures location is mandatory for everyone visiting the platform
-    return true;
+    return location.pathname === '/cart' || location.pathname === '/checkout' || location.pathname.startsWith('/checkout/');
   };
 
-  // ALWAYS show location request modal on app load if location is not enabled
-  // This ensures modal appears on every app open, regardless of browser permission state
+  // Show the location request modal only when the current route requires it
+  // (cart/checkout), not on every app open.
   useEffect(() => {
     // Wait for initial loading to complete
     if (isLocationLoading) {

@@ -43,11 +43,14 @@ const matchesVariation = (variation: any, variationValue: any) => {
         return true;
     }
     const normalizedValue = rawValue.trim().toLowerCase();
+    const composedLabel =
+        typeof variation?.variationType === 'string' && typeof variation?.value === 'string'
+            ? `${variation.variationType}: ${variation.value}`.trim().toLowerCase()
+            : undefined;
     return (
         (typeof variation?.value === 'string' && variation.value.trim().toLowerCase() === normalizedValue) ||
         (typeof variation?.name === 'string' && variation.name.trim().toLowerCase() === normalizedValue) ||
-        (typeof variation?.title === 'string' && variation.title.trim().toLowerCase() === normalizedValue) ||
-        (typeof variation?.pack === 'string' && variation.pack.trim().toLowerCase() === normalizedValue)
+        (composedLabel !== undefined && composedLabel === normalizedValue)
     );
 };
 
@@ -56,9 +59,7 @@ const getVariationMatchConditions = (variationValue: any) => {
     return [
         { "variations._id": mongoose.isValidObjectId(variationValue) ? variationValue : new mongoose.Types.ObjectId() },
         { "variations.value": variationSearchValue },
-        { "variations.name": variationSearchValue },
-        { "variations.title": variationSearchValue },
-        { "variations.pack": variationSearchValue }
+        { "variations.name": variationSearchValue }
     ];
 };
 

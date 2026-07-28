@@ -1807,10 +1807,6 @@ export const getStockSalesSummary = asyncHandler(
          }
       ] : []),
 
-      // Sort chronologically first so the $last accumulator below picks the
-      // most recently contributing order's salesperson, not an arbitrary one.
-      { $sort: { orderDate: 1 } },
-
       // Group by Product/Variant
       {
         $group: {
@@ -1858,8 +1854,15 @@ export const getStockSalesSummary = asyncHandler(
           totalSellingPrice: { $sum: "$itemDoc.total" },
           // Multiple orders can roll into one product/variant row here, so
           // there's no single "the" salesman - show whoever sold it most
-          // recently as a reasonable representative value.
-          salesman: { $last: { $ifNull: ["$salesPerson.name", "Admin"] } },
+          // recently as a reasonable representative value. $top sorts within
+          // each group only, avoiding a memory-heavy global sort over every
+          // order item before grouping.
+          salesman: {
+            $top: {
+              output: { $ifNull: ["$salesPerson.name", "Admin"] },
+              sortBy: { orderDate: -1 }
+            }
+          },
 
           // Debug/Extra
           orderDate: { $max: "$orderDate" },
@@ -1903,7 +1906,7 @@ export const getStockSalesSummary = asyncHandler(
     ];
 
     try {
-      const results = await Order.aggregate(pipeline);
+      const results = await Order.aggregate(pipeline).allowDiskUse(true);
       const data = results[0]?.data || [];
       const total = results[0]?.totalCount?.[0]?.count || 0;
 

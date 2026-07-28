@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import Button from '../../components/ui/button';
 import { appConfig } from '../../services/configService';
-import { calculateProductPrice, getCartItemVariantSelector, getCartLineUnitPrice } from '../../utils/priceUtils';
+import { calculateProductPrice, getCartItemVariantSelector, getCartLineUnitPrice, getCartLineVariantIdentity } from '../../utils/priceUtils';
 
 export default function Cart() {
   const { cart, updateQuantity, removeFromCart, clearCart, freeGiftRules: activeRules, loading } = useCart();
@@ -196,9 +196,8 @@ export default function Cart() {
                     <div className="flex items-center gap-3 bg-neutral-100 rounded-lg p-1">
                       <button
                         onClick={() => {
-                           const vId = item.variantId || (prod as any).variantId || (prod as any).selectedVariant?._id || item.variant;
-                           const vTitle = item.variation || (prod as any).variantTitle || (prod as any).pack;
-                           updateQuantity(prodId, qty - 1, vId, vTitle);
+                           const { variantId, variantTitle } = getCartLineVariantIdentity(item);
+                           updateQuantity(prodId, qty - 1, variantId, variantTitle);
                         }}
                         className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center bg-white rounded-md shadow-sm text-neutral-600 hover:text-[var(--customer-primary)] disabled:opacity-50 transition-colors"
                         disabled={loading}
@@ -208,9 +207,8 @@ export default function Cart() {
                       <span className="w-6 md:w-8 text-center font-medium text-sm md:text-base">{qty}</span>
                       <button
                         onClick={() => {
-                           const vId = item.variantId || (prod as any).variantId || (prod as any).selectedVariant?._id || item.variant;
-                           const vTitle = item.variation || (prod as any).variantTitle || (prod as any).pack;
-                           updateQuantity(prodId, qty + 1, vId, vTitle);
+                           const { variantId, variantTitle } = getCartLineVariantIdentity(item);
+                           updateQuantity(prodId, qty + 1, variantId, variantTitle);
                         }}
                         className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center bg-white rounded-md shadow-sm text-neutral-600 hover:text-[var(--customer-primary-dark)] disabled:opacity-50 transition-colors"
                         disabled={loading}
@@ -229,7 +227,10 @@ export default function Cart() {
                 {/* Delete Button */}
                 {!isFreeGift && (
                 <button
-                  onClick={() => removeFromCart(prodId)}
+                  onClick={() => {
+                    const { variantId, variantTitle } = getCartLineVariantIdentity(item);
+                    removeFromCart(prodId, variantId, variantTitle);
+                  }}
                   className="text-neutral-400 hover:text-[var(--customer-primary)] p-1 md:p-2 transition-colors self-start"
                   disabled={loading}
                   aria-label="Remove item"

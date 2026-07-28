@@ -248,6 +248,26 @@ export const getCartItemVariantSelector = (item: any): number | string | undefin
   item?.variation ||
   undefined;
 
+/** Cart-line variant identity used to match a cart item across the UI, context, and add/update/remove calls. */
+export const getCartLineVariantIdentity = (item: any): { variantId?: string; variantTitle?: string } => {
+  const prod = item?.product;
+  const variantId =
+    item?.variantId ||
+    prod?.variantId ||
+    prod?.selectedVariant?._id ||
+    item?.variant ||
+    undefined;
+  const variantTitle =
+    item?.variation ||
+    prod?.variantTitle ||
+    prod?.pack ||
+    undefined;
+  return {
+    variantId: variantId ? String(variantId) : undefined,
+    variantTitle: variantTitle ? String(variantTitle) : undefined,
+  };
+};
+
 /**
  * Formats a number to remove trailing zeros after the decimal point.
  * Example: 4.00 -> 4, 4.50 -> 4.5
