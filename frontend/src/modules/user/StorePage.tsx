@@ -1,6 +1,6 @@
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { Product } from '../../types/domain';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getStoreProducts } from '../../services/api/customerHomeService';
 import { useLocation } from '../../hooks/useLocation';
 import ProductCard from './components/ProductCard';
@@ -13,15 +13,22 @@ export default function StorePage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [shopData, setShopData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const limit = 1000;
+    const limit = 100;
+    const sentinelRef = useRef<HTMLDivElement>(null);
+    const hasMore = currentPage < totalPages;
 
     useEffect(() => {
         const fetchData = async () => {
             if (!slug) return;
             try {
-                setLoading(true);
+                if (currentPage === 1) {
+                    setLoading(true);
+                } else {
+                    setLoadingMore(true);
+                }
 
                 // Fetch shop data and products using the shop API endpoint
                 const response = await getStoreProducts(
@@ -38,22 +45,27 @@ export default function StorePage() {
                     message: response.message
                 });
                 if (response.success) {
-                    setProducts(response.data || []);
+                    setProducts((prev) =>
+                        currentPage === 1 ? (response.data || []) : [...prev, ...(response.data || [])]
+                    );
                     setShopData(response.shop || null);
                     if (response.pagination) {
                         setTotalPages(response.pagination.pages);
                     }
-                } else {
+                } else if (currentPage === 1) {
                     setProducts([]);
                     setShopData(null);
                 }
             } catch (error: any) {
                 console.error('Failed to fetch store data:', error);
                 console.error('Error details:', error.response?.data || error.message);
-                setProducts([]);
-                setShopData(null);
+                if (currentPage === 1) {
+                    setProducts([]);
+                    setShopData(null);
+                }
             } finally {
                 setLoading(false);
+                setLoadingMore(false);
             }
         };
 
@@ -63,6 +75,24 @@ export default function StorePage() {
     useEffect(() => {
         setCurrentPage(1); // Reset page when store changes
     }, [slug]);
+
+    // Infinite scroll: load the next page when the sentinel comes into view
+    useEffect(() => {
+        const sentinel = sentinelRef.current;
+        if (!sentinel) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+                    setCurrentPage((prev) => prev + 1);
+                }
+            },
+            { rootMargin: '300px' }
+        );
+
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [hasMore, loading, loadingMore]);
 
     const storeName = shopData?.name || (slug ? slug.charAt(0).toUpperCase() + slug.slice(1).replace('-', ' ') : 'Store');
     const [bannerImage, setBannerImage] = useState<string | null>(null);
@@ -195,8 +225,12 @@ export default function StorePage() {
                             />
                         ))}
                     </div>
-
-
+                    <div ref={sentinelRef} className="h-1 w-full" />
+                    {loadingMore && (
+                        <div className="flex justify-center p-4">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--customer-primary-dark)]"></div>
+                        </div>
+                    )}
                   </>
                 ) : (
                     <div className="text-center py-20 text-neutral-500">

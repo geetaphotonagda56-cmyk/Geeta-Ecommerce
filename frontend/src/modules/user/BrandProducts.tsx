@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getBrandById, Brand } from '../../services/api/brandService';
 import { getProducts } from '../../services/api/customerProductService';
@@ -13,24 +13,33 @@ export default function BrandProducts() {
   const [brand, setBrand] = useState<Brand | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const limit = 1000;
+  const limit = 100;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const hasMore = currentPage < totalPages;
 
   useEffect(() => {
     const fetchData = async () => {
       if (!id) return;
 
-      setLoading(true);
+      if (currentPage === 1) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
       try {
-        // Fetch Brand Details
-        const brandResponse = await getBrandById(id);
-        if (brandResponse.success) {
-          setBrand(brandResponse.data);
+        // Fetch Brand Details only on the first page
+        if (currentPage === 1) {
+          const brandResponse = await getBrandById(id);
+          if (brandResponse.success) {
+            setBrand(brandResponse.data);
+          }
         }
 
         // Fetch Products for this brand
-        const productsResponse = await getProducts({ 
+        const productsResponse = await getProducts({
           brand: id,
           page: currentPage,
           limit: limit
@@ -42,7 +51,7 @@ export default function BrandProducts() {
             tags: Array.isArray(p.tags) ? p.tags : [],
             nameParts: p.name ? p.name.toLowerCase().split(" ") : [],
           })) : [];
-          setProducts(safeProducts);
+          setProducts((prev) => (currentPage === 1 ? safeProducts : [...prev, ...safeProducts]));
           if (productsResponse.pagination) {
             setTotalPages(productsResponse.pagination.pages);
           }
@@ -51,6 +60,7 @@ export default function BrandProducts() {
         console.error("Error fetching brand data:", err);
       } finally {
         setLoading(false);
+        setLoadingMore(false);
       }
     };
 
@@ -60,6 +70,24 @@ export default function BrandProducts() {
   useEffect(() => {
     setCurrentPage(1); // Reset page when brand changes
   }, [id]);
+
+  // Infinite scroll: load the next page when the sentinel comes into view
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          setCurrentPage((prev) => prev + 1);
+        }
+      },
+      { rootMargin: '300px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><IconLoader forceShow /></div>;
 
@@ -106,8 +134,12 @@ export default function BrandProducts() {
                     />
                 ))}
             </div>
-
-
+            <div ref={sentinelRef} className="h-1 w-full" />
+            {loadingMore && (
+              <div className="flex justify-center p-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--customer-primary-dark)]"></div>
+              </div>
+            )}
           </>
         ) : (
             <div className="flex flex-col items-center justify-center py-20 text-neutral-500">

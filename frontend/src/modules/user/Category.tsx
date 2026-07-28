@@ -31,8 +31,11 @@ export default function CategoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const limit = 1000;
+  const [loadingMore, setLoadingMore] = useState(false);
+  const limit = 100;
   const productsContainerRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const hasMore = currentPage < totalPages;
 
   // Fetch Category Details
   useEffect(() => {
@@ -85,10 +88,19 @@ export default function CategoryPage() {
     }
   }, [id, searchParams]);
 
-  // Fetch Products when category or subcategory changes
+  // Reset pagination when the subcategory selection changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedSubcategory, category?._id]);
+
+  // Fetch Products when category/subcategory changes (page 1) or more pages are requested
   useEffect(() => {
     const fetchProducts = async () => {
-      setLoading(true);
+      if (currentPage === 1) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
       setError(null);
       try {
         // If the ID in the URL is actually for a subcategory, we should use the parent category ID
@@ -121,7 +133,9 @@ export default function CategoryPage() {
               nameParts: name ? name.toLowerCase().split(" ") : [],
             };
           });
-          setProducts(safeProducts);
+          setProducts((prev) =>
+            currentPage === 1 ? safeProducts : [...prev, ...safeProducts]
+          );
           if (response.pagination) {
             setTotalPages(response.pagination.pages);
           }
@@ -133,6 +147,7 @@ export default function CategoryPage() {
         setError("Network error while loading products.");
       } finally {
         setLoading(false);
+        setLoadingMore(false);
       }
     };
 
@@ -140,6 +155,24 @@ export default function CategoryPage() {
       fetchProducts();
     }
   }, [id, selectedSubcategory, category?._id, userLocation, currentPage]);
+
+  // Infinite scroll: load the next page when the sentinel comes into view
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          setCurrentPage((prev) => prev + 1);
+        }
+      },
+      { root: productsContainerRef.current, rootMargin: "300px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore]);
 
   // Scroll to last product on back or when coming from "View All"
   const lastProductScrolledRef = useRef(false);
@@ -591,6 +624,23 @@ export default function CategoryPage() {
                     />
                   ))}
                 </div>
+                {/* Sentinel for infinite scroll */}
+                <div ref={sentinelRef} className="h-1 w-full" />
+                {loadingMore && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4 mt-2 md:mt-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div
+                        key={`loading-more-${i}`}
+                        className="rounded-xl border border-neutral-200 bg-white p-3 animate-pulse"
+                      >
+                        <div className="aspect-square w-full rounded-lg bg-neutral-100" />
+                        <div className="mt-3 h-3 w-4/5 rounded bg-neutral-100" />
+                        <div className="mt-2 h-3 w-2/3 rounded bg-neutral-100" />
+                        <div className="mt-3 h-8 w-full rounded-lg bg-neutral-100" />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="px-4 md:px-6 lg:px-8 py-8 md:py-12 text-center">
