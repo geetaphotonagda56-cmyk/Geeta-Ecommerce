@@ -30,6 +30,7 @@ import {
   isPhonePeConfigured,
 } from "../../../services/phonepeService";
 import { completePosOnlinePayment } from "../../pos/completePosOnlinePayment";
+import { computeCharges, resolveSalesPerson, resolvePaymentStatus } from "./orderChargesUtils";
 
 /**
  * Get all orders with filters
@@ -668,12 +669,20 @@ export const updateOrderItems = asyncHandler(
       }
 
       // 4. Update Order
-      const { 
-        customerId, 
-        customerName: newCustomerName, 
-        customerPhone: newCustomerPhone, 
-        customerEmail: newCustomerEmail, 
-        paymentMethod: newPaymentMethod 
+      const {
+        customerId,
+        customerName: newCustomerName,
+        customerPhone: newCustomerPhone,
+        customerEmail: newCustomerEmail,
+        paymentMethod: newPaymentMethod,
+        discountType,
+        discountValue,
+        deliveryCharge,
+        salesPersonId,
+        salesPersonName,
+        salesPersonPhone,
+        isPartialPayment,
+        amountPaid: amountPaidInput,
       } = req.body;
 
       // Handle Credit Adjustment for Old State
@@ -704,7 +713,25 @@ export const updateOrderItems = asyncHandler(
 
       if (newPaymentMethod) {
         order.paymentMethod = newPaymentMethod;
-        order.paymentStatus = newPaymentMethod === 'Credit' ? 'Pending' : (order.paymentStatus || 'Paid');
+      }
+
+      // Apply any updated discount/delivery-charge/sales-person fields sent
+      // from the "More Options" popup, falling back to the order's existing
+      // values when the edit didn't touch them. Uses the same helpers as
+      // order creation so edit can never drift from create again.
+      const { shipping, discount, total: newTotal } = computeCharges(newSubtotal, {
+        discountType: discountType !== undefined ? discountType : order.discountType,
+        discountValue: discountValue !== undefined ? discountValue : order.discountValue,
+        deliveryCharge: deliveryCharge !== undefined ? deliveryCharge : order.shipping,
+      });
+
+      if (discountType) {
+        order.discountType = discountType;
+        order.discountValue = Number(discountValue) || 0;
+      }
+      const salesPerson = resolveSalesPerson({ salesPersonId, salesPersonName, salesPersonPhone });
+      if (salesPerson) {
+        order.salesPerson = salesPerson;
       }
 
       order.items = newItemIds as any;
@@ -712,7 +739,23 @@ export const updateOrderItems = asyncHandler(
       // Recompute tax from line-level GST (inclusive in unit price).
       // Subtotal already includes tax for GST-inclusive pricing, so we don't add it again to total.
       order.tax = Number(newTaxTotal.toFixed(2));
-      order.total = newSubtotal + (order.shipping || 0) - (order.discount || 0);
+      order.shipping = shipping;
+      order.discount = discount;
+      order.total = newTotal;
+
+      // Recalculate payment status against the new total so a partial
+      // payment doesn't silently go stale (e.g. paid < new total, or the
+      // reverse) after items/charges change.
+      const paymentResult = resolvePaymentStatus({
+        paymentMethod: order.paymentMethod,
+        total: order.total,
+        isPartialPayment: isPartialPayment !== undefined ? isPartialPayment : order.isPartialPayment,
+        amountPaid: amountPaidInput,
+        existingAmountPaid: order.amountPaid,
+      });
+      order.isPartialPayment = paymentResult.isPartialPayment;
+      order.amountPaid = paymentResult.amountPaid;
+      order.paymentStatus = paymentResult.paymentStatus;
 
       await order.save({ session });
 
@@ -1435,15 +1478,11 @@ export const createPOSOrder = asyncHandler(
         }
 
         // 3. Update Order with correct totals
-        const shipping = Number(deliveryCharge) > 0 ? Number(deliveryCharge) : 0;
-        const discount =
-          discountType === "%"
-            ? (subtotal * (Number(discountValue) || 0)) / 100
-            : Number(discountValue) > 0
-              ? Number(discountValue)
-              : 0;
-        // GST is inclusive in unitPrice, so subtotal already contains tax — don't add it again to the grand total.
-        const total = Math.max(0, subtotal + shipping - discount);
+        const { shipping, discount, total } = computeCharges(subtotal, {
+          discountType,
+          discountValue,
+          deliveryCharge,
+        });
 
         order.items = orderItemsIds;
         order.subtotal = subtotal;
@@ -1456,28 +1495,20 @@ export const createPOSOrder = asyncHandler(
         }
         order.total = total;
 
-        if (salesPersonName) {
-          order.salesPerson = {
-            id: salesPersonId && mongoose.Types.ObjectId.isValid(salesPersonId) ? salesPersonId : undefined,
-            name: salesPersonName,
-            phone: salesPersonPhone || undefined,
-          };
+        const salesPerson = resolveSalesPerson({ salesPersonId, salesPersonName, salesPersonPhone });
+        if (salesPerson) {
+          order.salesPerson = salesPerson;
         }
 
-        // Partial cash payment: only meaningful for Cash - Credit/Online are
-        // already their own "not fully settled in hand" concepts.
-        if (paymentMethod === "Cash" && isPartialPayment) {
-          const paid = Math.min(Number(amountPaidInput) || 0, total);
-          order.isPartialPayment = true;
-          order.amountPaid = paid;
-          order.paymentStatus = paid >= total ? "Paid" : "Partial";
-        } else {
-          order.amountPaid = total;
-        }
-
-        if (paymentMethod === 'Credit') {
-            order.paymentStatus = 'Pending';
-        }
+        const paymentResult = resolvePaymentStatus({
+          paymentMethod,
+          total,
+          isPartialPayment,
+          amountPaid: amountPaidInput,
+        });
+        order.isPartialPayment = paymentResult.isPartialPayment;
+        order.amountPaid = paymentResult.amountPaid;
+        order.paymentStatus = paymentResult.paymentStatus;
 
         await order.save();
 
@@ -1709,15 +1740,12 @@ export const initiatePOSOnlineOrder = asyncHandler(
 
     // "Discount and Charges" popup extras - optional, absent when the
     // cashier never opened that popup.
-    const shipping = Number(deliveryCharge) > 0 ? Number(deliveryCharge) : 0;
-    const discount =
-      discountType === "%"
-        ? (subtotal * (Number(discountValue) || 0)) / 100
-        : Number(discountValue) > 0
-          ? Number(discountValue)
-          : 0;
-    // GST is inclusive in unit prices, so grand total is subtotal + delivery - discount.
-    const total = Math.max(0, subtotal + shipping - discount);
+    const { shipping, discount, total } = computeCharges(subtotal, {
+      discountType,
+      discountValue,
+      deliveryCharge,
+    });
+    const salesPerson = resolveSalesPerson({ salesPersonId, salesPersonName, salesPersonPhone });
 
     // Create Pending Order
     const order = await Order.create({
@@ -1737,13 +1765,9 @@ export const initiatePOSOnlineOrder = asyncHandler(
       shipping,
       discount,
       ...(discountType ? { discountType, discountValue: Number(discountValue) || 0 } : {}),
-      ...(salesPersonName
+      ...(salesPerson
         ? {
-            salesPerson: {
-              id: salesPersonId && mongoose.Types.ObjectId.isValid(salesPersonId) ? salesPersonId : undefined,
-              name: salesPersonName,
-              phone: salesPersonPhone || undefined,
-            },
+            salesPerson,
           }
         : {}),
       total,

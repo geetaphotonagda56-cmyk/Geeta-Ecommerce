@@ -76,6 +76,7 @@ interface Bill {
   paymentMethod: string;
   orderType: 'Retail' | 'Wholesale';
   createdAt: number;
+  posCharges: PosCharges;
 }
 
 // Draft of all open POS bill tabs, restored on mount so a refresh/crash doesn't lose
@@ -101,6 +102,7 @@ function sanitizeBill(raw: any): Bill | null {
     paymentMethod: typeof raw.paymentMethod === 'string' && raw.paymentMethod ? raw.paymentMethod : 'Cash',
     orderType: raw.orderType === 'Wholesale' ? 'Wholesale' : 'Retail',
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
+    posCharges: raw.posCharges && typeof raw.posCharges === 'object' ? raw.posCharges : DEFAULT_POS_CHARGES,
   };
 }
 
@@ -249,7 +251,8 @@ const AdminPOSOrders = () => {
     customerSearch: '',
     paymentMethod: 'Cash',
     orderType: 'Retail',
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    posCharges: DEFAULT_POS_CHARGES
   }]);
 
   const [activeBillId, setActiveBillId] = useState<string>(() => loadPersistedBills()?.activeBillId ?? '1');
@@ -263,7 +266,8 @@ const AdminPOSOrders = () => {
       customerSearch: '',
       paymentMethod: 'Cash',
       orderType: 'Retail',
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      posCharges: DEFAULT_POS_CHARGES
   };
 
   // Helper to update active bill state
@@ -300,7 +304,8 @@ const AdminPOSOrders = () => {
       customerSearch: '',
       paymentMethod: 'Cash',
       orderType: 'Retail',
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      posCharges: DEFAULT_POS_CHARGES  // Always fresh - never inherit another bill's discount/delivery/partial-payment settings
     };
 
     setBills(prev => {
@@ -360,6 +365,14 @@ const AdminPOSOrders = () => {
   const selectedCustomer = activeBill.selectedCustomer;
   const customerSearch = activeBill.customerSearch;
   const paymentMethod = activeBill.paymentMethod;
+  const posCharges = activeBill.posCharges || DEFAULT_POS_CHARGES;
+
+  // Scoped to the active bill (like cart/customer above) so switching tabs
+  // or opening a new bill never carries over another bill's discount,
+  // delivery charge, sales person, or partial-payment settings.
+  const setPosCharges = (charges: PosCharges) => {
+    updateActiveBill({ posCharges: charges });
+  };
 
   const setCart = (action: React.SetStateAction<CartItem[]>) => {
     setBills(prev => {
@@ -614,7 +627,22 @@ const AdminPOSOrders = () => {
              customerSearch: order.customerName || '',
              paymentMethod: order.paymentMethod,
              orderType: 'Retail', // Default or infer?
-             createdAt: Date.now()
+             createdAt: Date.now(),
+             // Load the order's existing charges into the "More Options" popup
+             // state so editing doesn't silently reset/discard them. Set directly
+             // on the new bill (not via setPosCharges) since activeBillId hasn't
+             // updated yet in this render.
+             posCharges: {
+               discountType: order.discountType || DEFAULT_POS_CHARGES.discountType,
+               discountValue: Number(order.discountValue || 0),
+               deliveryChargeEnabled: Number(order.shipping || 0) > 0 ? true : DEFAULT_POS_CHARGES.deliveryChargeEnabled,
+               deliveryCharge: Number(order.shipping || 0),
+               isPartialPayment: !!order.isPartialPayment,
+               cashCollected: Number(order.amountPaid || 0),
+               salesPersonId: order.salesPerson?.id ? String(order.salesPerson.id) : '',
+               salesPersonName: order.salesPerson?.name || '',
+               salesPersonPhone: order.salesPerson?.phone || '',
+             }
           };
 
           setBills(prev => {
@@ -656,8 +684,8 @@ const AdminPOSOrders = () => {
   // Optional "Discount and Charges" popup - pre-stages special discount,
   // partial-cash-payment, delivery charge, and salesman/delivery-person
   // data that the payment picker/checkout functions below read from.
+  // posCharges itself is bill-scoped (see Derived State above).
   const [showChargesModal, setShowChargesModal] = useState(false);
-  const [posCharges, setPosCharges] = useState<PosCharges>(DEFAULT_POS_CHARGES);
   const [editingItem, setEditingItem] = useState<CartItem | null>(null);
   const [editingPurchaseItem, setEditingPurchaseItem] = useState<PurchaseItem | null>(null);
   const [billToRemove, setBillToRemove] = useState<string | null>(null);
@@ -3490,6 +3518,7 @@ const AdminPOSOrders = () => {
   };
 
   const handlePaymentSelection = async (method: string) => {
+    if (loading) return;
     setShowPaymentModal(false);
 
     if (method === 'Cash') {
@@ -3507,6 +3536,7 @@ const AdminPOSOrders = () => {
   };
 
   const initiateOnlinePayment = async (method: string) => {
+      if (loading) return;
       if (activeBillId.startsWith('edit_')) {
           showToast("Cannot create a new bill from an edit session. Please use Update.", "error");
           setLoading(false);
@@ -3589,6 +3619,7 @@ const AdminPOSOrders = () => {
               }
               showToast("Payment Successful & Order Placed!", "success");
               setCart([]);
+              setPosCharges(DEFAULT_POS_CHARGES);
           } else {
               showToast("Payment Verification Failed", "error");
           }
@@ -3601,6 +3632,7 @@ const AdminPOSOrders = () => {
   };
 
   const performCashCheckout = async (): Promise<{ success: boolean; orderId?: string }> => {
+    if (loading) return { success: false };
     if (activeBillId.startsWith('edit_')) {
         showToast("Cannot create a new bill from an edit session. Please use Update.", "error");
         setLoading(false);
@@ -3670,6 +3702,7 @@ const AdminPOSOrders = () => {
   };
 
   const performCreditCheckout = async () => {
+      if (loading) return;
       if (activeBillId.startsWith('edit_')) {
           showToast("Cannot create a new bill from an edit session. Please use Update.", "error");
           setLoading(false);
@@ -3744,6 +3777,7 @@ const AdminPOSOrders = () => {
   };
 
   const handleUpdateOrder = async () => {
+      if (loading) return;
       const targetEditId = activeBillId.startsWith('edit_') ? activeBillId.replace('edit_', '') : editOrderId;
       if (!targetEditId) return;
       setLoading(true);
@@ -3779,7 +3813,11 @@ const AdminPOSOrders = () => {
               customerName: selectedCustomer ? selectedCustomer.name : (customerSearch || "Walk-in Customer"),
               customerPhone: selectedCustomer ? selectedCustomer.phone : "0000000000",
               customerEmail: selectedCustomer ? selectedCustomer.email : "walkin@pos.com",
-              paymentMethod: paymentMethod || 'Cash'
+              paymentMethod: paymentMethod || 'Cash',
+              ...(posCharges.discountValue > 0 ? { discountType: posCharges.discountType, discountValue: posCharges.discountValue } : {}),
+              ...(posCharges.deliveryChargeEnabled && posCharges.deliveryCharge > 0 ? { deliveryCharge: posCharges.deliveryCharge } : {}),
+              ...(posCharges.salesPersonName ? { salesPersonId: posCharges.salesPersonId, salesPersonName: posCharges.salesPersonName, salesPersonPhone: posCharges.salesPersonPhone } : {}),
+              ...(isPartialPaymentActive(posCharges) ? { isPartialPayment: true, amountPaid: posCharges.cashCollected } : {}),
           });
           if (res.success) {
               showToast("Order updated successfully", "success");
@@ -6080,7 +6118,8 @@ const AdminPOSOrders = () => {
                      <div className="space-y-3">
                         <button
                           onClick={() => handlePaymentSelection('PhonePe')}
-                          className="w-full group flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-[var(--primary-color)] hover:bg-[var(--primary-alpha-10)] transition-all"
+                          disabled={loading}
+                          className="w-full group flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-[var(--primary-color)] hover:bg-[var(--primary-alpha-10)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <span className="font-semibold text-gray-700 group-hover:text-[var(--primary-darker)]">PhonePe (Online)</span>
                             <span className="text-gray-300 group-hover:text-[var(--primary-color)]">→</span>
@@ -6088,7 +6127,8 @@ const AdminPOSOrders = () => {
 
                          <button
                           onClick={() => handlePaymentSelection('Credit')}
-                          className="w-full group flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-red-500 hover:bg-red-50 transition-all"
+                          disabled={loading}
+                          className="w-full group flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-red-500 hover:bg-red-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <div className="flex flex-col items-start">
                                 <span className="font-semibold text-gray-700 group-hover:text-red-700">Credit (Udhaar)</span>
@@ -6101,7 +6141,8 @@ const AdminPOSOrders = () => {
 
                          <button
                           onClick={() => handlePaymentSelection('Cash')}
-                          className="w-full group flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-[var(--primary-color)] hover:bg-[#FCE4EC] transition-all"
+                          disabled={loading}
+                          className="w-full group flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-[var(--primary-color)] hover:bg-[#FCE4EC] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <span className="font-semibold text-gray-700 group-hover:text-[#D81B60]">Cash</span>
                             <span className="text-gray-300 group-hover:text-[var(--primary-color)]">→</span>

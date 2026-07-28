@@ -2,7 +2,7 @@ import mongoose, { Document, Schema } from "mongoose";
 
 export interface IReview extends Document {
   product: mongoose.Types.ObjectId;
-  order: mongoose.Types.ObjectId;
+  order?: mongoose.Types.ObjectId;
   customer: mongoose.Types.ObjectId;
 
   // Review Content
@@ -32,7 +32,7 @@ const ReviewSchema = new Schema<IReview>(
     order: {
       type: Schema.Types.ObjectId,
       ref: "Order",
-      required: [true, "Order is required"],
+      required: false,
     },
     customer: {
       type: Schema.Types.ObjectId,
@@ -64,11 +64,11 @@ const ReviewSchema = new Schema<IReview>(
     status: {
       type: String,
       enum: ["Pending", "Approved", "Rejected"],
-      default: "Pending",
+      default: "Approved",
     },
     isVerifiedPurchase: {
       type: Boolean,
-      default: true,
+      default: false,
     },
 
     // Helpful
@@ -85,8 +85,7 @@ const ReviewSchema = new Schema<IReview>(
 
 // Indexes
 ReviewSchema.index({ product: 1, status: 1 });
-ReviewSchema.index({ customer: 1 });
-ReviewSchema.index({ order: 1 });
+ReviewSchema.index({ customer: 1, product: 1 }, { unique: true });
 
 const Review = mongoose.model<IReview>("Review", ReviewSchema);
 

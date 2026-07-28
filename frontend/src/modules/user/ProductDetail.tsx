@@ -17,6 +17,9 @@ import { getSimilarProducts as getSemanticSimilarProducts } from '../../services
 import WishlistButton from '../../components/WishlistButton';
 import ShareButton from '../../components/ShareButton';
 import StarRating from "../../components/ui/StarRating";
+import RatingInput from "../../components/ui/RatingInput";
+import { useAuth } from "../../context/AuthContext";
+import type { Review as ReviewType } from "../../services/api/customerReviewService";
 import ProductCard from "./components/ProductCard";
 // import DealOfTheDay from "./components/banners/DealOfTheDay";
 import ExploreOurRange from "./components/banners/ExploreOurRange";
@@ -43,6 +46,7 @@ export default function ProductDetail() {
   const { cart, addToCart, updateQuantity } = useCart();
   const { location } = useLocation();
   const { startLoading, stopLoading } = useLoading();
+  const { isAuthenticated } = useAuth();
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const [isProductDetailsExpanded, setIsProductDetailsExpanded] =
     useState(false);
@@ -69,6 +73,10 @@ export default function ProductDetail() {
 
   const [reviews, setReviews] = useState<any[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewStats, setReviewStats] = useState({ avgRating: 0, totalReviews: 0 });
+  const [myReview, setMyReview] = useState<ReviewType | null>(null);
+  const [reviewForm, setReviewForm] = useState({ rating: 0, title: "", comment: "" });
+  const [submittingReview, setSubmittingReview] = useState(false);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState<number | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -146,6 +154,9 @@ export default function ProductDetail() {
 
           // Fetch reviews
           fetchReviews(id);
+          if (isAuthenticated) {
+            fetchMyReview(id);
+          }
         } else {
           setProduct(null);
           setError(response.message || "Product not found");
@@ -175,12 +186,56 @@ export default function ProductDetail() {
       );
       const res = await getProductReviews(productId);
       if (res.success) {
-        setReviews(res.data);
+        setReviews(res.data.reviews);
+        setReviewStats(res.data.stats);
       }
     } catch (err) {
       console.error("Failed to fetch reviews", err);
     } finally {
       setReviewsLoading(false);
+    }
+  };
+
+  const fetchMyReview = async (productId: string) => {
+    try {
+      const { getMyReview } = await import(
+        "../../services/api/customerReviewService"
+      );
+      const res = await getMyReview(productId);
+      if (res.success && res.data) {
+        setMyReview(res.data);
+        setReviewForm({
+          rating: res.data.rating,
+          title: res.data.title || "",
+          comment: res.data.comment || "",
+        });
+      }
+    } catch (err) {
+      console.error("Failed to fetch your review", err);
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!id || reviewForm.rating < 1) return;
+    setSubmittingReview(true);
+    try {
+      const { addReview } = await import(
+        "../../services/api/customerReviewService"
+      );
+      const res = await addReview(
+        id,
+        reviewForm.rating,
+        reviewForm.title,
+        reviewForm.comment
+      );
+      if (res.success && res.data) {
+        setMyReview(res.data);
+        await fetchReviews(id);
+      }
+    } catch (err) {
+      console.error("Failed to submit review", err);
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -1344,10 +1399,10 @@ export default function ProductDetail() {
             <h3 className="text-lg font-bold text-neutral-900">
               Ratings & Reviews
             </h3>
-            {reviews.length > 0 && (
+            {reviewStats.totalReviews > 0 && (
               <div className="flex items-center gap-1">
                 <span className="text-sm font-bold text-neutral-900">
-                  {product.rating || "4.5"}
+                  {reviewStats.avgRating.toFixed(1)}
                 </span>
                 <div className="flex text-yellow-500">
                   <svg
@@ -1359,9 +1414,66 @@ export default function ProductDetail() {
                   </svg>
                 </div>
                 <span className="text-xs text-neutral-500">
-                  ({reviews.length} reviews)
+                  ({reviewStats.totalReviews} reviews)
                 </span>
               </div>
+            )}
+          </div>
+
+          <div className="mb-6 p-4 bg-neutral-50 rounded-lg">
+            {isAuthenticated ? (
+              <>
+                <p className="text-sm font-semibold text-neutral-800 mb-2">
+                  {myReview ? "Edit your review" : "Write a review"}
+                </p>
+                <RatingInput
+                  value={reviewForm.rating}
+                  onChange={(rating) =>
+                    setReviewForm((prev) => ({ ...prev, rating }))
+                  }
+                />
+                <input
+                  type="text"
+                  placeholder="Title (optional)"
+                  value={reviewForm.title}
+                  onChange={(e) =>
+                    setReviewForm((prev) => ({ ...prev, title: e.target.value }))
+                  }
+                  className="w-full mt-3 px-3 py-2 text-sm border border-neutral-200 rounded-lg"
+                />
+                <textarea
+                  placeholder="Share your experience (optional)"
+                  value={reviewForm.comment}
+                  onChange={(e) =>
+                    setReviewForm((prev) => ({ ...prev, comment: e.target.value }))
+                  }
+                  rows={3}
+                  className="w-full mt-2 px-3 py-2 text-sm border border-neutral-200 rounded-lg resize-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleSubmitReview}
+                  disabled={reviewForm.rating < 1 || submittingReview}
+                  className="mt-3 px-5 py-2 bg-[var(--customer-primary-dark)] text-white text-sm font-semibold rounded-full disabled:opacity-50"
+                >
+                  {submittingReview
+                    ? "Saving..."
+                    : myReview
+                    ? "Update Review"
+                    : "Submit Review"}
+                </button>
+              </>
+            ) : (
+              <p className="text-sm text-neutral-600">
+                <button
+                  type="button"
+                  onClick={() => navigate("/login")}
+                  className="text-[var(--customer-primary-dark)] font-semibold underline"
+                >
+                  Log in
+                </button>{" "}
+                to write a review.
+              </p>
             )}
           </div>
 
@@ -1376,9 +1488,16 @@ export default function ProductDetail() {
                   key={review._id}
                   className="border-b border-neutral-50 pb-4 last:border-0">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-base font-semibold text-neutral-900">
-                      {review.customer?.name || "Customer"}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-semibold text-neutral-900">
+                        {review.customer?.name || "Customer"}
+                      </span>
+                      {review.isVerifiedPurchase && (
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">
+                          Verified Customer
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1 bg-[var(--customer-primary-alpha-20)] px-1.5 py-0.5 rounded">
                       <span className="text-xs font-bold text-[var(--customer-primary-dark)]">
                         {review.rating}
