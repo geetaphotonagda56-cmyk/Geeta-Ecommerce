@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { getOrderById, updateOrderStatus, updateOrderItems, Order, OrderItem as IOrderItem } from '../../../services/api/admin/adminOrderService';
+import { getOrderById, updateOrderStatus, updateOrderItems, getOrderHistory, Order, OrderItem as IOrderItem, OrderHistoryEntry } from '../../../services/api/admin/adminOrderService';
 import { getProducts, Product } from '../../../services/api/admin/adminProductService';
 
 export default function AdminOrderDetail() {
@@ -16,6 +16,13 @@ export default function AdminOrderDetail() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [searching, setSearching] = useState(false);
+  // orderItemId -> quantity as originally loaded, used to detect returns
+  // (quantity reduced or item removed) when saving edits.
+  const [originalItemQuantities, setOriginalItemQuantities] = useState<Record<string, { quantity: number; productName: string }>>({});
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState<OrderHistoryEntry[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [returnConfirmCandidates, setReturnConfirmCandidates] = useState<Array<{ orderItemId: string; productName: string; reducedQty: number }> | null>(null);
 
   // Fetch order detail from API
   useEffect(() => {
@@ -30,7 +37,8 @@ export default function AdminOrderDetail() {
           setOrder(response.data);
           // Initialize editable items
           const items = Array.isArray(response.data.items) ? response.data.items : [];
-          setEditableItems(items.filter((item: any) => !item.isFreeGift).map((item: any) => ({
+          const kept = items.filter((item: any) => !item.isFreeGift);
+          setEditableItems(kept.map((item: any) => ({
             _id: item._id,
             productId: typeof item.product === 'object' ? item.product?._id : item.product,
             productName: item.productName || item.product?.productName,
@@ -41,6 +49,16 @@ export default function AdminOrderDetail() {
             // Find variationId if possible
             variationId: item.variationId // We might need to handle this
           })));
+          const originalQuantities: Record<string, { quantity: number; productName: string }> = {};
+          kept.forEach((item: any) => {
+            if (item._id) {
+              originalQuantities[item._id] = {
+                quantity: item.quantity,
+                productName: item.productName || item.product?.productName || 'Item',
+              };
+            }
+          });
+          setOriginalItemQuantities(originalQuantities);
         } else {
           setError(response.message || 'Failed to fetch order details');
         }
@@ -129,6 +147,33 @@ export default function AdminOrderDetail() {
 
   const handleSaveItems = async () => {
     if (!order) return;
+
+    // Detect walk-in returns: items whose quantity dropped (or were removed
+    // entirely) compared to what the bill originally had when this edit started.
+    const currentQtyById: Record<string, number> = {};
+    editableItems.forEach(item => {
+      if (item._id) {
+        currentQtyById[item._id] = (currentQtyById[item._id] || 0) + item.quantity;
+      }
+    });
+    const returnCandidates: Array<{ orderItemId: string; productName: string; reducedQty: number }> = [];
+    Object.entries(originalItemQuantities).forEach(([orderItemId, original]) => {
+      const reducedQty = original.quantity - (currentQtyById[orderItemId] || 0);
+      if (reducedQty > 0) {
+        returnCandidates.push({ orderItemId, productName: original.productName, reducedQty });
+      }
+    });
+
+    if (returnCandidates.length > 0) {
+      setReturnConfirmCandidates(returnCandidates);
+      return;
+    }
+
+    await finalizeSaveItems([]);
+  };
+
+  const finalizeSaveItems = async (returns: Array<{ orderItemId: string; quantity: number }>) => {
+    if (!order) return;
     setUpdating(true);
     try {
         const response = await updateOrderItems(order._id, {
@@ -138,7 +183,8 @@ export default function AdminOrderDetail() {
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
                 sku: item.sku
-            }))
+            })),
+            returns
         });
         if (response.success && response.data) {
             setOrder(response.data);
@@ -151,6 +197,60 @@ export default function AdminOrderDetail() {
         alert(err.response?.data?.message || 'Failed to update order items');
     } finally {
         setUpdating(false);
+    }
+  };
+
+  const lineItemKey = (it: { product?: string; sku?: string; variation?: string; productName: string }) =>
+    `${it.product || ''}:${it.sku || ''}:${it.variation || ''}:${it.productName}`;
+
+  type LineChange =
+    | { type: 'added'; productName: string; quantity: number }
+    | { type: 'removed'; productName: string; quantity: number }
+    | { type: 'changed'; productName: string; beforeQty: number; afterQty: number; beforePrice: number; afterPrice: number };
+
+  const getChangedLines = (entry: OrderHistoryEntry): LineChange[] => {
+    const beforeMap = new Map(entry.itemsBefore.map((it) => [lineItemKey(it), it]));
+    const afterMap = new Map(entry.itemsAfter.map((it) => [lineItemKey(it), it]));
+    const keys = new Set([...beforeMap.keys(), ...afterMap.keys()]);
+    const changes: LineChange[] = [];
+    keys.forEach((key) => {
+      const before = beforeMap.get(key);
+      const after = afterMap.get(key);
+      if (before && !after) {
+        changes.push({ type: 'removed', productName: before.productName, quantity: before.quantity });
+      } else if (!before && after) {
+        changes.push({ type: 'added', productName: after.productName, quantity: after.quantity });
+      } else if (before && after && (before.quantity !== after.quantity || before.unitPrice !== after.unitPrice)) {
+        changes.push({
+          type: 'changed',
+          productName: after.productName,
+          beforeQty: before.quantity,
+          afterQty: after.quantity,
+          beforePrice: before.unitPrice,
+          afterPrice: after.unitPrice,
+        });
+      }
+    });
+    return changes;
+  };
+
+  const handleToggleHistory = async () => {
+    if (showHistory) {
+      setShowHistory(false);
+      return;
+    }
+    setShowHistory(true);
+    if (!order) return;
+    setLoadingHistory(true);
+    try {
+      const res = await getOrderHistory(order._id);
+      if (res.success && res.data) {
+        setHistoryEntries(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load bill history', err);
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -528,6 +628,84 @@ export default function AdminOrderDetail() {
             )}
           </div>
 
+          {/* Bill History / Returns */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold">Bill History</h2>
+                {order.returnStatus && order.returnStatus !== 'None' && (
+                  <span className={`inline-block px-2 py-0.5 text-[10px] rounded uppercase font-bold ${order.returnStatus === 'Full' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                    {order.returnStatus} Return
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={handleToggleHistory}
+                className="text-sm text-[var(--primary-color)] font-medium hover:underline"
+              >
+                {showHistory ? 'Hide History' : 'View History'}
+              </button>
+            </div>
+            {showHistory && (
+              loadingHistory ? (
+                <p className="text-sm text-neutral-500">Loading history...</p>
+              ) : historyEntries.length === 0 ? (
+                <p className="text-sm text-neutral-500">No edits have been made to this bill yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {historyEntries.map((entry) => (
+                    <div key={entry._id} className="border border-neutral-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-neutral-500">{formatDate(entry.createdAt)}</span>
+                        <span className="text-xs text-neutral-500">
+                          ₹{entry.totalsBefore.total.toFixed(2)} → ₹{entry.totalsAfter.total.toFixed(2)}
+                        </span>
+                      </div>
+                      {entry.returns.length > 0 && (
+                        <div className="mb-2">
+                          <p className="text-xs font-semibold text-red-600 mb-1">Returned:</p>
+                          <ul className="text-sm text-neutral-700 list-disc list-inside">
+                            {entry.returns.map((r, i) => (
+                              <li key={i}>{r.productName} x{r.quantity}{r.restocked ? ' (restocked)' : ''}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {(() => {
+                        const changes = getChangedLines(entry);
+                        if (changes.length === 0) return null;
+                        return (
+                          <div>
+                            <p className="text-xs font-semibold text-neutral-500 mb-1">Item changes:</p>
+                            <ul className="text-xs text-neutral-700 space-y-0.5">
+                              {changes.map((c, i) => (
+                                <li key={i}>
+                                  {c.type === 'added' && (
+                                    <span><span className="text-green-600 font-semibold">+ Added</span> {c.productName} x{c.quantity}</span>
+                                  )}
+                                  {c.type === 'removed' && (
+                                    <span><span className="text-red-600 font-semibold">− Removed</span> {c.productName} x{c.quantity}</span>
+                                  )}
+                                  {c.type === 'changed' && (
+                                    <span>
+                                      <span className="text-yellow-600 font-semibold">~ Changed</span> {c.productName}
+                                      {c.beforeQty !== c.afterQty && <> qty {c.beforeQty} → {c.afterQty}</>}
+                                      {c.beforePrice !== c.afterPrice && <> price ₹{c.beforePrice} → ₹{c.afterPrice}</>}
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+
           {/* Delivery Address */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold mb-4">Delivery Address</h2>
@@ -642,6 +820,56 @@ export default function AdminOrderDetail() {
           </div>
         </div>
       </div>
+
+      {returnConfirmCandidates && (
+        <div className="fixed inset-0 bg-black/60 z-[110] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-5 pt-5 pb-3">
+              <h3 className="text-base font-bold text-neutral-900">Mark as Return?</h3>
+              <p className="text-xs text-neutral-500 mt-1">
+                The following item(s) have reduced quantity or were removed from this bill:
+              </p>
+            </div>
+            <div className="px-5 max-h-48 overflow-y-auto">
+              <ul className="space-y-1.5">
+                {returnConfirmCandidates.map((c) => (
+                  <li key={c.orderItemId} className="flex justify-between text-sm bg-neutral-50 rounded-lg px-3 py-2">
+                    <span className="text-neutral-700 truncate pr-2">{c.productName}</span>
+                    <span className="font-bold text-neutral-900 whitespace-nowrap">-{c.reducedQty}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <button
+                onClick={() => {
+                  const returns = returnConfirmCandidates.map(c => ({ orderItemId: c.orderItemId, quantity: c.reducedQty }));
+                  setReturnConfirmCandidates(null);
+                  finalizeSaveItems(returns);
+                }}
+                className="w-full bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-bold py-2.5 rounded-xl text-sm"
+              >
+                Yes, Mark as Return
+              </button>
+              <button
+                onClick={() => {
+                  setReturnConfirmCandidates(null);
+                  finalizeSaveItems([]);
+                }}
+                className="w-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-semibold py-2.5 rounded-xl text-sm"
+              >
+                No, Just Save Edit
+              </button>
+              <button
+                onClick={() => setReturnConfirmCandidates(null)}
+                className="w-full text-neutral-400 hover:text-neutral-600 text-xs py-1"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import Product from "../../../models/Product";
 import Customer from "../../../models/Customer";
 import { Server as SocketIOServer } from "socket.io";
 import StockLedger from "../../../models/StockLedger";
+import OrderHistory from "../../../models/OrderHistory";
 import CreditTransaction from "../../../models/CreditTransaction";
 import {
   decrementVariantStock,
@@ -361,7 +362,22 @@ export const updateOrderStatus = asyncHandler(
 export const updateOrderItems = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { items: newItemsData } = req.body; // Array of { productId, variationId?, quantity, unitPrice?, mrp?, productName?, productImage? }
+    const { items: newItemsData, returns: returnsData } = req.body; // items: Array of { productId, variationId?, quantity, unitPrice?, mrp?, productName?, productImage? }
+    // returns: Array of { orderItemId, quantity } - how many units of an existing
+    // line item are being returned as part of this edit (walk-in bill returns).
+    const returnEntries: Array<{ orderItemId?: string; quantity: number }> = Array.isArray(returnsData)
+      ? returnsData
+          .map((r: any) => ({
+            orderItemId: typeof r?.orderItemId === "string" ? r.orderItemId : undefined,
+            quantity: Number(r?.quantity) || 0,
+          }))
+          .filter((r: any) => r.orderItemId && r.quantity > 0)
+      : [];
+    const returnQtyByOrderItemId = new Map<string, number>();
+    for (const r of returnEntries) {
+      const key = r.orderItemId as string;
+      returnQtyByOrderItemId.set(key, (returnQtyByOrderItemId.get(key) || 0) + r.quantity);
+    }
 
     if (!newItemsData || !Array.isArray(newItemsData) || newItemsData.length === 0) {
       return res.status(400).json({
@@ -413,6 +429,43 @@ export const updateOrderItems = asyncHandler(
 
       // 1. Restore stock for existing items
       const existingItems = await OrderItem.find({ order: order._id }).session(session);
+
+      // Snapshot for bill history (captured before anything is mutated) and
+      // a lookup so returned quantity can be carried forward onto whichever
+      // new item replaces a kept portion of the same product/variant.
+      const itemsBeforeSnapshot = existingItems.map((item) => ({
+        product: item.product,
+        productName: item.productName,
+        sku: item.sku,
+        variation: item.variation,
+        quantity: Number(item.quantity) || 0,
+        unitPrice: Number(item.unitPrice) || 0,
+        total: Number(item.total) || 0,
+      }));
+      const totalsBefore = {
+        subtotal: Number(order.subtotal) || 0,
+        tax: Number(order.tax) || 0,
+        total: Number(order.total) || 0,
+      };
+      const returnedQtyByProductVariant = new Map<string, number>();
+      // Old items whose (non-returned) quantity would otherwise be blindly
+      // restored to stock. Matched against the new item list below so a
+      // product/variant that's still on the bill at the same quantity never
+      // gets a restore+deduct pair written to the ledger - only a genuine
+      // net change (quantity delta, removal, or swap) produces an entry.
+      const pendingRestoreByKey = new Map<
+        string,
+        { productId: string; variantId: string; sku?: string; qty: number }
+      >();
+      const historyReturnLines: Array<{
+        product?: mongoose.Types.ObjectId;
+        productName: string;
+        sku?: string;
+        variation?: string;
+        quantity: number;
+        restocked: boolean;
+      }> = [];
+
       for (const item of existingItems) {
         if (!item.product) continue;
 
@@ -436,29 +489,70 @@ export const updateOrderItems = asyncHandler(
           continue;
         }
 
-        const prevStock = await getVariantStock(productId, variantId);
-        const restored = await incrementVariantStock(productId, variantId, qty, {
-          session,
-        });
+        // How much of this line's quantity is being returned in this edit
+        // (as opposed to simply corrected/removed for other reasons).
+        const returnQtyForItem = Math.min(
+          returnQtyByOrderItemId.get(String(item._id)) || 0,
+          qty
+        );
+        const plainRestoreQty = qty - returnQtyForItem;
 
-        if (restored) {
-          await StockLedger.create(
-            [
-              {
-                product: productId,
-                variationId: variantId,
-                sku: resolveLedgerSku(item.sku),
-                quantity: qty,
-                type: "IN",
-                source: "ORDER_EDIT_RESTORE",
-                referenceId: order._id,
-                previousStock: prevStock,
-                newStock: prevStock + qty,
-                [stockModifierField]: userId,
-              },
-            ],
-            { session }
+        if (returnQtyForItem > 0) {
+          const prevStock = await getVariantStock(productId, variantId);
+          const restored = await incrementVariantStock(productId, variantId, returnQtyForItem, {
+            session,
+          });
+          if (restored) {
+            await StockLedger.create(
+              [
+                {
+                  product: productId,
+                  variationId: variantId,
+                  sku: resolveLedgerSku(item.sku),
+                  quantity: returnQtyForItem,
+                  type: "IN",
+                  source: "RETURN",
+                  referenceId: order._id,
+                  previousStock: prevStock,
+                  newStock: prevStock + returnQtyForItem,
+                  [stockModifierField]: userId,
+                },
+              ],
+              { session }
+            );
+          } else {
+            console.warn(`Return restock failed for product ${productId} variant ${variantId} on order ${order._id}`);
+          }
+          historyReturnLines.push({
+            product: item.product as any,
+            productName: item.productName,
+            sku: item.sku,
+            variation: item.variation,
+            quantity: returnQtyForItem,
+            restocked: restored,
+          });
+          const carryKey = `${productId}:${variantId}`;
+          returnedQtyByProductVariant.set(
+            carryKey,
+            (returnedQtyByProductVariant.get(carryKey) || 0) +
+              (Number((item as any).returnedQuantity) || 0) +
+              returnQtyForItem
           );
+        }
+
+        if (plainRestoreQty > 0) {
+          const key = `${productId}:${variantId}`;
+          const pending = pendingRestoreByKey.get(key);
+          if (pending) {
+            pending.qty += plainRestoreQty;
+          } else {
+            pendingRestoreByKey.set(key, {
+              productId,
+              variantId,
+              sku: item.sku,
+              qty: plainRestoreQty,
+            });
+          }
         }
       }
 
@@ -589,32 +683,46 @@ export const updateOrderItems = asyncHandler(
         newSubtotal += total;
 
         if (resolvedVariantId && quantity > 0) {
-          const prevStock = await getVariantStock(String(product._id), resolvedVariantId);
-          const decremented = await decrementVariantStock(
-            String(product._id),
-            resolvedVariantId,
-            quantity,
-            { session }
-          );
+          // Net against any old line for this same product/variant that's
+          // pending restoration - the portion that's simply carried forward
+          // unchanged needs no stock movement or ledger entry at all.
+          const key = `${String(product._id)}:${resolvedVariantId}`;
+          const pending = pendingRestoreByKey.get(key);
+          let qtyToDeduct = quantity;
+          if (pending && pending.qty > 0) {
+            const matched = Math.min(pending.qty, qtyToDeduct);
+            pending.qty -= matched;
+            qtyToDeduct -= matched;
+          }
 
-          if (decremented) {
-            await StockLedger.create(
-              [
-                {
-                  product: product._id,
-                  variationId: resolvedVariantId,
-                  sku: resolveLedgerSku(sku, foundVariation?.sku, normalizedSku),
-                  quantity,
-                  type: "OUT",
-                  source: "ORDER_EDIT_DEDUCT",
-                  referenceId: order._id,
-                  previousStock: prevStock,
-                  newStock: Math.max(0, prevStock - quantity),
-                  [stockModifierField]: userId,
-                },
-              ],
+          if (qtyToDeduct > 0) {
+            const prevStock = await getVariantStock(String(product._id), resolvedVariantId);
+            const decremented = await decrementVariantStock(
+              String(product._id),
+              resolvedVariantId,
+              qtyToDeduct,
               { session }
             );
+
+            if (decremented) {
+              await StockLedger.create(
+                [
+                  {
+                    product: product._id,
+                    variationId: resolvedVariantId,
+                    sku: resolveLedgerSku(sku, foundVariation?.sku, normalizedSku),
+                    quantity: qtyToDeduct,
+                    type: "OUT",
+                    source: "ORDER_EDIT_DEDUCT",
+                    referenceId: order._id,
+                    previousStock: prevStock,
+                    newStock: Math.max(0, prevStock - qtyToDeduct),
+                    [stockModifierField]: userId,
+                  },
+                ],
+                { session }
+              );
+            }
           }
         }
 
@@ -643,6 +751,9 @@ export const updateOrderItems = asyncHandler(
             ? itemData.hsnCode.trim()
             : (product as any).hsnCode || "";
 
+        const carryKey = resolvedVariantId ? `${String(product._id)}:${resolvedVariantId}` : "";
+        const carriedReturnedQuantity = carryKey ? returnedQtyByProductVariant.get(carryKey) || 0 : 0;
+
         const newOrderItem = new OrderItem({
           order: order._id,
           product: product._id,
@@ -661,11 +772,44 @@ export const updateOrderItems = asyncHandler(
           status: "Pending",
           warrantyType: itemData.warrantyType || product.warrantyType || "None",
           warrantyDuration: itemData.warrantyDuration || product.warrantyDuration || "",
+          returnedQuantity: carriedReturnedQuantity,
           ...(resolvedVariantId ? { variantId: resolvedVariantId } : {}),
         });
 
         await newOrderItem.save({ session });
         newItemIds.push(newOrderItem._id);
+      }
+
+      // Any pending restore quantity left unmatched is a genuine reduction
+      // (quantity lowered, item removed, or swapped for a different
+      // product/variant) - restore stock and log it for that item only.
+      for (const pending of pendingRestoreByKey.values()) {
+        if (pending.qty <= 0) continue;
+
+        const prevStock = await getVariantStock(pending.productId, pending.variantId);
+        const restored = await incrementVariantStock(pending.productId, pending.variantId, pending.qty, {
+          session,
+        });
+
+        if (restored) {
+          await StockLedger.create(
+            [
+              {
+                product: pending.productId,
+                variationId: pending.variantId,
+                sku: resolveLedgerSku(pending.sku),
+                quantity: pending.qty,
+                type: "IN",
+                source: "ORDER_EDIT_RESTORE",
+                referenceId: order._id,
+                previousStock: prevStock,
+                newStock: prevStock + pending.qty,
+                [stockModifierField]: userId,
+              },
+            ],
+            { session }
+          );
+        }
       }
 
       // 4. Update Order
@@ -757,6 +901,13 @@ export const updateOrderItems = asyncHandler(
       order.amountPaid = paymentResult.amountPaid;
       order.paymentStatus = paymentResult.paymentStatus;
 
+      // Update the bill's return status. A return in this edit that left no
+      // items on the bill means everything has now been returned; otherwise
+      // any return (this edit or a prior one) makes it a partial return.
+      if (historyReturnLines.length > 0) {
+        order.returnStatus = newItemIds.length === 0 ? "Full" : "Partial";
+      }
+
       await order.save({ session });
 
       // Handle Credit Adjustment for New State
@@ -790,6 +941,37 @@ export const updateOrderItems = asyncHandler(
         ]
       });
 
+      // Bill history is an audit trail, not part of the edit's correctness -
+      // log it best-effort after the transaction so a logging hiccup never
+      // blocks the actual edit from succeeding.
+      try {
+        const itemsAfterSnapshot = ((updatedOrder?.items as any[]) || []).map((item: any) => ({
+          product: item.product?._id || item.product,
+          productName: item.productName,
+          sku: item.sku,
+          variation: item.variation,
+          quantity: Number(item.quantity) || 0,
+          unitPrice: Number(item.unitPrice) || 0,
+          total: Number(item.total) || 0,
+        }));
+
+        await OrderHistory.create({
+          order: order._id,
+          ...(userType === "Admin" ? { editedByAdmin: userId } : { editedBySeller: userId }),
+          itemsBefore: itemsBeforeSnapshot,
+          itemsAfter: itemsAfterSnapshot,
+          returns: historyReturnLines,
+          totalsBefore,
+          totalsAfter: {
+            subtotal: Number(updatedOrder?.subtotal) || 0,
+            tax: Number(updatedOrder?.tax) || 0,
+            total: Number(updatedOrder?.total) || 0,
+          },
+        });
+      } catch (historyError) {
+        console.error("Failed to write order history:", historyError);
+      }
+
       return res.status(200).json({
         success: true,
         message: "Order items updated successfully",
@@ -805,6 +987,33 @@ export const updateOrderItems = asyncHandler(
         message: error.message || "Failed to update order items",
       });
     }
+  }
+);
+
+/**
+ * Get the edit/return history for a bill (Order), newest first.
+ */
+export const getOrderHistory = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const order = await Order.findById(id).select("_id");
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    const history = await OrderHistory.find({ order: id })
+      .sort({ createdAt: -1 })
+      .populate("editedByAdmin", "name email")
+      .populate("editedBySeller", "sellerName storeName");
+
+    return res.status(200).json({
+      success: true,
+      data: history,
+    });
   }
 );
 

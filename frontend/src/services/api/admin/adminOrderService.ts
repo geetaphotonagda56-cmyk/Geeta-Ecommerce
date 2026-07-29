@@ -19,6 +19,7 @@ export interface OrderItem {
   status: "Pending" | "Shipped" | "Delivered" | "Cancelled" | "Returned";
   isFreeGift?: boolean;
   freeGiftReason?: string;
+  returnedQuantity?: number;
 }
 
 export interface DeliveryAddress {
@@ -76,8 +77,41 @@ export interface Order {
   cancellationReason?: string;
   cancelledAt?: string;
   cancelledBy?: string | { firstName: string; lastName: string };
+  returnStatus?: "None" | "Partial" | "Full";
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface OrderHistoryLineItem {
+  product?: string;
+  productName: string;
+  sku?: string;
+  variation?: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+export interface OrderHistoryReturnLine {
+  product?: string;
+  productName: string;
+  sku?: string;
+  variation?: string;
+  quantity: number;
+  restocked: boolean;
+}
+
+export interface OrderHistoryEntry {
+  _id: string;
+  order: string;
+  editedByAdmin?: string | { name: string; email: string };
+  editedBySeller?: string | { sellerName: string; storeName: string };
+  itemsBefore: OrderHistoryLineItem[];
+  itemsAfter: OrderHistoryLineItem[];
+  returns: OrderHistoryReturnLine[];
+  totalsBefore: { subtotal: number; tax: number; total: number };
+  totalsAfter: { subtotal: number; tax: number; total: number };
+  createdAt: string;
 }
 
 export interface GetOrdersParams {
@@ -237,6 +271,9 @@ export const updateOrderItems = async (
       warrantyType?: string;
       warrantyDuration?: string;
     }>;
+    // Existing line items (identified by their OrderItem _id) being returned
+    // as part of this edit, and how many units of each.
+    returns?: Array<{ orderItemId: string; quantity: number }>;
     customerId?: string;
     customerName?: string;
     customerPhone?: string;
@@ -247,6 +284,18 @@ export const updateOrderItems = async (
   const response = await api.patch<ApiResponse<Order>>(
     `/admin/orders/${id}/items`,
     data
+  );
+  return response.data;
+};
+
+/**
+ * Get the edit/return history for a bill, newest first.
+ */
+export const getOrderHistory = async (
+  id: string
+): Promise<ApiResponse<OrderHistoryEntry[]>> => {
+  const response = await api.get<ApiResponse<OrderHistoryEntry[]>>(
+    `/admin/orders/${id}/history`
   );
   return response.data;
 };

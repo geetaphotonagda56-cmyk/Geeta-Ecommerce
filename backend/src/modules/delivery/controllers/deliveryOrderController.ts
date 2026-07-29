@@ -194,27 +194,21 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
     // Save previous status before updating
     const previousStatus = order.status;
 
+    // Normalize client-sent status casing/spacing so "Picked up", "picked up"
+    // and "Picked Up" all map to the one canonical enum value.
+    const normalizedStatus = typeof status === 'string' && status.trim().toLowerCase() === 'picked up'
+        ? 'Picked Up'
+        : status;
+
     // Status transition logic
-    if (status) order.status = status;
+    if (normalizedStatus) order.status = normalizedStatus;
 
-    if (status === 'Picked up' || status === 'Out for Delivery') {
+    if (normalizedStatus === 'Picked Up' || normalizedStatus === 'Out for Delivery') {
         order.deliveryBoyStatus = 'Picked Up';
-    } else if (status === 'Delivered') {
-        order.deliveryBoyStatus = 'Delivered';
-        order.deliveredAt = new Date();
-        order.paymentStatus = 'Paid'; // Assume paid on delivery (or already paid)
-
-        // CASH COLLECTION LOGIC
-        if (order.paymentMethod === 'COD') {
-            await Delivery.findByIdAndUpdate(deliveryId, {
-                $inc: { cashCollected: order.total }
-            });
-        }
-
-        // COMMISSION LOGIC (Fixed mock amount for now, should be dynamic in future)
-        const COMMISSION = 40;
-        await Delivery.findByIdAndUpdate(deliveryId, {
-            $inc: { balance: COMMISSION }
+    } else if (normalizedStatus === 'Delivered') {
+        return res.status(400).json({
+            success: false,
+            message: "Delivery must be completed by scanning the bill QR code, not by direct status update.",
         });
     }
 
@@ -223,7 +217,7 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
     // Emit socket events for status changes
     const io = (req.app as any).get("io");
     if (io) {
-        if (status === 'Picked up' && previousStatus !== 'Picked up') {
+        if (normalizedStatus === 'Picked Up' && previousStatus !== 'Picked Up') {
             // Emit order-taken event
             io.to(`order-${id}`).emit('order-taken', {
                 orderId: id,
@@ -231,31 +225,95 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
             });
         }
 
-        if (status === 'Delivered' && previousStatus !== 'Delivered') {
-            // Emit order-delivered event to all relevant parties
-            io.to(`order-${id}`).emit('order-delivered', {
-                orderId: id,
-                orderNumber: order.orderNumber,
-                message: 'Order has been delivered successfully',
-            });
-
-            // Also emit to delivery boy room
-            io.to(`delivery-${deliveryId}`).emit('order-delivered', {
-                orderId: id,
-                orderNumber: order.orderNumber,
-                message: 'Order delivered successfully',
-            });
-        }
-
         // Trigger notification to sellers for payment status change or specific transitions
-        if (order.paymentStatus === 'Paid' || status === 'Delivered') {
+        if (order.paymentStatus === 'Paid') {
             notifySellersOfOrderUpdate(io, order, 'STATUS_UPDATE');
         }
     }
 
     return res.status(200).json({
         success: true,
-        message: `Order status updated to ${status}`,
+        message: `Order status updated to ${normalizedStatus}`,
+        data: order
+    });
+});
+
+/**
+ * Complete Delivery by Scanning the Bill QR Code
+ * This is the ONLY way an order can be marked Delivered - see updateOrderStatus,
+ * which rejects direct 'Delivered' transitions.
+ */
+export const completeDeliveryByScan = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { scannedText } = req.body;
+    const deliveryId = req.user?.userId;
+
+    if (!scannedText || typeof scannedText !== 'string') {
+        return res.status(400).json({ success: false, message: "Scanned QR text is required" });
+    }
+
+    const order = await Order.findById(id);
+    if (!order) {
+        return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    if (order.deliveryBoy?.toString() !== deliveryId) {
+        return res.status(403).json({ success: false, message: "This order is not assigned to you" });
+    }
+
+    if (order.status === 'Delivered') {
+        return res.status(400).json({ success: false, message: "Order is already delivered" });
+    }
+
+    const expectedPayload = `${order._id.toString()}:${order.deliveryQrToken}`;
+    if (scannedText.trim() !== expectedPayload) {
+        return res.status(400).json({ success: false, message: "This QR code does not match this order's bill" });
+    }
+
+    const previousStatus = order.status;
+
+    order.status = 'Delivered';
+    order.deliveryBoyStatus = 'Delivered';
+    order.deliveredAt = new Date();
+    order.paymentStatus = 'Paid';
+    await order.save();
+
+    await DeliveryAssignment.findOneAndUpdate(
+        { order: id },
+        { status: 'Delivered', deliveredAt: new Date() }
+    );
+
+    // CASH COLLECTION LOGIC
+    if (order.paymentMethod === 'COD') {
+        await Delivery.findByIdAndUpdate(deliveryId, {
+            $inc: { cashCollected: order.total }
+        });
+    }
+
+    // COMMISSION LOGIC (Fixed mock amount for now, should be dynamic in future)
+    const COMMISSION = 40;
+    await Delivery.findByIdAndUpdate(deliveryId, {
+        $inc: { balance: COMMISSION }
+    });
+
+    const io = (req.app as any).get("io");
+    if (io && previousStatus !== 'Delivered') {
+        io.to(`order-${id}`).emit('order-delivered', {
+            orderId: id,
+            orderNumber: order.orderNumber,
+            message: 'Order has been delivered successfully',
+        });
+        io.to(`delivery-${deliveryId}`).emit('order-delivered', {
+            orderId: id,
+            orderNumber: order.orderNumber,
+            message: 'Order delivered successfully',
+        });
+        notifySellersOfOrderUpdate(io, order, 'STATUS_UPDATE');
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: "Delivery confirmed - order marked as Delivered",
         data: order
     });
 });
@@ -357,7 +415,7 @@ export const sendDeliveryOtp = asyncHandler(async (req: Request, res: Response) 
         return res.status(400).json({ success: false, message: "Order is already delivered" });
     }
 
-    if (order.status !== 'Picked up' && order.status !== 'Out for Delivery') {
+    if (order.status !== 'Picked Up' && order.status !== 'Out for Delivery') {
         return res.status(400).json({ success: false, message: "Order must be picked up before sending delivery OTP" });
     }
 

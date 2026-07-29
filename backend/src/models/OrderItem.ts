@@ -30,6 +30,9 @@ export interface IOrderItem extends Document {
   // Status
   status: "Pending" | "Shipped" | "Delivered" | "Cancelled" | "Returned";
 
+  // Cumulative units of this line item returned across bill edits
+  returnedQuantity?: number;
+
   // Warranty (snapshot at time of order)
   warrantyType?: "None" | "Warranty" | "Guarantee";
   warrantyDuration?: string;
@@ -124,6 +127,11 @@ const OrderItemSchema = new Schema<IOrderItem>(
       type: String,
       enum: ["Pending", "Shipped", "Delivered", "Cancelled", "Returned"],
       default: "Pending",
+    },
+    returnedQuantity: {
+      type: Number,
+      min: [0, "Returned quantity cannot be negative"],
+      default: 0,
     },
     // Warranty
     warrantyType: {

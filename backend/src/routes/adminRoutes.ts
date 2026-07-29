@@ -99,6 +99,7 @@ router.delete("/staff/:id", requireUserType("Admin", "Seller"), staffController.
 
 // Order Edit (POS) - Accessible to both Admin and Seller
 router.patch("/orders/:id/items", requireUserType("Admin", "Seller"), orderController.updateOrderItems);
+router.get("/orders/:id/history", requireUserType("Admin", "Seller"), orderController.getOrderHistory);
 
 router.use(requireUserType("Admin"));
 
@@ -191,6 +192,7 @@ router.get("/inventory/payment-report", inventoryController.getPaymentReport);
 router.get("/inventory/sales-summary-report", inventoryController.getSalesSummaryReport);
 router.get("/inventory/return-exchange-report", inventoryController.getReturnExchangeReport);
 router.get("/inventory/stock-sales-summary", inventoryController.getStockSalesSummary);
+router.get("/inventory/stock-sales-summary/export", inventoryController.exportStockSalesSummary);
 router.get("/inventory/due-summary", inventoryController.getDueSummaryReport);
 router.post("/inventory/loss", inventoryController.createLossRecord);
 router.delete("/inventory/loss/:id", inventoryController.deleteLossRecord);

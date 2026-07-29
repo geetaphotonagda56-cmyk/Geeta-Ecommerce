@@ -79,6 +79,15 @@ export const updateOrderStatus = async (id: string, status: string) => {
     }
 };
 
+export const completeDeliveryByScan = async (id: string, scannedText: string) => {
+    try {
+        const response = await api.post(`${BASE_URL}/orders/${id}/complete-scan`, { scannedText });
+        return response.data;
+    } catch (error) {
+        throw handleApiError(error);
+    }
+};
+
 export const getSellerLocationsForOrder = async (id: string) => {
     try {
         const response = await api.get(`${BASE_URL}/orders/${id}/seller-locations`);

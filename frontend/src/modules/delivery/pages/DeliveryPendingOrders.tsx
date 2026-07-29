@@ -33,7 +33,7 @@ export default function DeliveryPendingOrders() {
         return 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]';
       case 'Pending':
         return 'bg-orange-100 text-orange-700';
-      case 'Picked up':
+      case 'Picked Up':
         return 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]';
       default:
         return 'bg-neutral-100 text-neutral-700';

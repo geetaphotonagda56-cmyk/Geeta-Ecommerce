@@ -68,10 +68,6 @@ export default function SignUp() {
         } catch (otpErr: any) {
           setError(otpErr.response?.data?.message || 'Registration successful but failed to setup call.');
         }
-
-        if (response.data?.token) {
-          requestNotificationPermission('customer', response.data.token);
-        }
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');

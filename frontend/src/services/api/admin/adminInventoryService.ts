@@ -271,10 +271,17 @@ export interface StockSalesData {
   gst: string;
   category: string;
   unitsSold: number;
+  mrp: number;
   purchasePrice: number;
+  purchaseValue: number;
   sellingPrice: number;
+  saleValue: number;
   totalSellingPrice: number;
+  commissionPercent: number;
+  commissionAmount: number;
   profit: number;
+  netProfit: number;
+  profitMarginPercent: number;
   salesman: string;
 }
 
@@ -283,6 +290,18 @@ export interface StockSalesData {
  */
 export const getStockSalesSummary = async (params?: GetStockSummaryParams): Promise<ApiResponse<StockSalesData[]>> => {
   const response = await api.get<ApiResponse<StockSalesData[]>>("/admin/inventory/stock-sales-summary", { params });
+  return response.data;
+};
+
+/**
+ * Export the full stock sales summary (all matching rows, not just the
+ * current page) as a CSV file with the complete profit/GST/commission breakdown.
+ */
+export const exportStockSalesSummaryCsv = async (params?: GetStockSummaryParams): Promise<Blob> => {
+  const response = await api.get("/admin/inventory/stock-sales-summary/export", {
+    params,
+    responseType: "blob",
+  });
   return response.data;
 };
 

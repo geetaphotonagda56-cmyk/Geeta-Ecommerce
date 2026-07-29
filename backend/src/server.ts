@@ -17,6 +17,7 @@ import { notFound } from "./middleware/notFound";
 import { ensureDefaultAdmin } from "./utils/ensureDefaultAdmin";
 import { seedHeaderCategories } from "./utils/seedHeaderCategories";
 import { initializeSocket } from "./socket/socketService";
+import { startDeliveryEscalationScheduler } from "./services/deliveryEscalationScheduler";
 import ThemeSettings from "./models/ThemeSettings";
 
 // Load environment variables
@@ -128,6 +129,7 @@ app.use(express.urlencoded({ extended: true }));
 // Initialize Socket.io
 const io = initializeSocket(httpServer);
 app.set("io", io);
+startDeliveryEscalationScheduler(io);
 
 // Routes
 app.get("/", (_req: Request, res: Response) => {

@@ -12,6 +12,7 @@ import { useToast } from '../../../context/ToastContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
+import { generateBillQrDataUrl } from "../../../utils/generateBillQrCode";
 import { Html5QrcodeSupportedFormats } from "html5-qrcode";
 import QRScannerModal from '../../../components/QRScannerModal';
 import { openBarcodeScanner } from '../../../utils/scannerPlatform';
@@ -59,6 +60,10 @@ export interface CartItem extends Product {
   // Tax (GST) per line
   hsnCode?: string;
   gst?: number; // percentage, e.g. 5
+  // Present only when this line was loaded from an existing bill for editing -
+  // used to detect quantity reductions/removals that are walk-in returns.
+  orderItemId?: string;
+  originalQty?: number;
 }
 
 interface Seller {
@@ -583,6 +588,8 @@ const AdminPOSOrders = () => {
                (item as any).hsnCode || item.product?.hsnCode || '';
              return normalizePosCartItem({
                _id: resolvedProductId || item._id,
+               orderItemId: item._id,
+               originalQty: item.quantity,
                productName: item.productName || item.product?.productName || item.product || 'Unknown Product',
                // If we have custom unitPrice, use it as customPrice
                price: unitPrice,
@@ -731,8 +738,9 @@ const AdminPOSOrders = () => {
 
   // Success/Print Modal
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [returnConfirmCandidates, setReturnConfirmCandidates] = useState<Array<{ orderItemId: string; productName: string; reducedQty: number }> | null>(null);
   const [showModalBreakdown, setShowModalBreakdown] = useState(false);
-  const [lastBillDetails, setLastBillDetails] = useState<{total: number, invoiceNum: string, date: string, time: string, cart: CartItem[], isPaid: boolean, isQuotation?: boolean, quotationEntry?: PurchaseEntryRecord, paymentMethod?: string, isEdit?: boolean, orderId?: string, customerName?: string, customerPhone?: string, subtotal?: number, discountAmount?: number, deliveryCharge?: number, salesPersonName?: string, isPartialPayment?: boolean, amountPaid?: number} | null>(null);
+  const [lastBillDetails, setLastBillDetails] = useState<{total: number, invoiceNum: string, date: string, time: string, cart: CartItem[], isPaid: boolean, isQuotation?: boolean, quotationEntry?: PurchaseEntryRecord, paymentMethod?: string, isEdit?: boolean, orderId?: string, deliveryQrToken?: string, customerName?: string, customerPhone?: string, subtotal?: number, discountAmount?: number, deliveryCharge?: number, salesPersonName?: string, isPartialPayment?: boolean, amountPaid?: number} | null>(null);
 
   const captureBillCustomerFields = () => ({
     customerName: selectedCustomer?.name || customerSearch?.trim() || 'Walk-in Customer',
@@ -3037,7 +3045,7 @@ const AdminPOSOrders = () => {
    * PDF Generation (Kept for 'Share' or background use)
    * Renamed from handleGenerateBill to downloadPDF
    */
-   const downloadPDF = () => {
+   const downloadPDF = async () => {
     const billPdf = readAdminPosBillSettings() ?? posBillSettings;
     if (lastBillDetails?.isQuotation && lastBillDetails.quotationEntry) {
       const entry = lastBillDetails.quotationEntry;
@@ -3430,6 +3438,17 @@ const AdminPOSOrders = () => {
         }
     }
 
+    // Delivery-completion QR code - the delivery boy scans this at drop-off
+    // to mark the order Delivered (see completeDeliveryByScan on the backend).
+    if (lastBillDetails?.orderId && lastBillDetails?.deliveryQrToken) {
+        const qrDataUrl = await generateBillQrDataUrl(lastBillDetails.orderId, lastBillDetails.deliveryQrToken);
+        const pageHeight = doc.internal.pageSize.getHeight();
+        doc.addImage(qrDataUrl, "PNG", 160, pageHeight - 40, 30, 30);
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "normal");
+        doc.text("Scan at delivery to confirm receipt", 145, pageHeight - 8);
+    }
+
     doc.save(`Invoice_${invoiceNum}.pdf`);
   };
 
@@ -3444,12 +3463,14 @@ const AdminPOSOrders = () => {
     const currentCharges = posCharges;
     let isPaid = false;
     let createdOrderId: string | undefined;
+    let createdDeliveryQrToken: string | undefined;
 
     if (paymentMethod === 'Cash') {
        const result = await performCashCheckout();
        if (!result.success) return;
        isPaid = true;
        createdOrderId = result.orderId;
+       createdDeliveryQrToken = result.deliveryQrToken;
     }
 
     // Set bill details for display and printing
@@ -3462,6 +3483,7 @@ const AdminPOSOrders = () => {
         isPaid: isPaid,
         paymentMethod: paymentMethod,
         orderId: createdOrderId,
+        deliveryQrToken: createdDeliveryQrToken,
         ...captureBillCustomerFields(),
         ...(hasActiveCharges(currentCharges)
           ? {
@@ -3631,7 +3653,7 @@ const AdminPOSOrders = () => {
       }
   };
 
-  const performCashCheckout = async (): Promise<{ success: boolean; orderId?: string }> => {
+  const performCashCheckout = async (): Promise<{ success: boolean; orderId?: string; deliveryQrToken?: string }> => {
     if (loading) return { success: false };
     if (activeBillId.startsWith('edit_')) {
         showToast("Cannot create a new bill from an edit session. Please use Update.", "error");
@@ -3687,7 +3709,11 @@ const AdminPOSOrders = () => {
             showToast("Order placed successfully!", "success");
             setCart([]);
             setPosCharges(DEFAULT_POS_CHARGES);
-            return { success: true, orderId: response?.data?._id || (response?.data as any)?.id };
+            return {
+                success: true,
+                orderId: response?.data?._id || (response?.data as any)?.id,
+                deliveryQrToken: (response?.data as any)?.deliveryQrToken,
+            };
         } else {
             showToast("Failed to place order", "error");
             return { success: false };
@@ -3780,6 +3806,50 @@ const AdminPOSOrders = () => {
       if (loading) return;
       const targetEditId = activeBillId.startsWith('edit_') ? activeBillId.replace('edit_', '') : editOrderId;
       if (!targetEditId) return;
+
+      // Detect walk-in returns: any line whose quantity dropped (or was
+      // removed entirely) compared to what the bill originally had when
+      // this edit started.
+      const originalQtyByOrderItemId = new Map<string, number>();
+      const productNameByOrderItemId = new Map<string, string>();
+      const currentQtyByOrderItemId = new Map<string, number>();
+      cart.forEach(item => {
+          if (item.orderItemId && typeof item.originalQty === 'number') {
+              originalQtyByOrderItemId.set(item.orderItemId, item.originalQty);
+              productNameByOrderItemId.set(item.orderItemId, item.productName);
+          }
+      });
+      cart.forEach(item => {
+          if (item.orderItemId) {
+              currentQtyByOrderItemId.set(
+                  item.orderItemId,
+                  (currentQtyByOrderItemId.get(item.orderItemId) || 0) + item.qty
+              );
+          }
+      });
+      const returnCandidates: Array<{ orderItemId: string; productName: string; reducedQty: number }> = [];
+      originalQtyByOrderItemId.forEach((originalQty, orderItemId) => {
+          const reducedQty = originalQty - (currentQtyByOrderItemId.get(orderItemId) || 0);
+          if (reducedQty > 0) {
+              returnCandidates.push({
+                  orderItemId,
+                  productName: productNameByOrderItemId.get(orderItemId) || 'Item',
+                  reducedQty,
+              });
+          }
+      });
+
+      if (returnCandidates.length > 0) {
+          setReturnConfirmCandidates(returnCandidates);
+          return;
+      }
+
+      await finalizeUpdateOrder([]);
+  };
+
+  const finalizeUpdateOrder = async (returns: Array<{ orderItemId: string; quantity: number }>) => {
+      const targetEditId = activeBillId.startsWith('edit_') ? activeBillId.replace('edit_', '') : editOrderId;
+      if (!targetEditId) return;
       setLoading(true);
       try {
           const items = cart.map(item => {
@@ -3809,6 +3879,7 @@ const AdminPOSOrders = () => {
 
           const res = await updateOrderItems(targetEditId, {
               items,
+              returns,
               customerId: selectedCustomer ? selectedCustomer._id : "walk-in-customer",
               customerName: selectedCustomer ? selectedCustomer.name : (customerSearch || "Walk-in Customer"),
               customerPhone: selectedCustomer ? selectedCustomer.phone : "0000000000",
@@ -3853,6 +3924,7 @@ const AdminPOSOrders = () => {
                   isPaid: res.data?.paymentStatus === 'Paid' || true, // Updates usually imply paid or credit handled
                   isEdit: true,
                   orderId: targetEditId,
+                  deliveryQrToken: (res.data as any)?.deliveryQrToken,
                   ...captureBillCustomerFields(),
               });
 
@@ -6152,6 +6224,57 @@ const AdminPOSOrders = () => {
             </div>
         </div>
       )}
+      {/* --- RETURN CONFIRM MODAL --- */}
+      {returnConfirmCandidates && (
+        <div className="fixed inset-0 bg-black/60 z-[110] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-5 pt-5 pb-3">
+              <h3 className="text-base font-bold text-slate-800">Mark as Return?</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                The following item(s) have reduced quantity or were removed from this bill:
+              </p>
+            </div>
+            <div className="px-5 max-h-48 overflow-y-auto">
+              <ul className="space-y-1.5">
+                {returnConfirmCandidates.map((c) => (
+                  <li key={c.orderItemId} className="flex justify-between text-sm bg-gray-50 rounded-lg px-3 py-2">
+                    <span className="text-slate-700 truncate pr-2">{c.productName}</span>
+                    <span className="font-bold text-slate-800 whitespace-nowrap">-{c.reducedQty}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <button
+                onClick={() => {
+                  const returns = returnConfirmCandidates.map(c => ({ orderItemId: c.orderItemId, quantity: c.reducedQty }));
+                  setReturnConfirmCandidates(null);
+                  finalizeUpdateOrder(returns);
+                }}
+                className="w-full bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white font-bold py-2.5 rounded-xl text-sm"
+              >
+                Yes, Mark as Return
+              </button>
+              <button
+                onClick={() => {
+                  setReturnConfirmCandidates(null);
+                  finalizeUpdateOrder([]);
+                }}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-slate-700 font-semibold py-2.5 rounded-xl text-sm"
+              >
+                No, Just Save Edit
+              </button>
+              <button
+                onClick={() => setReturnConfirmCandidates(null)}
+                className="w-full text-gray-400 hover:text-gray-600 text-xs py-1"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- SUCCESS / PRINT MODAL --- */}
       {showSuccessModal && lastBillDetails && (
         <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm print:hidden">

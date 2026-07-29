@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getOrderDetails, updateOrderStatus, getSellerLocationsForOrder, sendDeliveryOtp, verifyDeliveryOtp, updateDeliveryLocation } from '../../../services/api/delivery/deliveryService';
+import { getOrderDetails, updateOrderStatus, completeDeliveryByScan, getSellerLocationsForOrder, sendDeliveryOtp, verifyDeliveryOtp, updateDeliveryLocation } from '../../../services/api/delivery/deliveryService';
 import deliveryIcon from '@assets/deliveryboy/deliveryIcon.png';
 import GoogleMapsTracking from '../../../components/GoogleMapsTracking';
 import QRScannerModal from '../../../components/QRScannerModal';
@@ -87,7 +87,7 @@ const Icons = {
     )
 };
 
-type DeliveryOrderStatus = 'Pending' | 'Ready for pickup' | 'Picked up' | 'Out for Delivery' | 'Delivered' | 'Cancelled' | 'Returned';
+type DeliveryOrderStatus = 'Pending' | 'Ready for pickup' | 'Picked Up' | 'Out for Delivery' | 'Delivered' | 'Cancelled' | 'Returned';
 
 export default function DeliveryOrderDetail() {
     const { id } = useParams();
@@ -129,7 +129,7 @@ export default function DeliveryOrderDetail() {
         const fetchSellerLocations = async () => {
             if (!id || !order) return;
             // Only fetch if order has delivery boy assigned and status is before "Picked up"
-            if (order.status && order.status !== 'Picked up' && order.status !== 'Delivered') {
+            if (order.status && order.status !== 'Picked Up' && order.status !== 'Delivered') {
                 try {
                     const locations = await getSellerLocationsForOrder(id);
                     setSellerLocations(locations || []);
@@ -152,23 +152,40 @@ export default function DeliveryOrderDetail() {
 
     const handleScanSuccess = async (decodedText: string) => {
         setShowScanner(false);
-        if (!order) return;
+        if (!order || !id) return;
 
-        // Check if scanned text matches Order ID or MongoDB ID
-        if (decodedText === order.orderId || decodedText === order._id) {
-            // If order is Out for Delivery, we can mark it as Delivered directly via scan
-            if (order.status === 'Out for Delivery') {
-                const confirmDelivery = window.confirm(`Order verified! Mark as Delivered?`);
-                if (confirmDelivery) {
-                     await handleStatusChange('Delivered');
+        if (order.status === 'Out for Delivery' || order.status === 'Picked Up') {
+            // Delivery-completion scan - the printed bill QR encodes
+            // "<orderId>:<deliveryQrToken>". The backend (not this client)
+            // verifies the token matches this order and that it's assigned
+            // to this delivery boy, so no client-side id check is needed
+            // here - a mismatched/foreign QR simply gets rejected below.
+            try {
+                const result = await completeDeliveryByScan(id, decodedText);
+                if (result.success) {
+                    alert(result.message || 'Delivery confirmed!');
+                    await fetchOrder();
+                } else {
+                    alert(result.message || 'Could not confirm delivery');
                 }
-            } else if (order.status === 'Ready for pickup') {
-                 await handleStatusChange('Picked up');
-            } else {
-                 alert(`Scanned Order: ${decodedText}. Current Order: ${order.orderId}`);
+            } catch (err: any) {
+                alert(err.message || 'Failed to confirm delivery');
             }
-        } else {
+            return;
+        }
+
+        // Legacy pre-pickup scan: matches against the order number shown to
+        // the delivery boy (order.orderId here is the human-readable
+        // orderNumber, not the Mongo _id).
+        if (decodedText !== order.orderId) {
             alert("Invalid QR Code! This code does not match the current order.");
+            return;
+        }
+
+        if (order.status === 'Ready for pickup') {
+             await handleStatusChange('Picked Up');
+        } else {
+             alert(`Scanned Order: ${decodedText}. Current Order: ${order.orderId}`);
         }
     };
 
@@ -419,7 +436,7 @@ export default function DeliveryOrderDetail() {
         );
     }
 
-    const statusFlow: DeliveryOrderStatus[] = ['Pending', 'Ready for pickup', 'Picked up', 'Out for Delivery', 'Delivered'];
+    const statusFlow: DeliveryOrderStatus[] = ['Pending', 'Ready for pickup', 'Picked Up', 'Out for Delivery', 'Delivered'];
 
     let currentStatusIndex = statusFlow.indexOf(order.status as DeliveryOrderStatus);
     // Handle cases where status might not be in the flow (e.g. Cancelled)
@@ -454,9 +471,9 @@ export default function DeliveryOrderDetail() {
     };
 
     const nextStatus = getNextStatus();
-    const isMapVisible = order.status === 'Picked up' || (sellerLocations.length > 0 && order.status !== 'Delivered');
-    const showSellerLocations = sellerLocations.length > 0 && order.status !== 'Picked up' && order.status !== 'Delivered';
-    const showCustomerLocation = order.status === 'Picked up';
+    const isMapVisible = order.status === 'Picked Up' || (sellerLocations.length > 0 && order.status !== 'Delivered');
+    const showSellerLocations = sellerLocations.length > 0 && order.status !== 'Picked Up' && order.status !== 'Delivered';
+    const showCustomerLocation = order.status === 'Picked Up';
 
     return (
         <div className="min-h-screen bg-neutral-50 pb-32 relative">
@@ -473,7 +490,7 @@ export default function DeliveryOrderDetail() {
 
                 <div className="ml-auto">
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${order.status === 'Delivered' ? 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]' :
-                        order.status === 'Picked up' ? 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]' :
+                        order.status === 'Picked Up' ? 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]' :
                             order.status === 'Ready for pickup' ? 'bg-yellow-100 text-yellow-700' :
                                 'bg-orange-100 text-orange-700'
                         }`}>
@@ -508,13 +525,13 @@ export default function DeliveryOrderDetail() {
                     deliveryLocation={deliveryBoyLocation || undefined}
                     isTracking={!!deliveryBoyLocation}
                     showRoute={!!deliveryBoyLocation && (
-                        order.status === 'Picked up' ||
+                        order.status === 'Picked Up' ||
                         order.status === 'Out for Delivery' ||
                         (sellerLocations.length > 0 && order.status !== 'Delivered')
                     )}
                     routeOrigin={deliveryBoyLocation || undefined}
                     routeDestination={
-                        order.status === 'Picked up' || order.status === 'Out for Delivery'
+                        order.status === 'Picked Up' || order.status === 'Out for Delivery'
                             ? {
                                 lat: order.deliveryAddress?.latitude || order.address?.latitude || 0,
                                 lng: order.deliveryAddress?.longitude || order.address?.longitude || 0
@@ -524,14 +541,14 @@ export default function DeliveryOrderDetail() {
                                 : undefined
                     }
                     routeWaypoints={
-                        order.status === 'Picked up' || order.status === 'Out for Delivery'
+                        order.status === 'Picked Up' || order.status === 'Out for Delivery'
                             ? []
                             : sellerLocations.length > 1
                                 ? sellerLocations.slice(0, -1).map(s => ({ lat: s.latitude, lng: s.longitude }))
                                 : []
                     }
                     destinationName={
-                        order.status === 'Picked up' || order.status === 'Out for Delivery'
+                        order.status === 'Picked Up' || order.status === 'Out for Delivery'
                             ? order.address?.split(',')[0]
                             : sellerLocations.length > 0
                                 ? sellerLocations[0].storeName
@@ -716,16 +733,25 @@ export default function DeliveryOrderDetail() {
 
             </div>
 
-            {/* OTP Section (when order is Picked up) */}
-            {order.status === 'Picked up' && !showOtpInput && (
-                <div className="fixed bottom-24 left-6 right-6 z-30">
+            {/* Delivery-completion actions (when order is Picked Up): scanning the
+                printed bill QR is the primary path; OTP remains as a fallback
+                for orders that never had a bill printed (e.g. customer-app
+                orders placed outside POS). */}
+            {order.status === 'Picked Up' && !showOtpInput && (
+                <div className="fixed bottom-24 left-6 right-6 z-30 flex flex-col gap-2">
+                    <button
+                        onClick={() => openBarcodeScanner(() => setShowScanner(true))}
+                        className="w-full py-4 rounded-2xl bg-[var(--primary-dark)] backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
+                    >
+                        <span className="relative z-10">Scan Bill to Complete Delivery</span>
+                        <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
+                    </button>
                     <button
                         onClick={handleSendOtp}
-                        className="w-full py-4 rounded-2xl bg-[var(--primary-dark)] backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
+                        className="w-full py-3 rounded-2xl bg-neutral-800/80 backdrop-blur-md border border-white/10 text-white/90 font-semibold transition-transform active:scale-[0.98]"
                         disabled={otpSending}
                     >
-                        <span className="relative z-10">{otpSending ? 'Sending OTP...' : 'Send Delivery OTP'}</span>
-                        <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
+                        {otpSending ? 'Sending OTP...' : 'No bill printed? Send Delivery OTP instead'}
                     </button>
                 </div>
             )}
@@ -764,7 +790,7 @@ export default function DeliveryOrderDetail() {
             )}
 
             {/* Floating Glassmorphic Action Button Dock - Order Taken button or status update */}
-            {nextStatus && order.status !== 'Picked up' && !showOtpInput && (
+            {nextStatus && order.status !== 'Picked Up' && !showOtpInput && (
                 <div className="fixed bottom-24 left-6 right-6 z-30 flex gap-3">
                     {/* Scan Button (Visible when Out for Delivery or Ready for Pickup) */}
                    {(order.status === 'Out for Delivery' || order.status === 'Ready for pickup') && (
@@ -783,19 +809,25 @@ export default function DeliveryOrderDetail() {
                         </button>
                    )}
 
-                    <button
-                        onClick={() => handleStatusChange(nextStatus)}
-                        className="flex-1 py-4 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
-                        disabled={loading}
-                    >
-                        <span className="relative z-10">
-                            {loading ? 'Updating...' : nextStatus === 'Picked up' ? 'Order Taken' : `Mark as ${nextStatus}`}
-                        </span>
-                        {!loading && <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center relative z-10 group-hover:bg-white/30 transition-colors">
-                            <Icons.ChevronLeft className="rotate-180" size={18} />
-                        </div>}
-                        <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
-                    </button>
+                    {nextStatus === 'Delivered' ? (
+                        <div className="flex-1 py-4 rounded-2xl bg-black/60 backdrop-blur-md border border-white/20 text-white/90 text-sm font-semibold flex items-center justify-center text-center px-4">
+                            Scan the bill QR code to complete delivery
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => handleStatusChange(nextStatus)}
+                            className="flex-1 py-4 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
+                            disabled={loading}
+                        >
+                            <span className="relative z-10">
+                                {loading ? 'Updating...' : nextStatus === 'Picked Up' ? 'Order Taken' : `Mark as ${nextStatus}`}
+                            </span>
+                            {!loading && <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center relative z-10 group-hover:bg-white/30 transition-colors">
+                                <Icons.ChevronLeft className="rotate-180" size={18} />
+                            </div>}
+                            <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
+                        </button>
+                    )}
                 </div>
             )}
 

@@ -35,7 +35,6 @@ export interface RegisterResponse {
   success: boolean;
   message: string;
   data: {
-    token: string;
     user: {
       id: string;
       name: string;
@@ -83,23 +82,8 @@ export const verifyOTP = async (mobile: string, otp: string, sessionId?: string)
  */
 export const register = async (data: RegisterData): Promise<RegisterResponse> => {
   const response = await api.post<RegisterResponse>('/auth/customer/register', data);
-
-  // Note: Registration typically logs user in automatically in original implementation,
-  // but SignUp.tsx flow suggests OTP is required AFTER register?
-  // Actually original SignUp.tsx: calls register(), then sendOTP(), then verifyOTP().
-  // If register returns token, we might set it, but then verifyOTP overwrites it?
-
-  if (response.data.success && response.data.data.token) {
-    const module = detectModuleFromPath();
-    setAuthToken(response.data.data.token);
-    // Add userType to user data for proper identification
-    const userData = {
-      ...response.data.data.user,
-      userType: 'Customer'
-    };
-    setModuleUserData(userData, module);
-  }
-
+  // Registration does not log the user in - the account isn't OTP-verified yet.
+  // The token is only issued by verifyOTP once the OTP step completes.
   return response.data;
 };
 

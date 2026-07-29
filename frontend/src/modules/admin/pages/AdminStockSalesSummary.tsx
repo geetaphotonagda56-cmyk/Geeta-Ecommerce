@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { getStockSalesSummary, StockSalesData } from "../../../services/api/admin/adminInventoryService";
+import { getStockSalesSummary, exportStockSalesSummaryCsv, StockSalesData } from "../../../services/api/admin/adminInventoryService";
 import { getCategories } from "../../../services/api/categoryService";
 import { toast } from "react-hot-toast";
 
@@ -198,6 +198,47 @@ const AdminStockSalesSummary = () => {
     doc.save(`Stock_Sales_Summary_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
+  const downloadFullReportCsv = async () => {
+    try {
+      const params: any = {
+        search: debouncedSearchTerm || undefined,
+        category: categoryFilter || undefined,
+      };
+      const now = new Date();
+      if (dateFilterType === 'today') {
+        params.dateFrom = new Date(now.setHours(0, 0, 0, 0)).toISOString();
+        params.dateTo = new Date(now.setHours(23, 59, 59, 999)).toISOString();
+      } else if (dateFilterType === 'tomorrow') {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        params.dateFrom = new Date(tomorrow.setHours(0, 0, 0, 0)).toISOString();
+        params.dateTo = new Date(tomorrow.setHours(23, 59, 59, 999)).toISOString();
+      } else if (dateFilterType === 'last7days') {
+        const d = new Date();
+        d.setDate(d.getDate() - 7);
+        params.dateFrom = d.toISOString();
+      } else if (dateFilterType === 'last30days') {
+        const d = new Date();
+        d.setDate(d.getDate() - 30);
+        params.dateFrom = d.toISOString();
+      } else if (dateFilterType === 'custom' && customDateRange.start && customDateRange.end) {
+        params.dateFrom = new Date(customDateRange.start).toISOString();
+        params.dateTo = new Date(new Date(customDateRange.end).setHours(23, 59, 59, 999)).toISOString();
+      }
+
+      const blob = await exportStockSalesSummaryCsv(params);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Stock_Sales_Summary_Full_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error exporting full sales report:", error);
+      toast.error("Failed to export sales report");
+    }
+  };
+
   // Stats calculation (Client-side matching displayed page data, for simplicity now)
   const totalRevenue = data.reduce((sum, item) => sum + item.totalSellingPrice, 0);
   const totalProfit = data.reduce((sum, item) => sum + item.profit, 0);
@@ -247,6 +288,13 @@ const AdminStockSalesSummary = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
               </svg>
               PDF
+            </button>
+
+            <button
+              onClick={downloadFullReportCsv}
+              className="px-4 py-2 bg-[var(--primary-dark)] text-white rounded-xl font-semibold hover:bg-[var(--primary-darker)] transition-colors"
+            >
+              Export Full Report (CSV)
             </button>
           </div>
         </div>

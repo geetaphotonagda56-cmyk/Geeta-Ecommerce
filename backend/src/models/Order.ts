@@ -1,5 +1,6 @@
 
 import mongoose, { Document, Schema } from "mongoose";
+import crypto from "crypto";
 
 export interface IOrder extends Document {
   // Order Info
@@ -61,6 +62,7 @@ export interface IOrder extends Document {
   | "Received"
   | "Pending"
   | "Processed"
+  | "Picked Up"
   | "Shipped"
   | "Out for Delivery"
   | "Delivered"
@@ -77,11 +79,15 @@ export interface IOrder extends Document {
   | "Delivered"
   | "Failed";
   assignedAt?: Date;
+  deliveryBroadcastAttempts: number;
+  lastBroadcastAt?: Date;
+  needsManualAssignment: boolean;
 
   // Tracking
   trackingNumber?: string;
   estimatedDeliveryDate?: Date;
   deliveredAt?: Date;
+  deliveryQrToken: string;
 
   // Delivery OTP
   deliveryOtp?: string;
@@ -99,6 +105,10 @@ export interface IOrder extends Document {
   cancellationReason?: string;
   cancelledAt?: Date;
   cancelledBy?: mongoose.Types.ObjectId;
+
+  // Tracks in-store (walk-in) item-level returns made via bill edits.
+  // "Full" = every item on the bill has since been returned.
+  returnStatus?: "None" | "Partial" | "Full";
 
   createdAt: Date;
   updatedAt: Date;
@@ -262,6 +272,7 @@ const OrderSchema = new Schema<IOrder>(
         "Received",
         "Pending",
         "Processed",
+        "Picked Up",
         "Shipped",
         "Out for Delivery",
         "Delivered",
@@ -284,9 +295,24 @@ const OrderSchema = new Schema<IOrder>(
     assignedAt: {
       type: Date,
     },
+    deliveryBroadcastAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lastBroadcastAt: {
+      type: Date,
+    },
+    needsManualAssignment: {
+      type: Boolean,
+      default: false,
+    },
 
     // Tracking
     trackingNumber: {
+      type: String,
+      trim: true,
+    },
+    deliveryQrToken: {
       type: String,
       trim: true,
     },
@@ -344,13 +370,19 @@ const OrderSchema = new Schema<IOrder>(
       type: Schema.Types.ObjectId,
       ref: "Admin",
     },
+
+    returnStatus: {
+      type: String,
+      enum: ["None", "Partial", "Full"],
+      default: "None",
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Generate order number before validation
+// Generate order number and delivery QR token before validation
 OrderSchema.pre("validate", async function (this: IOrder, next) {
   if (!this.orderNumber) {
     const timestamp = Date.now().toString();
@@ -358,6 +390,9 @@ OrderSchema.pre("validate", async function (this: IOrder, next) {
       .toString()
       .padStart(3, "0");
     this.orderNumber = `ORD${timestamp}${random}`;
+  }
+  if (!this.deliveryQrToken) {
+    this.deliveryQrToken = crypto.randomBytes(16).toString("hex");
   }
   next();
 });

@@ -200,14 +200,12 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     }
   }
 
-  // Generate token
-  const token = generateToken(customer._id.toString(), "Customer");
-
+  // Do not issue a login token here - the account isn't OTP-verified yet.
+  // The actual login token is issued by verifySmsOtp once the OTP step completes.
   return res.status(201).json({
     success: true,
     message: "Customer registered successfully",
     data: {
-      token,
       user: {
         id: customer._id,
         name: customer.name,

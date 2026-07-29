@@ -186,7 +186,8 @@ export async function findDeliveryBoysNearLocation(
  * Aggregates all unique sellers from order items and finds delivery boys within their service radius
  */
 export async function findDeliveryBoysNearSellerLocations(
-    order: any
+    order: any,
+    radiusMultiplier: number = 1
 ): Promise<mongoose.Types.ObjectId[]> {
     try {
         // Get unique seller IDs from order items
@@ -233,7 +234,7 @@ export async function findDeliveryBoysNearSellerLocations(
                 continue;
             }
 
-            const radius = seller.serviceRadiusKm || 10; // Default 10km
+            const radius = (seller.serviceRadiusKm || 10) * radiusMultiplier; // Default 10km, widened on retry
             const nearbyBoys = await findDeliveryBoysNearLocation(lat, lng, radius);
 
             for (const boy of nearbyBoys) {
@@ -269,11 +270,12 @@ export async function findDeliveryBoysNearSellerLocations(
  */
 export async function notifyDeliveryBoysOfNewOrder(
     io: SocketIOServer,
-    order: any
+    order: any,
+    radiusMultiplier: number = 1
 ): Promise<void> {
     try {
         // Find delivery boys near seller locations (within service radius)
-        let nearbyDeliveryBoyIds = await findDeliveryBoysNearSellerLocations(order);
+        let nearbyDeliveryBoyIds = await findDeliveryBoysNearSellerLocations(order, radiusMultiplier);
 
         if (nearbyDeliveryBoyIds.length === 0) {
             console.log('No available delivery boys to notify (including fallback)');
@@ -350,6 +352,11 @@ export async function notifyDeliveryBoysOfNewOrder(
             // But we can't track rejection state accurately if we don't know who is connected
             return;
         }
+
+        await Order.findByIdAndUpdate(order._id, {
+            lastBroadcastAt: new Date(),
+            $inc: { deliveryBroadcastAttempts: 1 },
+        });
 
         notificationStates.set(orderId, {
             orderId,
@@ -506,40 +513,21 @@ export async function handleOrderRejection(
         const allRejected = state.rejectedDeliveryBoys.size === state.notifiedDeliveryBoys.size;
 
         if (allRejected) {
-            // Emit order-rejected-by-all event
+            // Emit order-rejected-by-all event so delivery apps drop this notification
             io.to('delivery-notifications').emit('order-rejected-by-all', {
                 orderId,
             });
 
-            try {
-                // Update order in database to "Rejected"
-                const order = await Order.findById(orderId);
-                if (order) {
-                    order.status = 'Rejected';
-                    order.deliveryBoyStatus = 'Failed';
-                    order.adminNotes = (order.adminNotes ? order.adminNotes + '\n' : '') +
-                        `[${new Date().toISOString()}] Rejected: All notified delivery boys (${state.notifiedDeliveryBoys.size}) rejected the order.`;
-                    await order.save();
+            // Do NOT mark the order as Rejected here - leave it unassigned so the
+            // stall-escalation scheduler (escalateStalledOrders) can retry with a
+            // wider radius, or hand it to admin for manual assignment once
+            // attempts are exhausted.
+            io.to(`order-${orderId}`).emit('order-searching', {
+                orderId,
+                message: 'Still finding a delivery partner for your order.',
+            });
 
-                    // Notify customer via socket
-                    io.to(`order-${orderId}`).emit('order-rejected', {
-                        orderId,
-                        message: 'Unfortunately, no delivery partner is available at the moment. Your order has been rejected.',
-                    });
-
-                    // Notify sellers/restaurants
-                    notifySellersOfOrderUpdate(io, order, 'STATUS_UPDATE');
-
-                    console.log(`✅ All delivery boys rejected order ${orderId}. Order status updated to Rejected.`);
-                } else {
-                    console.error(`❌ Order ${orderId} not found when trying to update rejection status`);
-                }
-            } catch (dbError) {
-                console.error(`❌ Error updating order ${orderId} to Rejected status:`, dbError);
-                // We still proceed with cleanup to avoid memory leaks/stuck state
-            }
-
-            // Clean up notification state
+            // Clean up notification state so a retry starts fresh
             notificationStates.delete(orderId);
         } else {
             // Emit rejection acknowledgment to the specific delivery boy
@@ -568,5 +556,56 @@ export function getNotificationState(orderId: string): OrderNotificationState | 
  */
 export function clearNotificationState(orderId: string): void {
     notificationStates.delete(orderId);
+}
+
+const STALL_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes with no acceptance
+const MAX_BROADCAST_ATTEMPTS = 3;
+
+/**
+ * Runs on a timer (see deliveryEscalationScheduler.ts). Finds orders that have
+ * been broadcast but not accepted within STALL_TIMEOUT_MS, and either
+ * re-broadcasts with a wider radius or, after MAX_BROADCAST_ATTEMPTS, flags
+ * the order for manual admin assignment.
+ */
+export async function escalateStalledOrders(io: SocketIOServer): Promise<void> {
+    try {
+        const cutoff = new Date(Date.now() - STALL_TIMEOUT_MS);
+
+        const stalledOrders = await Order.find({
+            deliveryBoy: { $exists: false },
+            status: { $in: ['Received', 'Processed'] },
+            needsManualAssignment: false,
+            // Orders that were broadcast but not accepted in time, OR orders
+            // that never got a single broadcast (e.g. zero delivery boys were
+            // available at creation time) - both need a retry.
+            $or: [
+                { lastBroadcastAt: { $lte: cutoff } },
+                { lastBroadcastAt: { $exists: false }, createdAt: { $lte: cutoff } },
+            ],
+        });
+
+        for (const order of stalledOrders) {
+            if (order.deliveryBroadcastAttempts >= MAX_BROADCAST_ATTEMPTS) {
+                order.needsManualAssignment = true;
+                await order.save();
+
+                io.to('admin-notifications').emit('order-needs-manual-assignment', {
+                    orderId: order._id.toString(),
+                    orderNumber: order.orderNumber,
+                    message: `No delivery partner accepted order ${order.orderNumber} after ${order.deliveryBroadcastAttempts} attempts. Manual assignment required.`,
+                });
+
+                console.log(`⚠️ Order ${order.orderNumber} flagged for manual assignment after ${order.deliveryBroadcastAttempts} broadcast attempts`);
+                continue;
+            }
+
+            // Widen the search radius by 1.5x per retry attempt
+            const radiusMultiplier = 1.5 * (order.deliveryBroadcastAttempts + 1);
+            await notifyDeliveryBoysOfNewOrder(io, order, radiusMultiplier);
+            console.log(`🔁 Re-broadcast order ${order.orderNumber} with radius multiplier ${radiusMultiplier}`);
+        }
+    } catch (error) {
+        console.error('Error escalating stalled orders:', error);
+    }
 }
 

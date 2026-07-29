@@ -1699,6 +1699,220 @@ export const getReturnExchangeReport = asyncHandler(
 );
 
 /**
+ * Shared lookup/group/computed-fields stages for the stock sales summary,
+ * used by both the paginated JSON endpoint and the full CSV export so the
+ * two never drift out of sync.
+ */
+function buildStockSalesPipeline(
+  matchQuery: any,
+  category: string | undefined,
+  searchRegex: RegExp | null
+): any[] {
+  return [
+    { $match: matchQuery },
+
+    // Lookup Items
+    {
+      $lookup: {
+        from: "orderitems",
+        localField: "_id",
+        foreignField: "order",
+        as: "itemDoc"
+      }
+    },
+    { $unwind: "$itemDoc" },
+
+    // Lookup Product Details
+    {
+      $lookup: {
+        from: "products",
+        localField: "itemDoc.product",
+        foreignField: "_id",
+        as: "productDoc"
+      }
+    },
+    { $unwind: { path: "$productDoc", preserveNullAndEmptyArrays: true } },
+
+    // Lookup Category
+    {
+      $lookup: {
+        from: "categories",
+        localField: "productDoc.category",
+        foreignField: "_id",
+        as: "categoryDoc"
+      }
+    },
+    { $unwind: { path: "$categoryDoc", preserveNullAndEmptyArrays: true } },
+
+    // Get Tax Info (for GST/Cess)
+    {
+      $lookup: {
+        from: "taxes",
+        localField: "productDoc.tax",
+        foreignField: "_id",
+        as: "taxDoc"
+      }
+    },
+    { $unwind: { path: "$taxDoc", preserveNullAndEmptyArrays: true } },
+
+    // Apply Filters that need Product/Category info (Search, Category Filter)
+    ...(category ? [
+      {
+         $match: { "categoryDoc.name": category }
+      }
+    ] : []),
+
+    ...(searchRegex ? [
+       {
+         $match: {
+           $or: [
+             { "itemDoc.productName": searchRegex },
+             { "categoryDoc.name": searchRegex },
+             { "productDoc.hsnCode": searchRegex }
+           ]
+         }
+       }
+    ] : []),
+
+    // Group by Product/Variant
+    {
+      $group: {
+        _id: {
+          prodId: "$productDoc._id",
+          variant: "$itemDoc.variation"
+        },
+        itemName: { $first: "$itemDoc.productName" },
+        variantName: { $first: { $ifNull: ["$itemDoc.variation", "Standard"] } },
+        uom: { $first: { $ifNull: ["$productDoc.pack", "Piece"] } },
+        hsn: { $first: { $ifNull: ["$productDoc.hsnCode", "N/A"] } },
+        category: { $first: { $ifNull: ["$categoryDoc.name", "Uncategorized"] } },
+        taxPercent: { $first: { $ifNull: ["$taxDoc.percentage", 0] } },
+
+        unitsSold: { $sum: "$itemDoc.quantity" },
+        purchasePrice: {
+          $first: {
+            $let: {
+              vars: {
+                matchedVariant: {
+                  $first: {
+                    $filter: {
+                      input: { $ifNull: ["$productDoc.variations", []] },
+                      as: "v",
+                      cond: { $eq: ["$$v._id", "$itemDoc.variantId"] }
+                    }
+                  }
+                }
+              },
+              in: {
+                $ifNull: [
+                  "$$matchedVariant.purchasePrice",
+                  {
+                    $ifNull: [
+                      { $arrayElemAt: ["$productDoc.variations.purchasePrice", 0] },
+                      { $ifNull: ["$productDoc.purchasePrice", 0] }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        mrp: {
+          $first: {
+            $let: {
+              vars: {
+                matchedVariant: {
+                  $first: {
+                    $filter: {
+                      input: { $ifNull: ["$productDoc.variations", []] },
+                      as: "v",
+                      cond: { $eq: ["$$v._id", "$itemDoc.variantId"] }
+                    }
+                  }
+                }
+              },
+              in: {
+                $ifNull: [
+                  "$$matchedVariant.compareAtPrice",
+                  { $ifNull: ["$$matchedVariant.price", "$itemDoc.mrp"] }
+                ]
+              }
+            }
+          }
+        },
+        commissionPercent: { $first: { $ifNull: ["$productDoc.commission", 0] } },
+        averageSellingPrice: { $avg: "$itemDoc.unitPrice" },
+        totalSellingPrice: { $sum: "$itemDoc.total" },
+        // Multiple orders can roll into one product/variant row here, so
+        // there's no single "the" salesman - show whoever sold it most
+        // recently as a reasonable representative value. $top sorts within
+        // each group only, avoiding a memory-heavy global sort over every
+        // order item before grouping.
+        salesman: {
+          $top: {
+            output: { $ifNull: ["$salesPerson.name", "Admin"] },
+            sortBy: { orderDate: -1 }
+          }
+        },
+
+        // Debug/Extra
+        orderDate: { $max: "$orderDate" },
+      }
+    },
+
+    // Calculate Computed Fields
+    {
+      $addFields: {
+         gst: { $concat: [{ $toString: "$taxPercent" }, "%"] },
+         cess: "0%",
+
+         // Purchase value = what we paid for the units sold
+         purchaseValue: { $multiply: ["$unitsSold", "$purchasePrice"] },
+         // Sale value = what the customer paid, in total, for the units sold
+         saleValue: "$totalSellingPrice",
+
+         // Profit = Total Sales - (Units * Purchase Price)
+         profit: {
+           $subtract: [
+             "$totalSellingPrice",
+             { $multiply: ["$unitsSold", "$purchasePrice"] }
+           ]
+         },
+
+         // Commission is charged on the sale value, not the profit
+         commissionAmount: {
+           $round: [
+             { $multiply: ["$totalSellingPrice", { $divide: ["$commissionPercent", 100] }] },
+             2
+           ]
+         },
+
+         // Format prices
+         sellingPrice: { $round: ["$averageSellingPrice", 2] }
+      }
+    },
+    // Second pass: fields that depend on the ones computed above
+    {
+      $addFields: {
+         netProfit: { $round: [{ $subtract: ["$profit", "$commissionAmount"] }, 2] },
+         profitMarginPercent: {
+           $round: [
+             {
+               $cond: [
+                 { $eq: ["$totalSellingPrice", 0] },
+                 0,
+                 { $multiply: [{ $divide: ["$profit", "$totalSellingPrice"] }, 100] }
+               ]
+             },
+             2
+           ]
+         }
+      }
+    },
+  ];
+}
+
+/**
  * Get Stock Sales Summary Report
  */
 export const getStockSalesSummary = asyncHandler(
@@ -1742,151 +1956,7 @@ export const getStockSalesSummary = asyncHandler(
     }
 
     const pipeline: any[] = [
-      { $match: matchQuery },
-
-      // Lookup Items
-      {
-        $lookup: {
-          from: "orderitems",
-          localField: "_id",
-          foreignField: "order",
-          as: "itemDoc"
-        }
-      },
-      { $unwind: "$itemDoc" },
-
-      // Lookup Product Details
-      {
-        $lookup: {
-          from: "products",
-          localField: "itemDoc.product",
-          foreignField: "_id",
-          as: "productDoc"
-        }
-      },
-      { $unwind: { path: "$productDoc", preserveNullAndEmptyArrays: true } },
-
-      // Lookup Category
-      {
-        $lookup: {
-          from: "categories",
-          localField: "productDoc.category",
-          foreignField: "_id",
-          as: "categoryDoc"
-        }
-      },
-      { $unwind: { path: "$categoryDoc", preserveNullAndEmptyArrays: true } },
-
-      // Get Tax Info (for GST/Cess)
-      {
-        $lookup: {
-          from: "taxes",
-          localField: "productDoc.tax",
-          foreignField: "_id",
-          as: "taxDoc"
-        }
-      },
-      { $unwind: { path: "$taxDoc", preserveNullAndEmptyArrays: true } },
-
-      // Apply Filters that need Product/Category info (Search, Category Filter)
-      ...(category ? [
-        {
-           $match: { "categoryDoc.name": category }
-        }
-      ] : []),
-
-      ...(searchRegex ? [
-         {
-           $match: {
-             $or: [
-               { "itemDoc.productName": searchRegex },
-               { "categoryDoc.name": searchRegex },
-               { "productDoc.hsnCode": searchRegex }
-             ]
-           }
-         }
-      ] : []),
-
-      // Group by Product/Variant
-      {
-        $group: {
-          _id: {
-            prodId: "$productDoc._id",
-            variant: "$itemDoc.variation"
-          },
-          itemName: { $first: "$itemDoc.productName" },
-          variantName: { $first: { $ifNull: ["$itemDoc.variation", "Standard"] } },
-          uom: { $first: { $ifNull: ["$productDoc.pack", "Piece"] } },
-          hsn: { $first: { $ifNull: ["$productDoc.hsnCode", "N/A"] } },
-          category: { $first: { $ifNull: ["$categoryDoc.name", "Uncategorized"] } },
-          taxPercent: { $first: { $ifNull: ["$taxDoc.percentage", 0] } },
-
-          unitsSold: { $sum: "$itemDoc.quantity" },
-          purchasePrice: {
-            $first: {
-              $let: {
-                vars: {
-                  matchedVariant: {
-                    $first: {
-                      $filter: {
-                        input: { $ifNull: ["$productDoc.variations", []] },
-                        as: "v",
-                        cond: { $eq: ["$$v._id", "$itemDoc.variantId"] }
-                      }
-                    }
-                  }
-                },
-                in: {
-                  $ifNull: [
-                    "$$matchedVariant.purchasePrice",
-                    {
-                      $ifNull: [
-                        { $arrayElemAt: ["$productDoc.variations.purchasePrice", 0] },
-                        { $ifNull: ["$productDoc.purchasePrice", 0] }
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          averageSellingPrice: { $avg: "$itemDoc.unitPrice" },
-          totalSellingPrice: { $sum: "$itemDoc.total" },
-          // Multiple orders can roll into one product/variant row here, so
-          // there's no single "the" salesman - show whoever sold it most
-          // recently as a reasonable representative value. $top sorts within
-          // each group only, avoiding a memory-heavy global sort over every
-          // order item before grouping.
-          salesman: {
-            $top: {
-              output: { $ifNull: ["$salesPerson.name", "Admin"] },
-              sortBy: { orderDate: -1 }
-            }
-          },
-
-          // Debug/Extra
-          orderDate: { $max: "$orderDate" },
-        }
-      },
-
-      // Calculate Computed Fields
-      {
-        $addFields: {
-           gst: { $concat: [{ $toString: "$taxPercent" }, "%"] },
-           cess: "0%",
-
-           // Profit = Total Sales - (Units * Purchase Price)
-           profit: {
-             $subtract: [
-               "$totalSellingPrice",
-               { $multiply: ["$unitsSold", "$purchasePrice"] }
-             ]
-           },
-
-           // Format prices
-           sellingPrice: { $round: ["$averageSellingPrice", 2] }
-        }
-      },
+      ...buildStockSalesPipeline(matchQuery, category as string | undefined, searchRegex),
 
       // Sort
       { $sort: { totalSellingPrice: -1 } },
@@ -1930,6 +2000,75 @@ export const getStockSalesSummary = asyncHandler(
       return res.status(500).json({
         success: false,
         message: "Error generating stock sales summary",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+);
+
+/**
+ * Export Stock Sales Summary as CSV (all matching rows, no pagination)
+ * Includes full profit/GST/commission breakdown for accounting use.
+ */
+export const exportStockSalesSummary = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { search, category, dateFrom, dateTo } = req.query;
+
+    const sanitizedSearch = search ? (search as string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : null;
+    const searchRegex = sanitizedSearch ? new RegExp(sanitizedSearch, "i") : null;
+
+    const matchQuery: any = {
+      adminNotes: { $not: { $regex: "POS Order - Seller:", $options: "i" } },
+    };
+
+    if (dateFrom || dateTo) {
+      matchQuery.orderDate = {};
+      if (dateFrom) {
+        const dFrom = new Date(dateFrom as string);
+        if (!isNaN(dFrom.getTime())) matchQuery.orderDate.$gte = dFrom;
+      }
+      if (dateTo) {
+        const dTo = new Date(dateTo as string);
+        if (!isNaN(dTo.getTime())) matchQuery.orderDate.$lte = dTo;
+      }
+      if (Object.keys(matchQuery.orderDate).length === 0) delete matchQuery.orderDate;
+    }
+
+    const pipeline: any[] = buildStockSalesPipeline(matchQuery, category as string | undefined, searchRegex);
+
+    try {
+      const results = await Order.aggregate(pipeline).allowDiskUse(true);
+
+      const csvHeaders = [
+        "Item Name", "Variant", "Category", "HSN", "UOM",
+        "Units Sold", "MRP", "Purchase Price", "Purchase Value",
+        "Selling Price", "Sale Value", "GST", "Commission %",
+        "Commission Amount", "Profit", "Net Profit", "Profit Margin %", "Salesman"
+      ];
+
+      const csvRows = results.map((item: any) => [
+        item.itemName, item.variantName, item.category, item.hsn, item.uom,
+        item.unitsSold, item.mrp, item.purchasePrice, item.purchaseValue,
+        item.sellingPrice, item.saleValue, item.gst, item.commissionPercent,
+        item.commissionAmount, item.profit, item.netProfit, item.profitMarginPercent, item.salesman
+      ]);
+
+      const csvContent = [
+        csvHeaders.join(","),
+        ...csvRows.map((row) => row.map((cell) => `"${cell ?? ''}"`).join(",")),
+      ].join("\n");
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=stock_sales_summary_${Date.now()}.csv`
+      );
+      res.send(csvContent);
+    } catch (error: any) {
+      console.error("Stock Sales Summary Export Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error exporting stock sales summary",
         error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }

@@ -79,8 +79,26 @@ function buildOtpMessage(otp: string): string {
 
 /**
  * Parse and handle SMS India HUB API response
+ *
+ * The API doesn't always return JSON. On some failures (e.g. invalid sender ID)
+ * it returns a plain-text body like "Failed#senderid not valid" with
+ * Content-Type: text/html, which axios hands back as a raw string. That string
+ * has no ErrorCode/ErrorMessage fields, so it must be checked separately or it
+ * silently falls through as a "success".
  */
-function handleSmsResponse(responseData: SmsIndiaHubResponse): void {
+function handleSmsResponse(responseData: SmsIndiaHubResponse | string): void {
+  if (typeof responseData === 'string') {
+    const text = responseData.trim();
+    if (/^failed/i.test(text)) {
+      throw new Error(`SMS India HUB API Error: ${text}`);
+    }
+    if (/^success/i.test(text) || text === '') {
+      return; // Success
+    }
+    // Unknown plain-text shape - treat as failure rather than silently succeeding
+    throw new Error(`SMS India HUB API Error: Unrecognized response - ${text}`);
+  }
+
   const errorCode = responseData.ErrorCode || '';
   const errorMsg = responseData.ErrorMessage || '';
 
@@ -104,6 +122,9 @@ function handleSmsResponse(responseData: SmsIndiaHubResponse): void {
         throw new Error(`SMS India HUB API Error (Code: ${errorCode}): ${errorMsg}`);
     }
   }
+
+  // Neither JSON error/success fields nor a recognizable text response - fail closed
+  throw new Error('SMS India HUB API Error: Unrecognized response format');
 }
 
 /**
@@ -129,7 +150,7 @@ async function sendSmsViaApi(mobile: string, message: string): Promise<void> {
     params.DLT_TE_ID = SMS_INDIA_HUB_DLT_TEMPLATE_ID.trim();
   }
 
-  const response = await axios.get<SmsIndiaHubResponse>(SMS_INDIA_HUB_API_URL, {
+  const response = await axios.get<SmsIndiaHubResponse | string>(SMS_INDIA_HUB_API_URL, {
     params,
     paramsSerializer: (params) => {
       return Object.keys(params)
