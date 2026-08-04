@@ -13,11 +13,13 @@ import {
 import { getBrands } from "../modules/admin/controllers/adminProductController";
 import { searchProductImage } from "../modules/seller/controllers/sellerToolsController";
 import { authenticate, requireUserType, checkEnabled } from "../middleware/auth";
+import { hidePurchasePriceForStaff, stripPurchasePriceFromStaffWrites } from "../middleware/staffAccessControl";
 
 const router = Router();
 
 // All routes require authentication
 router.use(authenticate);
+router.use(hidePurchasePriceForStaff);
 
 // Search image tool - shared by both the seller and admin bulk-edit UIs, so
 // unlike the rest of this router it isn't seller-only. Must be registered
@@ -36,7 +38,7 @@ router.get("/brands", getBrands);
 router.get("/shops", getShops);
 
 // Create product
-router.post("/", createProduct);
+router.post("/", stripPurchasePriceFromStaffWrites, createProduct);
 
 // Get seller's products with filters
 router.get("/", getProducts);
@@ -45,7 +47,7 @@ router.get("/", getProducts);
 router.get("/:id", getProductById);
 
 // Update product
-router.put("/:id", updateProduct);
+router.put("/:id", stripPurchasePriceFromStaffWrites, updateProduct);
 
 // Delete product
 router.delete("/:id", deleteProduct);

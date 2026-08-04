@@ -307,8 +307,7 @@ const SellerAccountSettings = () => {
                             <img
                               src={sellerData.profile || 'https://placehold.co/150'}
                               alt="Profile"
-                              className="relative w-32 h-32 rounded-full object-cover border-4 border-white shadow-md bg-white"
-                            />
+                              className="relative w-32 h-32 rounded-full object-cover border-4 border-white shadow-md bg-white" loading="lazy" decoding="async" />
                             {isEditing && (
                               <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-sm z-10">
                                 <span className="text-white text-xs font-bold uppercase tracking-wider flex flex-col items-center gap-1">
@@ -355,8 +354,7 @@ const SellerAccountSettings = () => {
                               <img
                                 src={sellerData.logo || 'https://placehold.co/100'}
                                 alt="Store Logo"
-                                className="w-full h-full object-contain"
-                              />
+                                className="w-full h-full object-contain" loading="lazy" decoding="async" />
                             </div>
                             {isEditing && (
                               <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-xl cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-sm">
@@ -512,8 +510,7 @@ const SellerAccountSettings = () => {
                             <img
                               src={sellerData.storeBanner || 'https://placehold.co/1200x400?text=Store+Banner'}
                               alt="Store Banner"
-                              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                            />
+                              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" decoding="async" />
                             {isEditing && (
                               <div className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm">
                                 <div className="bg-white/20 p-4 rounded-full border border-white/30 backdrop-blur-md">

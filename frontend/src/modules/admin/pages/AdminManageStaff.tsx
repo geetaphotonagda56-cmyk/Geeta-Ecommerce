@@ -323,7 +323,7 @@ const AdminManageStaff: React.FC = () => {
               <div className="flex items-start gap-4">
                 <div className="w-16 h-16 rounded-full bg-[var(--primary-color)]/10 flex items-center justify-center text-[var(--primary-color)] font-bold text-xl border-2 border-[var(--primary-color)]/20">
                   {staff.avatar ? (
-                    <img src={staff.avatar} alt={staff.name} className="w-full h-full rounded-full object-cover" />
+                    <img src={staff.avatar} alt={staff.name} className="w-full h-full rounded-full object-cover" loading="lazy" decoding="async" />
                   ) : (
                     staff.name.charAt(0)
                   )}

@@ -1,5 +1,6 @@
 import express from "express";
 import { authenticate, requireUserType, checkEnabled } from "../middleware/auth";
+import { hidePurchasePriceForStaff, blockStaffReportMutation } from "../middleware/staffAccessControl";
 import {
   getStockSummary,
   getStockBalanceSummary,
@@ -16,6 +17,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireUserType("Seller"));
 router.use(checkEnabled);
+router.use(hidePurchasePriceForStaff);
 
 router.get("/stock-summary", getStockSummary);
 router.get("/stock-balance", getStockBalanceSummary);
@@ -23,6 +25,6 @@ router.get("/low-stock", getLowStockSummary);
 router.get("/out-of-stock", getOutOfStockSummary);
 router.get("/loss-summary", getLossSummary);
 router.post("/loss", createLossRecord);
-router.delete("/loss/:id", deleteLossRecord);
+router.delete("/loss/:id", blockStaffReportMutation, deleteLossRecord);
 
 export default router;

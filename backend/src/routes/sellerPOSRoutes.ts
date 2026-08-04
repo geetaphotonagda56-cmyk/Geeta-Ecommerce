@@ -24,12 +24,14 @@ import {
 import { updateStockLedgerEntry } from "../modules/admin/controllers/updateStockLedgerController";
 import { createCustomer, getAllCustomers, deleteCustomer } from "../modules/admin/controllers/adminCustomerController";
 import { authenticate, requireUserType, checkEnabled } from "../middleware/auth";
+import { hidePurchasePriceForStaff, blockStaffReportMutation } from "../middleware/staffAccessControl";
 
 const router = Router();
 
 router.use(authenticate);
 router.use(requireUserType("Seller"));
 router.use(checkEnabled);
+router.use(hidePurchasePriceForStaff);
 
 router.get("/customers", getAllCustomers);
 router.post("/customers", createCustomer);
@@ -39,10 +41,10 @@ router.post("/orders/online", initiatePOSOnlineOrder);
 router.post("/orders/verify", verifyPOSPayment);
 router.get("/report", getPOSReport);
 router.get("/stock-ledger", getPOSStockLedger);
-router.put("/stock-ledger/:id", updateStockLedgerEntry);
+router.put("/stock-ledger/:id", blockStaffReportMutation, updateStockLedgerEntry);
 router.get("/purchase-entries", getSellerPurchaseEntries);
 router.post("/purchase-entries", upsertSellerPurchaseEntry);
-router.delete("/purchase-entries/:entryId", deleteSellerPurchaseEntry);
+router.delete("/purchase-entries/:entryId", blockStaffReportMutation, deleteSellerPurchaseEntry);
 router.get("/bill-settings", getSellerBillSettings);
 router.put("/bill-settings", updateSellerBillSettings);
 router.get("/state", getSellerPOSState);

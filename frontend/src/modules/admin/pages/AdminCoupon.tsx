@@ -340,8 +340,7 @@ export default function AdminCoupon() {
                       <img
                         src={couponImagePreview}
                         alt="Coupon preview"
-                        className="max-h-24 mx-auto rounded-lg object-cover"
-                      />
+                        className="max-h-24 mx-auto rounded-lg object-cover" loading="lazy" decoding="async" />
                       <p className="text-xs text-neutral-600">
                         {couponImageFile?.name}
                       </p>

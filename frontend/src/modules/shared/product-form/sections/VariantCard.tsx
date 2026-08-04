@@ -761,8 +761,7 @@ export default function VariantCard({
               <img
                 src={variant.mainImage}
                 alt=""
-                className="h-24 w-24 rounded-xl border border-white object-cover shadow-md"
-              />
+                className="h-24 w-24 rounded-xl border border-white object-cover shadow-md" loading="lazy" decoding="async" />
             ) : (
               <div className="flex h-24 w-24 items-center justify-center rounded-xl bg-white text-3xl text-violet-300 shadow-inner">
                 📷
@@ -796,8 +795,7 @@ export default function VariantCard({
                     <img
                       src={url}
                       alt=""
-                      className="h-24 w-full rounded-xl border border-white object-cover shadow-md"
-                    />
+                      className="h-24 w-full rounded-xl border border-white object-cover shadow-md" loading="lazy" decoding="async" />
                     <button
                       type="button"
                       onClick={() => removeGalleryImage(url)}

@@ -254,7 +254,7 @@ export default function AdminStoreSettings() {
                         <div className="flex flex-col items-center gap-4">
                             <div className="group relative h-32 w-32 flex items-center justify-center rounded-[2rem] border-2 border-dashed border-neutral-200 bg-neutral-50 shadow-inner transition-all hover:border-[var(--primary-color)]/50 hover:bg-[var(--primary-color)]/5 overflow-hidden">
                                 {formData.appLogo ? (
-                                    <img src={formData.appLogo} alt="App Logo" className="h-20 w-20 object-contain transition-transform group-hover:scale-110" />
+                                    <img src={formData.appLogo} alt="App Logo" className="h-20 w-20 object-contain transition-transform group-hover:scale-110" loading="lazy" decoding="async" />
                                 ) : (
                                     <div className="flex flex-col items-center gap-1 text-neutral-400">
                                         <Globe className="h-8 w-8" />
@@ -286,7 +286,7 @@ export default function AdminStoreSettings() {
                         <div className="flex flex-col items-center gap-4">
                             <div className="group relative h-24 w-24 flex items-center justify-center rounded-2xl border-2 border-dashed border-neutral-200 bg-neutral-50 shadow-inner transition-all hover:border-[var(--primary-color)]/50 hover:bg-[var(--primary-color)]/5 overflow-hidden">
                                 {formData.appFavicon ? (
-                                    <img src={formData.appFavicon} alt="Favicon" className="h-12 w-12 object-contain" />
+                                    <img src={formData.appFavicon} alt="Favicon" className="h-12 w-12 object-contain" loading="lazy" decoding="async" />
                                 ) : (
                                     <div className="flex flex-col items-center gap-1 text-neutral-400">
                                         <Plus className="h-6 w-6" />

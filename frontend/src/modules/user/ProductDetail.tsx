@@ -704,8 +704,7 @@ export default function ProductDetail() {
                       alt={`${product.name} - Image ${index + 1}`}
                       className="w-full h-full object-contain"
                       referrerPolicy="no-referrer"
-                      draggable={false}
-                    />
+                      draggable={false} loading="lazy" decoding="async" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-neutral-400 text-6xl">
                       {(product.name || product.productName || "?")
@@ -724,8 +723,7 @@ export default function ProductDetail() {
                 src={currentImage}
                 alt={product.name}
                 className="w-full h-full object-contain mix-blend-multiply"
-                referrerPolicy="no-referrer"
-              />
+                referrerPolicy="no-referrer" loading="lazy" decoding="async" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-neutral-400 text-6xl">
                 {(product.name || product.productName || "?")
@@ -882,8 +880,7 @@ export default function ProductDetail() {
                       src={image}
                       alt={`${product.name} - Image ${index + 1}`}
                       className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
+                      referrerPolicy="no-referrer" loading="lazy" decoding="async" />
                   </button>
                 ))}
               </div>
@@ -955,8 +952,7 @@ export default function ProductDetail() {
                             src={variantOption.image}
                             alt={variantOption.title}
                             className="max-h-full max-w-full object-contain"
-                            referrerPolicy="no-referrer"
-                          />
+                            referrerPolicy="no-referrer" loading="lazy" decoding="async" />
                         ) : (
                           <span className="text-sm text-neutral-300 font-bold">
                             {variantOption.title.charAt(0).toUpperCase()}

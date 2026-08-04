@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticate, requireUserType } from "../middleware/auth";
+import { hidePurchasePriceForStaff, blockStaffReportMutation, stripPurchasePriceFromStaffWrites } from "../middleware/staffAccessControl";
 import { uploadMultipleDocuments } from "../middleware/upload";
 
 // Dashboard Controllers
@@ -86,6 +87,9 @@ const router = Router();
 
 // All routes require authentication
 router.use(authenticate);
+// Strip purchase price / profit fields from every response for staff accounts
+// that lack the "view_purchase_price" permission (backend-enforced, not just UI).
+router.use(hidePurchasePriceForStaff);
 
 // Settings Routes (Accessible to all authenticated users - Sellers need this)
 router.get("/settings", settingsController.getAppSettings);
@@ -96,6 +100,7 @@ router.get("/staff", requireUserType("Admin", "Seller"), staffController.getStaf
 router.post("/staff", requireUserType("Admin", "Seller"), staffController.createStaff);
 router.put("/staff/:id", requireUserType("Admin", "Seller"), staffController.updateStaff);
 router.delete("/staff/:id", requireUserType("Admin", "Seller"), staffController.deleteStaff);
+router.post("/staff/login", requireUserType("Admin", "Seller"), staffController.staffLogin);
 
 // Order Edit (POS) - Accessible to both Admin and Seller
 router.patch("/orders/:id/items", requireUserType("Admin", "Seller"), orderController.updateOrderItems);
@@ -160,18 +165,18 @@ router.put("/brands/:id", productController.updateBrand);
 router.delete("/brands/:id", productController.deleteBrand);
 
 // ==================== Product Routes ====================
-router.post("/products", productController.createProduct);
+router.post("/products", stripPurchasePriceFromStaffWrites, productController.createProduct);
 router.get("/products/pos", productController.getPOSProducts);
 router.get("/products", productController.getProducts);
 // Product order functionality removed
 // router.put("/products/order", productController.updateProductOrder);
 router.get("/products/:id", productController.getProductById);
-router.put("/products/:id", productController.updateProduct);
+router.put("/products/:id", stripPurchasePriceFromStaffWrites, productController.updateProduct);
 router.delete("/products/:id", productController.deleteProduct);
 // Product approval no longer needed - products show directly in list
 // router.patch("/products/:id/approve", productController.approveProductRequest);
-router.post("/products/bulk-import", productController.bulkImportProducts);
-router.put("/products/bulk-update", productController.bulkUpdateProducts);
+router.post("/products/bulk-import", stripPurchasePriceFromStaffWrites, productController.bulkImportProducts);
+router.put("/products/bulk-update", stripPurchasePriceFromStaffWrites, productController.bulkUpdateProducts);
 // One-shot reconciliation: copy headerCategoryId from each product's Category
 // onto the product itself (for items created before that auto-inheritance was
 // added). POST so admins can run it from the UI / postman with a dryRun flag.
@@ -187,15 +192,16 @@ router.get("/inventory/low-stock", inventoryController.getLowStockSummary);
 router.get("/inventory/out-of-stock", inventoryController.getOutOfStockSummary);
 router.get("/inventory/loss-summary", inventoryController.getLossSummary);
 router.get("/inventory/gst-sales", inventoryController.getGSTSalesReport);
-router.delete("/inventory/gst-sales", inventoryController.deleteGSTSalesReportEntries);
+router.delete("/inventory/gst-sales", blockStaffReportMutation, inventoryController.deleteGSTSalesReportEntries);
 router.get("/inventory/payment-report", inventoryController.getPaymentReport);
 router.get("/inventory/sales-summary-report", inventoryController.getSalesSummaryReport);
+router.get("/inventory/product-sales-report", inventoryController.getProductSalesReport);
 router.get("/inventory/return-exchange-report", inventoryController.getReturnExchangeReport);
 router.get("/inventory/stock-sales-summary", inventoryController.getStockSalesSummary);
 router.get("/inventory/stock-sales-summary/export", inventoryController.exportStockSalesSummary);
 router.get("/inventory/due-summary", inventoryController.getDueSummaryReport);
 router.post("/inventory/loss", inventoryController.createLossRecord);
-router.delete("/inventory/loss/:id", inventoryController.deleteLossRecord);
+router.delete("/inventory/loss/:id", blockStaffReportMutation, inventoryController.deleteLossRecord);
 
 // ==================== POS Routes ====================
 router.post("/orders/pos", orderController.createPOSOrder);
@@ -203,25 +209,29 @@ router.post("/orders/pos/online", orderController.initiatePOSOnlineOrder);
 router.post("/orders/pos/verify", orderController.verifyPOSPayment);
 router.get("/pos/report", orderController.getPOSReport);
 router.get("/pos/stock-ledger", orderController.getPOSStockLedger);
-router.put("/pos/stock-ledger/:id", updateStockLedgerController.updateStockLedgerEntry);
+router.put("/pos/stock-ledger/:id", blockStaffReportMutation, updateStockLedgerController.updateStockLedgerEntry);
 router.post("/pos/exchange", orderController.processPOSExchange);
-router.delete("/orders/pos/:id", deletePOSOrderController.deletePOSOrder);
+router.delete("/orders/pos/:id", blockStaffReportMutation, deletePOSOrderController.deletePOSOrder);
 router.post("/orders/pos/:id/restore-stock-and-delete", deletePOSOrderController.restorePOSOrderStockAndDelete);
 router.post("/orders/pos/:id/restore-stock-only", deletePOSOrderController.restorePOSOrderStockOnly);
 router.get("/pos/purchase-entries", adminPOSPurchaseEntryController.getAdminPurchaseEntries);
 router.post("/pos/purchase-entries", adminPOSPurchaseEntryController.upsertAdminPurchaseEntry);
-router.delete("/pos/purchase-entries/:entryId", adminPOSPurchaseEntryController.deleteAdminPurchaseEntry);
+router.delete("/pos/purchase-entries/:entryId", blockStaffReportMutation, adminPOSPurchaseEntryController.deleteAdminPurchaseEntry);
 
 // ==================== Order Routes ====================
 router.get("/orders/pos-report", orderController.getPOSOrders);
 router.get("/orders/online", orderController.getOnlineOrders);
 router.get("/orders", orderController.getAllOrders);
 router.get("/orders/status/:status", orderController.getOrdersByStatus);
+router.get("/orders/delivery-workflow", orderController.getOrdersByWorkflowStage);
 router.get("/orders/:id", orderController.getOrderById);
 router.delete("/orders/:id", deleteOrderController.deleteOrder);
 router.patch("/orders/:id/status", orderController.updateOrderStatus);
 // router.patch("/orders/:id/items", orderController.updateOrderItems); // Moved up to allow Sellers
 router.patch("/orders/:id/assign-delivery", orderController.assignDeliveryBoy);
+router.get("/orders/:id/workflow-detail", orderController.getOrderWorkflowDetail);
+router.patch("/orders/:id/confirm", orderController.confirmOrder);
+router.patch("/orders/:id/dispatch", orderController.dispatchOrder);
 router.get("/orders/export/csv", orderController.exportOrders);
 
 // ==================== POS Credit Routes ====================
@@ -248,8 +258,12 @@ router.post("/pos/suppliers/:id/pay", supplierController.paySupplier);
 import * as adminGSTReportController from "../modules/admin/controllers/adminGSTReportController";
 router.get("/reports/gst-register", adminGSTReportController.listGSTReport);
 router.post("/reports/gst-register", adminGSTReportController.createGSTReportEntry);
-router.patch("/reports/gst-register/:id", adminGSTReportController.updateGSTReportEntry);
-router.delete("/reports/gst-register/:id", adminGSTReportController.deleteGSTReportEntry);
+router.patch("/reports/gst-register/:id", blockStaffReportMutation, adminGSTReportController.updateGSTReportEntry);
+router.delete("/reports/gst-register/:id", blockStaffReportMutation, adminGSTReportController.deleteGSTReportEntry);
+router.get(
+  "/reports/delivery-performance",
+  deliveryController.getDeliveryPerformanceReport
+);
 
 // ==================== Return Request Routes ====================
 router.get("/return-requests", orderController.getReturnRequests);
@@ -270,6 +284,7 @@ router.delete("/customers/:id", customerController.deleteCustomer);
 
 // ==================== Delivery Routes ====================
 router.post("/delivery", deliveryController.createDeliveryBoy);
+router.post("/delivery/quick-create", deliveryController.quickCreateDeliveryBoy);
 router.get("/delivery", deliveryController.getAllDeliveryBoys);
 router.get("/delivery/:id", deliveryController.getDeliveryBoyById);
 router.put("/delivery/:id", deliveryController.updateDeliveryBoy);

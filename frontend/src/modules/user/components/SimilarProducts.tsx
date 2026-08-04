@@ -40,8 +40,7 @@ export default function SimilarProducts({ products, currentProductId }: SimilarP
                       src={product.imageUrl}
                       alt={product.name}
                       className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
+                      referrerPolicy="no-referrer" loading="lazy" decoding="async" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-neutral-100 text-neutral-400 text-2xl">
                       {product.name.charAt(0).toUpperCase()}

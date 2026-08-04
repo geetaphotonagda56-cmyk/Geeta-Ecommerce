@@ -5,6 +5,7 @@ import { DeliveryStatusProvider, useDeliveryStatus } from '../context/DeliverySt
 import { DeliveryUserProvider, useDeliveryUser } from '../context/DeliveryUserContext';
 import { getDeliveryProfile } from '../../../services/api/delivery/deliveryService';
 import { useDeliveryOrderNotifications } from '../../../hooks/useDeliveryOrderNotifications';
+import { useDeliveryAssignmentAlerts } from '../../../hooks/useDeliveryAssignmentAlerts';
 import OrderNotificationCard from './OrderNotificationCard';
 import { AnimatePresence } from 'framer-motion';
 
@@ -21,6 +22,8 @@ function DeliveryLayoutContent({ children }: DeliveryLayoutContentProps) {
     acceptOrder,
     rejectOrder,
   } = useDeliveryOrderNotifications();
+
+  useDeliveryAssignmentAlerts(navigate);
 
   useEffect(() => {
     const fetchProfile = async () => {

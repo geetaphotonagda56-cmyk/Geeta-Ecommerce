@@ -470,8 +470,7 @@ export default function CategoryPage() {
                             parent.textContent =
                               subcat.icon || subcat.name?.charAt(0) || "📦";
                           }
-                        }}
-                      />
+                        }} loading="lazy" decoding="async" />
                     ) : (
                       <span className="text-2xl">{subcat.icon || "📦"}</span>
                     )}
@@ -577,8 +576,7 @@ export default function CategoryPage() {
                           <img
                             src={subcat.image}
                             alt=""
-                            className="w-4 h-4 object-cover rounded-full"
-                          />
+                            className="w-4 h-4 object-cover rounded-full" loading="lazy" decoding="async" />
                         ) : (
                           subcat.icon || "📦"
                         )}

@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Delivery from "../../../models/Delivery";
 import DeliveryAssignment from "../../../models/DeliveryAssignment";
@@ -57,6 +58,52 @@ export const createDeliveryBoy = asyncHandler(
     return res.status(201).json({
       success: true,
       message: "Delivery boy created successfully",
+      data: deliveryBoy,
+    });
+  }
+);
+
+/**
+ * Quick-create a delivery partner from the admin "Dispatch Order" popup,
+ * with just a name + phone. Placeholder email/password/address/city fill
+ * the schema's required fields; the admin can complete the profile later
+ * via the full edit form. Immediately Active so it's dispatchable right away.
+ */
+export const quickCreateDeliveryBoy = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { name, mobile } = req.body;
+
+    if (!name || !mobile) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and mobile are required",
+      });
+    }
+
+    const existing = await Delivery.findOne({ mobile });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: "A delivery partner with this mobile number already exists",
+      });
+    }
+
+    const placeholderEmail = `delivery.${mobile}.${Date.now()}@placeholder.geeta.local`;
+    const placeholderPassword = Math.random().toString(36).slice(-10);
+
+    const deliveryBoy = await Delivery.create({
+      name,
+      mobile,
+      email: placeholderEmail,
+      password: placeholderPassword,
+      address: "",
+      city: "",
+      status: "Active",
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Delivery partner created successfully",
       data: deliveryBoy,
     });
   }
@@ -428,6 +475,227 @@ export const getDeliveryBoyCashCollections = asyncHandler(
         limit: parseInt(limit as string),
         total,
         pages: Math.ceil(total / parseInt(limit as string)),
+      },
+    });
+  }
+);
+
+/**
+ * Delivery Performance Report
+ * Per-delivery-boy summary (assigned/delivered/failed/cancelled counts,
+ * average delivery duration, on-time % against Order.estimatedDeliveryDate)
+ * plus a paginated drill-down list of individual assignments.
+ */
+export const getDeliveryPerformanceReport = asyncHandler(
+  async (req: Request, res: Response) => {
+    const {
+      dateFrom,
+      dateTo,
+      deliveryBoyId,
+      page = 1,
+      limit = 20,
+    } = req.query;
+
+    const matchStage: any = {};
+    if (dateFrom || dateTo) {
+      matchStage.assignedAt = {};
+      if (dateFrom) matchStage.assignedAt.$gte = new Date(dateFrom as string);
+      if (dateTo) matchStage.assignedAt.$lte = new Date(dateTo as string);
+    }
+    if (deliveryBoyId) {
+      matchStage.deliveryBoy = new mongoose.Types.ObjectId(
+        deliveryBoyId as string
+      );
+    }
+
+    // Per-delivery-boy counts + average delivery duration
+    const perDeliveryBoyAgg = await DeliveryAssignment.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: "$deliveryBoy",
+          assigned: { $sum: 1 },
+          delivered: {
+            $sum: { $cond: [{ $eq: ["$status", "Delivered"] }, 1, 0] },
+          },
+          failed: {
+            $sum: { $cond: [{ $eq: ["$status", "Failed"] }, 1, 0] },
+          },
+          cancelled: {
+            $sum: { $cond: [{ $eq: ["$status", "Cancelled"] }, 1, 0] },
+          },
+          totalDurationMs: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ["$status", "Delivered"] },
+                    { $ifNull: ["$deliveredAt", false] },
+                  ],
+                },
+                { $subtract: ["$deliveredAt", "$assignedAt"] },
+                0,
+              ],
+            },
+          },
+          deliveredWithDuration: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ["$status", "Delivered"] },
+                    { $ifNull: ["$deliveredAt", false] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "deliveries",
+          localField: "_id",
+          foreignField: "_id",
+          as: "deliveryBoyInfo",
+        },
+      },
+      { $unwind: { path: "$deliveryBoyInfo", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          deliveryBoyId: "$_id",
+          name: "$deliveryBoyInfo.name",
+          mobile: "$deliveryBoyInfo.mobile",
+          assigned: 1,
+          delivered: 1,
+          failed: 1,
+          cancelled: 1,
+          avgDurationMs: {
+            $cond: [
+              { $gt: ["$deliveredWithDuration", 0] },
+              { $divide: ["$totalDurationMs", "$deliveredWithDuration"] },
+              0,
+            ],
+          },
+        },
+      },
+      { $sort: { assigned: -1 } },
+    ]);
+
+    // On-time % — join delivered assignments to their Order's estimatedDeliveryDate
+    const onTimeAgg = await DeliveryAssignment.aggregate([
+      {
+        $match: {
+          ...matchStage,
+          status: "Delivered",
+          deliveredAt: { $ne: null },
+        },
+      },
+      {
+        $lookup: {
+          from: "orders",
+          localField: "order",
+          foreignField: "_id",
+          as: "orderInfo",
+        },
+      },
+      { $unwind: "$orderInfo" },
+      { $match: { "orderInfo.estimatedDeliveryDate": { $ne: null } } },
+      {
+        $group: {
+          _id: "$deliveryBoy",
+          onTimeCount: {
+            $sum: {
+              $cond: [
+                { $lte: ["$deliveredAt", "$orderInfo.estimatedDeliveryDate"] },
+                1,
+                0,
+              ],
+            },
+          },
+          withEstimate: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const onTimeMap = new Map(
+      onTimeAgg.map((row) => [row._id.toString(), row])
+    );
+
+    const perDeliveryBoy = perDeliveryBoyAgg.map((row) => {
+      const onTime = onTimeMap.get(row.deliveryBoyId.toString());
+      const onTimePercent =
+        onTime && onTime.withEstimate > 0
+          ? (onTime.onTimeCount / onTime.withEstimate) * 100
+          : null;
+      return { ...row, onTimePercent };
+    });
+
+    const summary = perDeliveryBoy.reduce(
+      (acc, row) => {
+        acc.assigned += row.assigned;
+        acc.delivered += row.delivered;
+        acc.failed += row.failed;
+        acc.cancelled += row.cancelled;
+        return acc;
+      },
+      { assigned: 0, delivered: 0, failed: 0, cancelled: 0 }
+    );
+
+    const totalOnTime = Array.from(onTimeMap.values()).reduce(
+      (acc, row) => {
+        acc.onTimeCount += row.onTimeCount;
+        acc.withEstimate += row.withEstimate;
+        return acc;
+      },
+      { onTimeCount: 0, withEstimate: 0 }
+    );
+    const overallOnTimePercent =
+      totalOnTime.withEstimate > 0
+        ? (totalOnTime.onTimeCount / totalOnTime.withEstimate) * 100
+        : null;
+    const overallAvgDurationMs = perDeliveryBoy.length
+      ? perDeliveryBoy.reduce(
+          (sum, row) => sum + row.avgDurationMs * (row.delivered || 0),
+          0
+        ) / (summary.delivered || 1)
+      : 0;
+
+    // Paginated drill-down list of individual assignments
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [assignments, total] = await Promise.all([
+      DeliveryAssignment.find(matchStage)
+        .populate("deliveryBoy", "name mobile")
+        .populate("order", "orderNumber estimatedDeliveryDate total")
+        .sort({ assignedAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      DeliveryAssignment.countDocuments(matchStage),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: "Delivery performance report fetched successfully",
+      data: {
+        perDeliveryBoy,
+        summary: {
+          ...summary,
+          onTimePercent: overallOnTimePercent,
+          avgDurationMs: overallAvgDurationMs,
+        },
+        assignments,
+      },
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
       },
     });
   }

@@ -127,8 +127,7 @@ export default function Login() {
             <img
               src="/assets/geetastoreslogo.png"
               alt="Geeta Stores"
-              className="h-10 sm:h-12 w-auto object-contain"
-            />
+              className="h-10 sm:h-12 w-auto object-contain" loading="lazy" decoding="async" />
           </motion.div>
           <div className="text-center">
             <h1 className="text-white font-bold text-lg sm:text-xl tracking-tight">Welcome back</h1>

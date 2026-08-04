@@ -97,8 +97,7 @@ export default function AdminLogin() {
             <img
               src="/assets/geetastoreslogo.png"
               alt="Geeta Stores"
-              className="h-32 w-auto mx-auto object-contain"
-            />
+              className="h-32 w-auto mx-auto object-contain" loading="lazy" decoding="async" />
           </div>
           <h1 className="text-2xl font-bold text-white mb-1">
             Admin Login

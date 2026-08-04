@@ -106,7 +106,7 @@ export default function BrandProducts() {
             </button>
             <div className="flex items-center gap-2 min-w-0">
                 {brand?.image && (
-                    <img src={brand.image} alt="" className="w-8 h-8 object-contain rounded-md border border-neutral-100" />
+                    <img src={brand.image} alt="" className="w-8 h-8 object-contain rounded-md border border-neutral-100" loading="lazy" decoding="async" />
                 )}
                 <h1 className="text-lg font-bold text-neutral-800 truncate">{brand?.name || 'Brand Products'}</h1>
             </div>

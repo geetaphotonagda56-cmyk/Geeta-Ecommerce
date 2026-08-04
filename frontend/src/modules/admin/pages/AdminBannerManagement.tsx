@@ -168,8 +168,7 @@ export default function AdminBannerManagement() {
                 <img
                   src={banner.image}
                   alt={banner.title}
-                  className="w-full h-full object-cover"
-                />
+                  className="w-full h-full object-cover" loading="lazy" decoding="async" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-400">
                   <span className="text-sm">No Image</span>
@@ -246,7 +245,7 @@ export default function AdminBannerManagement() {
                     <input type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full border p-2 rounded" />
                     <input type="text" placeholder="Subtitle" value={formData.subtitle} onChange={e => setFormData({...formData, subtitle: e.target.value})} className="w-full border p-2 rounded" />
                     <input type="text" placeholder="Image URL (Unsplash works great)" value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} className="w-full border p-2 rounded" />
-                    {formData.image && <img src={formData.image} className="h-32 object-cover rounded" />}
+                    {formData.image && <img src={formData.image} className="h-32 object-cover rounded" loading="lazy" decoding="async" />}
 
                     <div className="grid grid-cols-2 gap-4">
                         <select value={formData.redirectType} onChange={e => setFormData({...formData, redirectType: e.target.value as RedirectType})} className="border p-2 rounded">

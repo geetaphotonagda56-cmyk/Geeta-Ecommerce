@@ -336,8 +336,7 @@ export default function AddToCartAnimation({
             <img
               src={removedProduct.imageUrl || removedProduct.mainImage}
               alt={removedProduct.name || removedProduct.productName || 'Product'}
-              className="w-full h-full object-cover"
-            />
+              className="w-full h-full object-cover" loading="lazy" decoding="async" />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-neutral-200 text-neutral-400 text-xs font-semibold">
               {(removedProduct.name || removedProduct.productName || 'P').charAt(0).toUpperCase()}
@@ -360,8 +359,7 @@ export default function AddToCartAnimation({
             <img
               src={flyingProduct.product.imageUrl || flyingProduct.product.mainImage}
               alt={flyingProduct.product.name || flyingProduct.product.productName || 'Product'}
-              className="w-full h-full object-cover rounded-full"
-            />
+              className="w-full h-full object-cover rounded-full" loading="lazy" decoding="async" />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-neutral-200 text-neutral-400 text-xs font-semibold rounded-full">
               {(flyingProduct.product.name || flyingProduct.product.productName || 'P').charAt(0).toUpperCase()}
@@ -425,8 +423,7 @@ export default function AddToCartAnimation({
                         <img
                           src={imageUrl}
                           alt={prodName}
-                          className="w-full h-full object-cover"
-                        />
+                          className="w-full h-full object-cover" loading="lazy" decoding="async" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-neutral-200 text-neutral-400 text-xs font-semibold">
                           {firstChar}

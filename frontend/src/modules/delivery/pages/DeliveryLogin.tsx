@@ -94,8 +94,7 @@ export default function DeliveryLogin() {
             <img
               src="/assets/geetastoreslogo.png"
               alt="Geeta Stores"
-              className="h-24 w-auto mx-auto object-contain"
-            />
+              className="h-24 w-auto mx-auto object-contain" loading="lazy" decoding="async" />
           </div>
           <h1 className="text-2xl font-bold text-white mb-1">Delivery Login</h1>
           <p className="text-[var(--primary-dark)] text-sm">Access your delivery dashboard</p>

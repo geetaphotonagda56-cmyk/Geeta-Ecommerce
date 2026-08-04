@@ -1,0 +1,274 @@
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useToast } from '../../../context/ToastContext';
+import {
+    getOrderWorkflowDetail,
+    confirmOrder,
+    dispatchOrder,
+    updateOrderStatus,
+    Order,
+    DeliverySlot,
+} from '../../../services/api/admin/adminOrderService';
+import { generateBillQrDataUrl } from '../../../utils/generateBillQrCode';
+import ChooseDeliveryTimeSheet from '../components/ChooseDeliveryTimeSheet';
+import DispatchOrderSheet from '../components/DispatchOrderSheet';
+
+export default function AdminOrderDeliveryDetail() {
+    const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
+    const { showToast } = useToast();
+    const [order, setOrder] = useState<Order | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+    const [showConfirmSheet, setShowConfirmSheet] = useState(false);
+    const [showDispatchSheet, setShowDispatchSheet] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+
+    const fetchOrder = async () => {
+        if (!id) return;
+        try {
+            setLoading(true);
+            const response = await getOrderWorkflowDetail(id);
+            if (response.success && response.data) {
+                setOrder(response.data);
+                if (response.data.deliveryQrToken) {
+                    const dataUrl = await generateBillQrDataUrl(response.data._id, response.data.deliveryQrToken);
+                    setQrDataUrl(dataUrl);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching order detail:', err);
+            showToast('Failed to load order', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchOrder();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id]);
+
+    const handleConfirm = async (slot: DeliverySlot) => {
+        if (!order) return;
+        try {
+            setSubmitting(true);
+            const response = await confirmOrder(order._id, { deliverySlot: slot });
+            if (response.success) {
+                showToast('Order confirmed', 'success');
+                setShowConfirmSheet(false);
+                fetchOrder();
+            } else {
+                showToast(response.message || 'Failed to confirm order', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.response?.data?.message || 'Failed to confirm order', 'error');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleDispatch = async (deliveryBoyId: string) => {
+        if (!order) return;
+        try {
+            setSubmitting(true);
+            const response = await dispatchOrder(order._id, { deliveryBoyId });
+            if (response.success) {
+                showToast('Order dispatched', 'success');
+                setShowDispatchSheet(false);
+                fetchOrder();
+            } else {
+                showToast(response.message || 'Failed to dispatch order', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.response?.data?.message || 'Failed to dispatch order', 'error');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleCancel = async () => {
+        if (!order || !window.confirm(`Cancel order ${order.orderNumber}?`)) return;
+        try {
+            const response = await updateOrderStatus(order._id, { status: 'Cancelled' });
+            if (response.success) {
+                showToast('Order cancelled', 'success');
+                fetchOrder();
+            } else {
+                showToast(response.message || 'Failed to cancel order', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.response?.data?.message || 'Failed to cancel order', 'error');
+        }
+    };
+
+    if (loading) {
+        return <div className="p-6 text-center text-sm text-neutral-500">Loading order...</div>;
+    }
+
+    if (!order) {
+        return <div className="p-6 text-center text-sm text-neutral-500">Order not found</div>;
+    }
+
+    const items = Array.isArray(order.items) ? (order.items as any[]) : [];
+    const stage = order.deliveryWorkflowStage || 'New';
+    const deliveryBoy = typeof order.deliveryBoy === 'object' ? order.deliveryBoy : null;
+    const phoneDigits = order.customerPhone?.replace(/\D/g, '');
+
+    return (
+        <div className="p-4 md:p-6 max-w-3xl mx-auto">
+            <button onClick={() => navigate(-1)} className="text-sm text-neutral-500 mb-3">&larr; Back</button>
+
+            <div className="bg-white rounded-xl border border-neutral-200 p-5 mb-4">
+                <div className="flex items-center justify-between mb-1">
+                    <h1 className="text-lg font-semibold text-neutral-900">Order #{order.orderNumber}</h1>
+                    <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]">
+                        {stage}
+                    </span>
+                </div>
+                <p className="text-xs text-neutral-500">
+                    {order.orderDate ? new Date(order.orderDate).toLocaleString() : ''}
+                </p>
+            </div>
+
+            <div className="bg-white rounded-xl border border-neutral-200 p-5 mb-4">
+                <h2 className="text-sm font-semibold text-neutral-900 mb-3">Customer</h2>
+                <p className="text-sm text-neutral-900">{order.customerName}</p>
+                <p className="text-sm text-neutral-500 mb-1">{order.customerPhone}</p>
+                <p className="text-sm text-neutral-500 mb-3">
+                    {order.deliveryAddress?.address}, {order.deliveryAddress?.city} {order.deliveryAddress?.pincode}
+                </p>
+                <div className="flex items-center gap-2">
+                    <a
+                        href={`tel:${order.customerPhone}`}
+                        className="flex-1 text-center px-3 py-2 text-sm font-medium text-[var(--primary-color)] bg-[var(--primary-alpha-20)] rounded-lg"
+                    >
+                        📞 Call
+                    </a>
+                    <a
+                        href={`https://wa.me/${phoneDigits}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 text-center px-3 py-2 text-sm font-medium text-green-700 bg-green-50 rounded-lg"
+                    >
+                        WhatsApp
+                    </a>
+                </div>
+            </div>
+
+            {deliveryBoy && (
+                <div className="bg-white rounded-xl border border-neutral-200 p-5 mb-4">
+                    <h2 className="text-sm font-semibold text-neutral-900 mb-2">Delivery Partner</h2>
+                    <p className="text-sm text-neutral-900">{(deliveryBoy as any).name}</p>
+                    <p className="text-sm text-neutral-500">{(deliveryBoy as any).mobile}</p>
+                </div>
+            )}
+
+            <div className="bg-white rounded-xl border border-neutral-200 p-5 mb-4">
+                <h2 className="text-sm font-semibold text-neutral-900 mb-3">Items</h2>
+                <div className="space-y-3">
+                    {items.map((item: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-lg bg-neutral-100 overflow-hidden shrink-0">
+                                    {item.productImage && (
+                                        <img src={item.productImage} alt={item.productName} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                                    )}
+                                </div>
+                                <p className="text-sm text-neutral-700 truncate">{item.productName} x {item.quantity}</p>
+                            </div>
+                            <p className="text-sm font-medium text-neutral-900 shrink-0">₹{item.total?.toFixed(0)}</p>
+                        </div>
+                    ))}
+                </div>
+                <div className="border-t border-neutral-200 mt-3 pt-3 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-neutral-900">Total</p>
+                    <p className="text-sm font-semibold text-neutral-900">₹{order.total?.toFixed(0)}</p>
+                </div>
+            </div>
+
+            {order.billSummary && (
+                <div className="bg-white rounded-xl border border-neutral-200 p-5 mb-4">
+                    <h2 className="text-sm font-semibold text-neutral-900 mb-3">Profit (Admin only)</h2>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <p className="text-neutral-500 text-xs">Total Purchase</p>
+                            <p className="font-medium text-neutral-900">₹{order.billSummary.totalPurchase?.toFixed(0)}</p>
+                        </div>
+                        <div>
+                            <p className="text-neutral-500 text-xs">Total Sale</p>
+                            <p className="font-medium text-neutral-900">₹{order.billSummary.totalSP?.toFixed(0)}</p>
+                        </div>
+                        <div className="col-span-2">
+                            <p className="text-neutral-500 text-xs">Net Profit</p>
+                            <p className="font-semibold text-green-700">₹{order.billSummary.profit?.toFixed(0)}</p>
+                        </div>
+                    </div>
+                    {items.some((item: any) => item.lineProfit !== undefined) && (
+                        <div className="mt-3 pt-3 border-t border-neutral-100 space-y-1">
+                            {items.map((item: any, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between text-xs text-neutral-600">
+                                    <span className="truncate">{item.productName}</span>
+                                    <span>₹{item.lineProfit?.toFixed(0)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {qrDataUrl && (
+                <div className="bg-white rounded-xl border border-neutral-200 p-5 mb-4 flex flex-col items-center">
+                    <h2 className="text-sm font-semibold text-neutral-900 mb-3 self-start">Bill QR</h2>
+                    <img src={qrDataUrl} alt="Bill QR code" className="w-32 h-32" loading="lazy" decoding="async" />
+                </div>
+            )}
+
+            {order.orderChannel === 'WalkIn' ? (
+                <p className="text-xs text-neutral-500 text-center pb-4">
+                    This is a walk-in (POS) bill - confirm/dispatch/cancel actions don't apply.
+                </p>
+            ) : (
+                <div className="flex items-center gap-3 sticky bottom-4">
+                    {(stage === 'New' || stage === 'Confirmed') && (
+                        <button
+                            onClick={handleCancel}
+                            className="px-4 py-2.5 text-sm font-medium text-red-600 bg-red-50 rounded-lg"
+                        >
+                            Cancel
+                        </button>
+                    )}
+                    {stage === 'New' && (
+                        <button
+                            onClick={() => setShowConfirmSheet(true)}
+                            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[var(--primary-color)] rounded-lg"
+                        >
+                            Confirm
+                        </button>
+                    )}
+                    {stage === 'Confirmed' && (
+                        <button
+                            onClick={() => setShowDispatchSheet(true)}
+                            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[var(--primary-color)] rounded-lg"
+                        >
+                            Dispatch
+                        </button>
+                    )}
+                </div>
+            )}
+
+            <ChooseDeliveryTimeSheet
+                isOpen={showConfirmSheet}
+                onClose={() => setShowConfirmSheet(false)}
+                onConfirm={handleConfirm}
+                submitting={submitting}
+            />
+            <DispatchOrderSheet
+                isOpen={showDispatchSheet}
+                onClose={() => setShowDispatchSheet(false)}
+                onDispatch={handleDispatch}
+                submitting={submitting}
+            />
+        </div>
+    );
+}

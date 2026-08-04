@@ -170,8 +170,7 @@ export default function CategoryTileSection({
                                   // Hide broken image
                                   const target = e.target as HTMLImageElement;
                                   target.style.display = 'none';
-                                }}
-                              />
+                                }} loading="lazy" decoding="async" />
                             ) : (
                               <div
                                 key={idx}
@@ -195,8 +194,7 @@ export default function CategoryTileSection({
                             if (parent) {
                               parent.innerHTML = `<div class="w-full h-full flex items-center justify-center text-3xl text-neutral-300">${tile.name.charAt(0)}</div>`;
                             }
-                          }}
-                        />
+                          }} loading="lazy" decoding="async" />
                       )
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-3xl text-neutral-300">

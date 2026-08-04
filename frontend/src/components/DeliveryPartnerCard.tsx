@@ -113,8 +113,7 @@ export default function DeliveryPartnerCard({
                             <img
                                 src={partner.profileImage}
                                 alt={partner.name}
-                                className="w-full h-full object-cover"
-                            />
+                                className="w-full h-full object-cover" loading="lazy" decoding="async" />
                         ) : (
                             <span className="text-2xl text-white">🛵</span>
                         )}

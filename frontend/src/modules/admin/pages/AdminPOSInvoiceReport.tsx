@@ -4,10 +4,21 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { deletePOSOrder, getPOSOrders, updateOrderStatus, Order } from "../../../services/api/admin/adminOrderService";
+import { getDeliveryBoys, DeliveryBoy } from "../../../services/api/admin/adminDeliveryService";
 import { useAuth } from "../../../context/AuthContext";
 import { toast } from "react-hot-toast";
 
-type DateFilterType = 'today' | 'last7days' | 'last30days' | 'alltime' | 'custom';
+type DateFilterType = 'today' | 'thisweek' | 'thismonth' | 'last7days' | 'last30days' | 'alltime' | 'custom';
+
+const DATE_FILTER_LABELS: Record<DateFilterType, string> = {
+  today: 'Today',
+  thisweek: 'This Week',
+  thismonth: 'This Month',
+  last7days: 'Last 7 Days',
+  last30days: 'Last 30 Days',
+  alltime: 'All Time',
+  custom: 'Custom',
+};
 
 const AdminPOSInvoiceReport = () => {
   const { isAuthenticated, token } = useAuth();
@@ -18,6 +29,8 @@ const AdminPOSInvoiceReport = () => {
   const [customDateRange, setCustomDateRange] = useState({ start: "", end: "" });
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [paymentMethodFilter, setPaymentMethodFilter] = useState("All Methods");
+  const [deliveryBoys, setDeliveryBoys] = useState<DeliveryBoy[]>([]);
+  const [deliveryBoyFilter, setDeliveryBoyFilter] = useState("All");
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [editMode, setEditMode] = useState(false);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
@@ -32,7 +45,16 @@ const AdminPOSInvoiceReport = () => {
     if (isAuthenticated && token) {
       fetchOrders();
     }
-  }, [token, isAuthenticated, pagination.page, pagination.limit, dateFilterType, customDateRange, paymentMethodFilter, debouncedSearchTerm]);
+  }, [token, isAuthenticated, pagination.page, pagination.limit, dateFilterType, customDateRange, paymentMethodFilter, deliveryBoyFilter, debouncedSearchTerm]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !token) return;
+    getDeliveryBoys({ status: 'Active', limit: 100 })
+      .then((response) => {
+        if (response.success && response.data) setDeliveryBoys(response.data);
+      })
+      .catch(() => {});
+  }, [isAuthenticated, token]);
 
   // Handle search with debounce
   useEffect(() => {
@@ -52,6 +74,7 @@ const AdminPOSInvoiceReport = () => {
         limit: pagination.limit,
         paymentMethod: paymentMethodFilter !== "All Methods" ? paymentMethodFilter : undefined,
         search: debouncedSearchTerm || undefined,
+        deliveryBoyId: deliveryBoyFilter !== "All" ? deliveryBoyFilter : undefined,
       };
 
       // Date Filters
@@ -59,6 +82,16 @@ const AdminPOSInvoiceReport = () => {
       if (dateFilterType === 'today') {
         params.dateFrom = new Date(now.setHours(0, 0, 0, 0)).toISOString();
         params.dateTo = new Date(now.setHours(23, 59, 59, 999)).toISOString();
+      } else if (dateFilterType === 'thisweek') {
+        const d = new Date();
+        const day = d.getDay();
+        const diffToMonday = day === 0 ? 6 : day - 1;
+        d.setDate(d.getDate() - diffToMonday);
+        d.setHours(0, 0, 0, 0);
+        params.dateFrom = d.toISOString();
+      } else if (dateFilterType === 'thismonth') {
+        const d = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        params.dateFrom = d.toISOString();
       } else if (dateFilterType === 'last7days') {
         const d = new Date();
         d.setDate(d.getDate() - 7);
@@ -121,6 +154,8 @@ const AdminPOSInvoiceReport = () => {
       "Customer": item.customerName,
       "Phone": item.customerPhone,
       "Amount": item.total,
+      "Total MRP": item.totalMRP ?? 0,
+      "Profit": item.profit ?? 0,
       "Payment Method": item.paymentMethod,
       "Status": item.status
     })));
@@ -142,12 +177,14 @@ const AdminPOSInvoiceReport = () => {
       item.customerName,
       item.customerPhone,
       `₹${item.total.toLocaleString()}`,
+      `₹${(item.totalMRP ?? 0).toLocaleString()}`,
+      `₹${(item.profit ?? 0).toLocaleString()}`,
       item.paymentMethod,
       item.status
     ]);
 
     autoTable(doc, {
-      head: [['Invoice No', 'Date', 'Customer', 'Phone', 'Amount', 'Method', 'Status']],
+      head: [['Invoice No', 'Date', 'Customer', 'Phone', 'Amount', 'Total MRP', 'Profit', 'Method', 'Status']],
       body: tableData,
       startY: 28,
       styles: { fontSize: 9 },
@@ -255,7 +292,7 @@ const AdminPOSInvoiceReport = () => {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-100">
-            {['today', 'last7days', 'last30days', 'alltime', 'custom'].map((type) => (
+            {(['today', 'thisweek', 'thismonth', 'last7days', 'last30days', 'alltime', 'custom'] as DateFilterType[]).map((type) => (
               <button
                 key={type}
                 onClick={() => handleDateFilterChange(type as DateFilterType)}
@@ -264,7 +301,7 @@ const AdminPOSInvoiceReport = () => {
                     ? 'bg-white text-[var(--primary-dark)] shadow-sm border border-gray-100'
                     : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
                 }`}>
-                {type === 'alltime' ? 'All Time' : type.charAt(0).toUpperCase() + type.slice(1).replace('last', 'Last ')}
+                {DATE_FILTER_LABELS[type]}
               </button>
             ))}
 
@@ -329,6 +366,16 @@ const AdminPOSInvoiceReport = () => {
               <option>Card</option>
               <option>Net Banking</option>
             </select>
+
+            <select
+              value={deliveryBoyFilter}
+              onChange={(e) => setDeliveryBoyFilter(e.target.value)}
+              className="px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-700 outline-none focus:border-[var(--primary-color)] transition-all min-w-[180px]">
+              <option value="All">All Delivery Boys</option>
+              {deliveryBoys.map(d => (
+                <option key={d._id} value={d._id}>{d.name} - {d.mobile}</option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
@@ -351,21 +398,23 @@ const AdminPOSInvoiceReport = () => {
                   <th className="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Date</th>
                   <th className="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Customer</th>
                   <th className="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Amount</th>
+                  <th className="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Total MRP</th>
                   <th className="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Method</th>
                   <th className="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Status</th>
+                  <th className="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Profit</th>
                   <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {loading ? (
                    <tr>
-                     <td colSpan={8} className="px-6 py-24 text-center">
+                     <td colSpan={10} className="px-6 py-24 text-center">
                        <div className="w-10 h-10 border-4 border-[var(--primary-color)] border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
                        <p className="text-gray-400 font-black text-[10px] uppercase tracking-[0.2em]">Syncing POS Records...</p>
                      </td>
                    </tr>
                 ) : orders.length === 0 ? (
-                  <tr><td colSpan={8} className="px-6 py-24 text-center text-gray-400 font-black italic tracking-widest uppercase text-[10px]">No POS invoices found</td></tr>
+                  <tr><td colSpan={10} className="px-6 py-24 text-center text-gray-400 font-black italic tracking-widest uppercase text-[10px]">No POS invoices found</td></tr>
                 ) : (
                   orders.map((item: any) => (
                     <tr key={item._id} className="hover:bg-[var(--primary-alpha-10)]/30 transition-colors group">
@@ -421,6 +470,7 @@ const AdminPOSInvoiceReport = () => {
                           <span className="font-black text-gray-900 text-sm">₹{item.total.toLocaleString()}</span>
                         )}
                       </td>
+                      <td className="px-4 py-4 text-sm text-gray-700">₹{(item.totalMRP ?? 0).toLocaleString()}</td>
                       <td className="px-4 py-4">
                         <span className="px-3 py-1 bg-gray-100 rounded-lg text-[10px] font-black text-gray-500 uppercase tracking-widest">{item.paymentMethod}</span>
                       </td>
@@ -440,6 +490,7 @@ const AdminPOSInvoiceReport = () => {
                           </span>
                         )}
                       </td>
+                      <td className="px-4 py-4 font-black text-[var(--primary-dark)] text-sm">₹{(item.profit ?? 0).toLocaleString()}</td>
                       <td className="px-6 py-4 text-right">
                          <Link to={`/admin/orders/${item._id}`} className="px-4 py-2 bg-white border border-gray-100 text-[var(--primary-dark)] rounded-xl text-[10px] font-black hover:bg-[var(--primary-dark)] hover:text-white hover:border-[var(--primary-dark)] transition-all active:scale-95 shadow-sm">Details</Link>
                       </td>

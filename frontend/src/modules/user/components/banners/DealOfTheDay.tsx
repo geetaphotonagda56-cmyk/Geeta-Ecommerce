@@ -156,8 +156,7 @@ export default function DealOfTheDay() {
                              <img
                                 src={product.imageUrl}
                                 alt={product.name}
-                                className="w-full h-full object-contain"
-                             />
+                                className="w-full h-full object-contain" loading="lazy" decoding="async" />
                          </div>
 
                          <div className="w-full text-center">

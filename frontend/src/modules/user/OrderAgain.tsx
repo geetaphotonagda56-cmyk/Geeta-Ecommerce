@@ -178,8 +178,7 @@ export default function OrderAgain() {
                                   <img
                                     src={imageUrl}
                                     alt={productName}
-                                    className="w-full h-full object-contain"
-                                  />
+                                    className="w-full h-full object-contain" loading="lazy" decoding="async" />
                                 ) : (
                                   <span className="text-[8px] text-neutral-400">
                                     {firstChar}
@@ -264,8 +263,7 @@ export default function OrderAgain() {
                         <img
                           src={imageUrl}
                           alt={name}
-                          className="w-full h-full object-contain"
-                        />
+                          className="w-full h-full object-contain" loading="lazy" decoding="async" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-neutral-100 text-neutral-400 text-4xl">
                           {firstChar}

@@ -20,7 +20,7 @@ export default function CropTestHarness() {
       {resultUrl && (
         <div style={{ marginTop: 20 }}>
           <p>Result:</p>
-          <img src={resultUrl} style={{ border: "1px solid red", maxWidth: 400 }} />
+          <img src={resultUrl} style={{ border: "1px solid red", maxWidth: 400 }} loading="lazy" decoding="async" />
         </div>
       )}
       <ImageCropperModal

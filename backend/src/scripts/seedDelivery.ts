@@ -19,7 +19,7 @@ async function seedDelivery() {
     await Delivery.create({
       name: "Demo Delivery Partner",
       mobile: mobile,
-      email: "delivery@Geeta Stores.com",
+      email: "delivery@geetastores.com",
       password: "password123",
       address: "123 Geeta Stores Street",
       city: "Mumbai",

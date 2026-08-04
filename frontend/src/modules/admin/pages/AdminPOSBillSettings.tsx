@@ -200,7 +200,7 @@ const AdminPOSBillSettings = () => {
                 <div className="group relative h-48 w-48 flex items-center justify-center rounded-3xl border-2 border-dashed border-neutral-200 bg-neutral-50 shadow-inner transition-all hover:border-[var(--primary-color)]/50 hover:bg-[var(--primary-color)]/5 overflow-hidden">
                     {settings.qrCode ? (
                         <div className="relative w-full h-full p-4">
-                            <img src={settings.qrCode} alt="QR Scanner" className="w-full h-full object-contain" />
+                            <img src={settings.qrCode} alt="QR Scanner" className="w-full h-full object-contain" loading="lazy" decoding="async" />
                             <button
                                 onClick={() => setSettings(prev => ({...prev, qrCode: ""}))}
                                 className="absolute top-2 right-2 p-1.5 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-colors"

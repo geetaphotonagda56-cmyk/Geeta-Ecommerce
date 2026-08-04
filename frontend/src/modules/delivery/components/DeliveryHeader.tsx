@@ -31,8 +31,7 @@ export default function DeliveryHeader({ userName }: DeliveryHeaderProps) {
           <img
             src="/assets/geetastoreslogo.png"
             alt="Geeta Stores"
-            className="h-12 w-auto object-contain mb-1"
-          />
+            className="h-12 w-auto object-contain mb-1" loading="lazy" decoding="async" />
           <h1 className={`text-sm font-bold transition-colors ${
             isOnline ? 'text-[var(--primary-dark)]' : 'text-neutral-500'
           }`}>

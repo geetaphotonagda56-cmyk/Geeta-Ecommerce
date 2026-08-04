@@ -67,7 +67,7 @@ export const SimpleInvoice: React.FC<SimpleInvoiceProps> = ({ billDetails, shopS
         <div className="text-xs mt-3">Thank you for your purchase!</div>
         {shopSettings?.qrCode && (
           <div className="mt-4 flex justify-center">
-            <img src={shopSettings.qrCode} alt="QR" className="w-24 h-24 object-contain" />
+            <img src={shopSettings.qrCode} alt="QR" className="w-24 h-24 object-contain" loading="lazy" decoding="async" />
           </div>
         )}
       </div>

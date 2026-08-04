@@ -1615,8 +1615,7 @@ export default function OrderDetail() {
                           alt={
                             item.product?.name || item.productName || "Product"
                           }
-                          className="w-full h-full object-cover rounded-lg"
-                        />
+                          className="w-full h-full object-cover rounded-lg" loading="lazy" decoding="async" />
                       ) : (
                         <span className="text-2xl">📦</span>
                       )}

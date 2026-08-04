@@ -20,6 +20,9 @@ export interface OrderItem {
   isFreeGift?: boolean;
   freeGiftReason?: string;
   returnedQuantity?: number;
+  variantId?: string;
+  purchasePrice?: number;
+  lineProfit?: number;
 }
 
 export interface DeliveryAddress {
@@ -57,6 +60,7 @@ export interface Order {
   | "Processed"
   | "Shipped"
   | "Out for Delivery"
+  | "In Transit"
   | "Delivered"
   | "Cancelled"
   | "Rejected"
@@ -80,6 +84,42 @@ export interface Order {
   returnStatus?: "None" | "Partial" | "Full";
   createdAt?: string;
   updatedAt?: string;
+  totalMRP?: number;
+  totalSP?: number;
+  totalPurchase?: number;
+  profit?: number;
+  billSummary?: {
+    totalMRP: number;
+    totalPurchase: number;
+    totalSP: number;
+    profit: number;
+  };
+  deliveryWorkflowStage?: OrderWorkflowStage;
+  confirmedAt?: string;
+  dispatchedAt?: string;
+  inTransitAt?: string;
+  deliverySlot?: DeliverySlot;
+  deliveryQrToken?: string;
+  amountPaid?: number;
+  isPartialPayment?: boolean;
+  orderChannel?: OrderChannel;
+}
+
+export type OrderChannel = "Online" | "WalkIn";
+
+export type OrderWorkflowStage =
+  | "All"
+  | "New"
+  | "Confirmed"
+  | "Shipment Ready"
+  | "In Transit"
+  | "Delivered"
+  | "Cancelled";
+
+export interface DeliverySlot {
+  type: "Fast" | "Same-day" | "Later" | "Custom";
+  label?: string;
+  scheduledFor?: string;
 }
 
 export interface OrderHistoryLineItem {
@@ -119,10 +159,12 @@ export interface GetOrdersParams {
   limit?: number;
   status?: string;
   paymentStatus?: string;
+  paymentMethod?: string;
   seller?: string;
   dateFrom?: string;
   dateTo?: string;
   search?: string;
+  deliveryBoyId?: string;
 }
 
 export interface UpdateOrderStatusData {
@@ -490,5 +532,67 @@ export const restorePOSOrderStockOnly = async (id: string): Promise<ApiResponse<
  */
 export const deleteOrder = async (id: string): Promise<ApiResponse<any>> => {
   const response = await api.delete<ApiResponse<any>>(`/admin/orders/${id}`);
+  return response.data;
+};
+
+export interface GetOrdersByWorkflowStageResponse extends ApiResponse<Order[]> {
+  counts: Record<OrderWorkflowStage, number>;
+  pagination: { page: number; limit: number; total: number; pages: number };
+}
+
+/**
+ * Get orders for the admin "Order Delivery" tabbed workflow page.
+ */
+export const getOrdersByWorkflowStage = async (
+  stage: OrderWorkflowStage,
+  params?: { page?: number; limit?: number; search?: string; channel?: OrderChannel }
+): Promise<GetOrdersByWorkflowStageResponse> => {
+  const response = await api.get<GetOrdersByWorkflowStageResponse>(
+    "/admin/orders/delivery-workflow",
+    { params: { stage, ...params } }
+  );
+  return response.data;
+};
+
+/**
+ * Get the admin-only order detail (includes per-item/order profit) for the
+ * Order Delivery workflow page.
+ */
+export const getOrderWorkflowDetail = async (
+  id: string
+): Promise<ApiResponse<Order>> => {
+  const response = await api.get<ApiResponse<Order>>(
+    `/admin/orders/${id}/workflow-detail`
+  );
+  return response.data;
+};
+
+/**
+ * Confirm a "New" order with a chosen delivery time slot, moving it to
+ * "Confirmed".
+ */
+export const confirmOrder = async (
+  id: string,
+  data: { deliverySlot: DeliverySlot }
+): Promise<ApiResponse<Order>> => {
+  const response = await api.patch<ApiResponse<Order>>(
+    `/admin/orders/${id}/confirm`,
+    data
+  );
+  return response.data;
+};
+
+/**
+ * Dispatch a "Confirmed" order to a delivery partner, moving it to
+ * "Shipment Ready" and notifying the delivery boy.
+ */
+export const dispatchOrder = async (
+  id: string,
+  data: AssignDeliveryBoyData
+): Promise<ApiResponse<Order>> => {
+  const response = await api.patch<ApiResponse<Order>>(
+    `/admin/orders/${id}/dispatch`,
+    data
+  );
   return response.data;
 };

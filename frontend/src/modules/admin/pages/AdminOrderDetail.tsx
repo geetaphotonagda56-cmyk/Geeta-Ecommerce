@@ -442,6 +442,9 @@ export default function AdminOrderDetail() {
                     <th className="text-right py-2 px-2">Price</th>
                     <th className="text-right py-2 px-2">Qty</th>
                     <th className="text-right py-2 px-2">Total</th>
+                    <th className="text-right py-2 px-2">MRP</th>
+                    <th className="text-right py-2 px-2">Purchase Price</th>
+                    <th className="text-right py-2 px-2">Profit</th>
                     {isEditingItems && <th className="text-center py-2 px-2">Action</th>}
                   </tr>
                 </thead>
@@ -498,6 +501,15 @@ export default function AdminOrderDetail() {
                         </td>
                         <td className="text-right py-3 px-2 font-medium">
                           ₹{total.toFixed(2)}
+                        </td>
+                        <td className="text-right py-3 px-2 text-neutral-600">
+                          {isEditingItems ? '—' : `₹${(item.mrp ?? unitPrice).toFixed(2)}`}
+                        </td>
+                        <td className="text-right py-3 px-2 text-neutral-600">
+                          {isEditingItems ? '—' : `₹${(item.purchasePrice ?? 0).toFixed(2)}`}
+                        </td>
+                        <td className="text-right py-3 px-2 font-semibold text-[var(--primary-dark)]">
+                          {isEditingItems ? '—' : `₹${(item.lineProfit ?? (total - (item.purchasePrice ?? 0) * quantity)).toFixed(2)}`}
                         </td>
                         {isEditingItems && (
                           <td className="text-center py-3 px-2">
@@ -556,7 +568,7 @@ export default function AdminOrderDetail() {
                                 <div key={product._id} className="border rounded-lg p-3 hover:bg-neutral-50 transition-colors">
                                    <div className="flex justify-between items-start">
                                       <div className="flex gap-4">
-                                         <img src={product.mainImage} alt="" className="w-12 h-12 object-contain bg-white rounded border" />
+                                         <img src={product.mainImage} alt="" className="w-12 h-12 object-contain bg-white rounded border" loading="lazy" decoding="async" />
                                          <div>
                                             <p className="font-semibold text-neutral-900">{product.productName}</p>
                                             <p className="text-xs text-neutral-500">SKU: {product.sku}</p>
@@ -770,6 +782,22 @@ export default function AdminOrderDetail() {
                 <span>Total:</span>
                 <span>₹{order.total?.toFixed(2) || '0.00'}</span>
               </div>
+              {order.billSummary && (
+                <div className="border-t pt-2 mt-2 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-neutral-600">Total MRP:</span>
+                    <span className="font-medium">₹{order.billSummary.totalMRP.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-neutral-600">Total Purchase Price:</span>
+                    <span className="font-medium">₹{order.billSummary.totalPurchase.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold text-[var(--primary-dark)]">
+                    <span>Profit:</span>
+                    <span>₹{order.billSummary.profit.toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

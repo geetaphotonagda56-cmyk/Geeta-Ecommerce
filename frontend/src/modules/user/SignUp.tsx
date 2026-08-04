@@ -168,8 +168,7 @@ export default function SignUp() {
             <img
               src="/assets/geetastoreslogo.png"
               alt="Geeta Stores"
-              className="h-9 sm:h-11 w-auto object-contain"
-            />
+              className="h-9 sm:h-11 w-auto object-contain" loading="lazy" decoding="async" />
           </motion.div>
           <div className="text-center">
             <h1 className="text-white font-bold text-base sm:text-lg tracking-tight">Join Geeta Stores</h1>

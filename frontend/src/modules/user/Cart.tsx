@@ -150,8 +150,7 @@ export default function Cart() {
                     <img
                       src={prod.imageUrl}
                       alt={prod.name}
-                      className="w-full h-full object-cover rounded-lg"
-                    />
+                      className="w-full h-full object-cover rounded-lg" loading="lazy" decoding="async" />
                   ) : (
                     <span className="text-2xl text-neutral-400">
                       {(prod.name || 'P').charAt(0).toUpperCase()}

@@ -1703,8 +1703,7 @@ export default function AdminStockManagement() {
                             onError={(e) => {
                               (e.target as HTMLImageElement).src =
                                 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="80"%3E%3Crect width="60" height="80" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-size="10"%3ENo Image%3C/text%3E%3C/svg%3E';
-                            }}
-                          />
+                            }} loading="lazy" decoding="async" />
                         ) : (
                           <div className="w-10 h-10 bg-neutral-100 rounded flex items-center justify-center text-xs text-neutral-400">
                             No Img
@@ -1941,8 +1940,7 @@ export default function AdminStockManagement() {
                           onError={(e) => {
                             (e.target as HTMLImageElement).src =
                               'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="80"%3E%3Crect width="60" height="80" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-size="10"%3ENo Image%3C/text%3E%3C/svg%3E';
-                          }}
-                        />
+                          }} loading="lazy" decoding="async" />
                       ) : (
                         <div className="w-full h-full bg-neutral-50 flex flex-col items-center justify-center text-neutral-300 gap-1">
                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -2216,7 +2214,7 @@ export default function AdminStockManagement() {
               <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm mb-6 flex flex-col md:flex-row gap-6">
                 <div className="w-full md:w-32 aspect-square rounded-lg border border-neutral-100 overflow-hidden bg-white flex items-center justify-center relative group">
                   {selectedProductDetails.image ? (
-                    <img src={selectedProductDetails.image} alt="" className="w-full h-full object-contain" />
+                    <img src={selectedProductDetails.image} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" />
                   ) : (
                     <div className="text-neutral-300"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>
                   )}

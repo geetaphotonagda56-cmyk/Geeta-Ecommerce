@@ -153,6 +153,21 @@ export const createDeliveryBoy = async (
   return response.data;
 };
 
+/**
+ * Quick-create a delivery partner from the Dispatch Order popup - just name
+ * + mobile, immediately Active. Admin can fill in the rest later.
+ */
+export const quickCreateDeliveryBoy = async (data: {
+  name: string;
+  mobile: string;
+}): Promise<ApiResponse<DeliveryBoy>> => {
+  const response = await api.post<ApiResponse<DeliveryBoy>>(
+    "/admin/delivery/quick-create",
+    data
+  );
+  return response.data;
+};
+
 export const updateDeliveryBoy = async (
   id: string,
   data: UpdateDeliveryBoyData
@@ -247,6 +262,69 @@ export const getDeliveryBoyCashCollections = async (
 ): Promise<ApiResponse<CashCollection[]>> => {
   const response = await api.get<ApiResponse<CashCollection[]>>(
     `/admin/delivery/${deliveryBoyId}/cash-collections`,
+    { params }
+  );
+  return response.data;
+};
+
+/**
+ * Delivery Performance Report
+ */
+export interface DeliveryPerformanceRow {
+  deliveryBoyId: string;
+  name?: string;
+  mobile?: string;
+  assigned: number;
+  delivered: number;
+  failed: number;
+  cancelled: number;
+  avgDurationMs: number;
+  onTimePercent: number | null;
+}
+
+export interface DeliveryPerformanceAssignment {
+  _id: string;
+  order?: { _id: string; orderNumber?: string; estimatedDeliveryDate?: string; total?: number };
+  deliveryBoy?: { _id: string; name?: string; mobile?: string };
+  status: string;
+  assignmentType: string;
+  assignedAt: string;
+  acceptedAt?: string;
+  pickedUpAt?: string;
+  inTransitAt?: string;
+  deliveredAt?: string;
+  failedAt?: string;
+  failureReason?: string;
+}
+
+export interface DeliveryPerformanceSummary {
+  assigned: number;
+  delivered: number;
+  failed: number;
+  cancelled: number;
+  onTimePercent: number | null;
+  avgDurationMs: number;
+}
+
+export interface DeliveryPerformanceReportData {
+  perDeliveryBoy: DeliveryPerformanceRow[];
+  summary: DeliveryPerformanceSummary;
+  assignments: DeliveryPerformanceAssignment[];
+}
+
+export interface GetDeliveryPerformanceParams {
+  page?: number;
+  limit?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  deliveryBoyId?: string;
+}
+
+export const getDeliveryPerformanceReport = async (
+  params?: GetDeliveryPerformanceParams
+): Promise<ApiResponse<DeliveryPerformanceReportData>> => {
+  const response = await api.get<ApiResponse<DeliveryPerformanceReportData>>(
+    "/admin/reports/delivery-performance",
     { params }
   );
   return response.data;

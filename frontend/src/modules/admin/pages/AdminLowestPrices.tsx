@@ -444,8 +444,7 @@ export default function AdminLowestPrices() {
                                                                     referrerPolicy="no-referrer"
                                                                     onError={(e) => {
                                                                         (e.target as HTMLImageElement).style.display = "none";
-                                                                    }}
-                                                                />
+                                                                    }} loading="lazy" decoding="async" />
                                                             ) : (
                                                                 <span className="text-neutral-400 text-lg font-bold">
                                                                     {(product?.productName || "?").charAt(0).toUpperCase()}

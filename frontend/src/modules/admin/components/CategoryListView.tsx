@@ -115,8 +115,7 @@ export default function CategoryListView({
                         if (parent) {
                           parent.innerHTML = `<div class="w-12 h-12 rounded-lg bg-neutral-100 flex items-center justify-center"><span class="text-lg font-semibold text-neutral-400">${category.name.charAt(0).toUpperCase()}</span></div>`;
                         }
-                      }}
-                    />
+                      }} loading="lazy" decoding="async" />
                   ) : (
                     <div className="w-12 h-12 rounded-lg bg-neutral-100 flex items-center justify-center">
                       <span className="text-lg font-semibold text-neutral-400">

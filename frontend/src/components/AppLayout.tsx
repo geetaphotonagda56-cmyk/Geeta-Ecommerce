@@ -387,8 +387,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 <img
                   src={config?.appLogo || "/assets/geetastoreslogo.png"}
                   alt={config?.appName || "Geeta Stores"}
-                  className="h-12 w-auto object-contain"
-                />
+                  className="h-12 w-auto object-contain" loading="lazy" decoding="async" />
               </Link>
 
               <div className="flex items-center justify-center gap-8 flex-1">
@@ -625,7 +624,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                                         <path d="m21 21-4.35-4.35" />
                                       </svg>
                                     ) : item.image ? (
-                                      <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+                                      <img src={item.image} alt={item.name} className="w-full h-full object-contain" loading="lazy" decoding="async" />
                                     ) : (
                                       <span className="text-xl">
                                         {item.type === 'category' ? '📁' : '📦'}

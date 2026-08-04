@@ -154,7 +154,7 @@ export default function AdminReplaceRequests() {
                                     className="h-10 w-10 bg-gray-100 rounded border overflow-hidden cursor-pointer hover:scale-105 transition-transform"
                                     onClick={() => setSelectedImage(img)}
                                 >
-                                    <img src={img} alt="Issue" className="h-full w-full object-cover" />
+                                    <img src={img} alt="Issue" className="h-full w-full object-cover" loading="lazy" decoding="async" />
                                 </div>
                             ))
                         ) : (
@@ -217,7 +217,7 @@ export default function AdminReplaceRequests() {
        {selectedImage && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 p-4" onClick={() => setSelectedImage(null)}>
           <div className="bg-white p-2 rounded-lg max-w-lg w-full" onClick={e => e.stopPropagation()}>
-             <img src={selectedImage} alt="Full View" className="w-full h-auto rounded" />
+             <img src={selectedImage} alt="Full View" className="w-full h-auto rounded" loading="lazy" decoding="async" />
              <button
                 className="mt-2 w-full py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 font-medium"
                 onClick={() => setSelectedImage(null)}

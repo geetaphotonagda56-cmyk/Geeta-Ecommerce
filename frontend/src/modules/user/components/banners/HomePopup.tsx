@@ -57,8 +57,7 @@ export default function HomePopup() {
             <img
                 src={popupData.image || popupData.imageUrl}
                 alt={popupData.title || 'Offer'}
-                className="w-full h-auto max-h-[55vh] object-contain"
-            />
+                className="w-full h-auto max-h-[55vh] object-contain" loading="lazy" decoding="async" />
          </div>
 
          <div className="p-6 text-center relative -mt-6 bg-white rounded-t-3xl">

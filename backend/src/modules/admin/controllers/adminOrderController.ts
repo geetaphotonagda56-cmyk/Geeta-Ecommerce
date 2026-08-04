@@ -14,6 +14,7 @@ import { Server as SocketIOServer } from "socket.io";
 import StockLedger from "../../../models/StockLedger";
 import OrderHistory from "../../../models/OrderHistory";
 import CreditTransaction from "../../../models/CreditTransaction";
+import Notification from "../../../models/Notification";
 import {
   decrementVariantStock,
   getVariantStock,
@@ -32,6 +33,49 @@ import {
 } from "../../../services/phonepeService";
 import { completePosOnlinePayment } from "../../pos/completePosOnlinePayment";
 import { computeCharges, resolveSalesPerson, resolvePaymentStatus } from "./orderChargesUtils";
+
+/**
+ * Shared $addFields stage for order-item profit/MRP computation used by
+ * getOnlineOrders/getPOSOrders. Mirrors the purchasePrice variant-matching
+ * logic in adminInventoryController.getSalesSummaryReport so profit figures
+ * stay consistent across reports.
+ */
+const buildItemProfitAddFields = () => ({
+  "items.purchasePrice": {
+    $let: {
+      vars: { product: { $arrayElemAt: ["$productInfo", 0] } },
+      in: {
+        $let: {
+          vars: {
+            matchedVariant: {
+              $first: {
+                $filter: {
+                  input: { $ifNull: ["$$product.variations", []] },
+                  as: "v",
+                  cond: { $eq: ["$$v._id", "$items.variantId"] },
+                },
+              },
+            },
+          },
+          in: {
+            $ifNull: [
+              "$$matchedVariant.purchasePrice",
+              {
+                $ifNull: [
+                  { $arrayElemAt: ["$$product.variations.purchasePrice", 0] },
+                  { $ifNull: ["$$product.purchasePrice", 0] },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    },
+  },
+  "items.mrp": {
+    $ifNull: [{ $arrayElemAt: ["$productInfo.compareAtPrice", 0] }, "$items.unitPrice"],
+  },
+});
 
 /**
  * Get all orders with filters
@@ -114,28 +158,37 @@ export const getOnlineOrders = asyncHandler(
       dateFrom,
       dateTo,
       search,
+      deliveryBoyId,
     } = req.query;
 
-    const query: any = {
+    const pageNum = parseInt(page as string) || 1;
+    const limitNum = parseInt(limit as string) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    const matchStage: any = {
       $and: [
         { adminNotes: { $not: { $regex: "pos", $options: "i" } } },
         { "deliveryAddress.address": { $ne: "POS Order" } }
       ]
     };
 
-    if (status && status !== "All Status") query.status = status;
-    if (paymentStatus) query.paymentStatus = paymentStatus;
-    if (paymentMethod) query.paymentMethod = paymentMethod;
+    if (status && status !== "All Status") matchStage.status = status;
+    if (paymentStatus) matchStage.paymentStatus = paymentStatus;
+    if (paymentMethod) matchStage.paymentMethod = paymentMethod;
 
     if (dateFrom || dateTo) {
-      query.orderDate = {};
-      if (dateFrom) query.orderDate.$gte = new Date(dateFrom as string);
-      if (dateTo) query.orderDate.$lte = new Date(dateTo as string);
+      matchStage.orderDate = {};
+      if (dateFrom) matchStage.orderDate.$gte = new Date(dateFrom as string);
+      if (dateTo) matchStage.orderDate.$lte = new Date(dateTo as string);
+    }
+
+    if (deliveryBoyId && mongoose.Types.ObjectId.isValid(deliveryBoyId as string)) {
+      matchStage.deliveryBoy = new mongoose.Types.ObjectId(deliveryBoyId as string);
     }
 
     if (search) {
       const searchRegex = { $regex: search as string, $options: "i" };
-      query.$or = [
+      matchStage.$or = [
         { orderNumber: searchRegex },
         { customerName: searchRegex },
         { customerEmail: searchRegex },
@@ -145,26 +198,73 @@ export const getOnlineOrders = asyncHandler(
       ];
     }
 
-    const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+    const pipeline: any[] = [
+      { $match: matchStage },
+      {
+        $lookup: {
+          from: "orderitems",
+          localField: "_id",
+          foreignField: "order",
+          as: "items"
+        }
+      },
+      { $unwind: { path: "$items", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "products",
+          localField: "items.product",
+          foreignField: "_id",
+          as: "productInfo"
+        }
+      },
+      { $addFields: buildItemProfitAddFields() },
+      {
+        $group: {
+          _id: "$_id",
+          orderNumber: { $first: "$orderNumber" },
+          orderDate: { $first: "$orderDate" },
+          customer: { $first: "$customer" },
+          customerName: { $first: "$customerName" },
+          customerEmail: { $first: "$customerEmail" },
+          customerPhone: { $first: "$customerPhone" },
+          deliveryAddress: { $first: "$deliveryAddress" },
+          total: { $first: "$total" },
+          paymentMethod: { $first: "$paymentMethod" },
+          paymentStatus: { $first: "$paymentStatus" },
+          status: { $first: "$status" },
+          deliveryBoy: { $first: "$deliveryBoy" },
+          deliveryBoyStatus: { $first: "$deliveryBoyStatus" },
+          adminNotes: { $first: "$adminNotes" },
+          createdAt: { $first: "$createdAt" },
+          updatedAt: { $first: "$updatedAt" },
+          totalMRP: { $sum: { $multiply: [{ $ifNull: ["$items.mrp", 0] }, { $ifNull: ["$items.quantity", 0] }] } },
+          totalSP: { $sum: { $multiply: [{ $ifNull: ["$items.unitPrice", 0] }, { $ifNull: ["$items.quantity", 0] }] } },
+          totalPurchase: { $sum: { $multiply: [{ $ifNull: ["$items.purchasePrice", 0] }, { $ifNull: ["$items.quantity", 0] }] } },
+        }
+      },
+      { $addFields: { profit: { $subtract: ["$totalSP", "$totalPurchase"] } } },
+      { $sort: { orderDate: -1 } },
+      {
+        $facet: {
+          data: [{ $skip: skip }, { $limit: limitNum }],
+          totalCount: [{ $count: "count" }],
+        }
+      }
+    ];
 
-    const [orders, total] = await Promise.all([
-      Order.find(query)
-        .populate("customer", "name email phone")
-        .sort({ orderDate: -1 })
-        .skip(skip)
-        .limit(parseInt(limit as string)),
-      Order.countDocuments(query),
-    ]);
+    const results = await Order.aggregate(pipeline);
+    const orders = results[0]?.data || [];
+    const total = results[0]?.totalCount?.[0]?.count || 0;
 
     return res.status(200).json({
       success: true,
       message: "Online orders fetched successfully",
       data: orders,
       pagination: {
-        page: parseInt(page as string),
-        limit: parseInt(limit as string),
+        page: pageNum,
+        limit: limitNum,
         total,
-        pages: Math.ceil(total / parseInt(limit as string)),
+        pages: Math.ceil(total / limitNum),
       },
     });
   }
@@ -183,9 +283,14 @@ export const getPOSOrders = asyncHandler(
       dateFrom,
       dateTo,
       search,
+      deliveryBoyId,
     } = req.query;
 
-    const query: any = {
+    const pageNum = parseInt(page as string) || 1;
+    const limitNum = parseInt(limit as string) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    const matchStage: any = {
       $and: [
         {
           $or: [
@@ -199,18 +304,22 @@ export const getPOSOrders = asyncHandler(
       ]
     };
 
-    if (status) query.status = status;
-    if (paymentMethod && paymentMethod !== "All Methods") query.paymentMethod = paymentMethod;
+    if (status) matchStage.status = status;
+    if (paymentMethod && paymentMethod !== "All Methods") matchStage.paymentMethod = paymentMethod;
 
     if (dateFrom || dateTo) {
-      query.orderDate = {};
-      if (dateFrom) query.orderDate.$gte = new Date(dateFrom as string);
-      if (dateTo) query.orderDate.$lte = new Date(dateTo as string);
+      matchStage.orderDate = {};
+      if (dateFrom) matchStage.orderDate.$gte = new Date(dateFrom as string);
+      if (dateTo) matchStage.orderDate.$lte = new Date(dateTo as string);
+    }
+
+    if (deliveryBoyId && mongoose.Types.ObjectId.isValid(deliveryBoyId as string)) {
+      matchStage.deliveryBoy = new mongoose.Types.ObjectId(deliveryBoyId as string);
     }
 
     if (search) {
       const searchRegex = { $regex: search as string, $options: "i" };
-      query.$and.push({
+      matchStage.$and.push({
         $or: [
           { orderNumber: searchRegex },
           { customerName: searchRegex },
@@ -221,26 +330,73 @@ export const getPOSOrders = asyncHandler(
       });
     }
 
-    const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+    const pipeline: any[] = [
+      { $match: matchStage },
+      {
+        $lookup: {
+          from: "orderitems",
+          localField: "_id",
+          foreignField: "order",
+          as: "items"
+        }
+      },
+      { $unwind: { path: "$items", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "products",
+          localField: "items.product",
+          foreignField: "_id",
+          as: "productInfo"
+        }
+      },
+      { $addFields: buildItemProfitAddFields() },
+      {
+        $group: {
+          _id: "$_id",
+          orderNumber: { $first: "$orderNumber" },
+          orderDate: { $first: "$orderDate" },
+          customer: { $first: "$customer" },
+          customerName: { $first: "$customerName" },
+          customerEmail: { $first: "$customerEmail" },
+          customerPhone: { $first: "$customerPhone" },
+          deliveryAddress: { $first: "$deliveryAddress" },
+          total: { $first: "$total" },
+          paymentMethod: { $first: "$paymentMethod" },
+          paymentStatus: { $first: "$paymentStatus" },
+          status: { $first: "$status" },
+          deliveryBoy: { $first: "$deliveryBoy" },
+          deliveryBoyStatus: { $first: "$deliveryBoyStatus" },
+          adminNotes: { $first: "$adminNotes" },
+          createdAt: { $first: "$createdAt" },
+          updatedAt: { $first: "$updatedAt" },
+          totalMRP: { $sum: { $multiply: [{ $ifNull: ["$items.mrp", 0] }, { $ifNull: ["$items.quantity", 0] }] } },
+          totalSP: { $sum: { $multiply: [{ $ifNull: ["$items.unitPrice", 0] }, { $ifNull: ["$items.quantity", 0] }] } },
+          totalPurchase: { $sum: { $multiply: [{ $ifNull: ["$items.purchasePrice", 0] }, { $ifNull: ["$items.quantity", 0] }] } },
+        }
+      },
+      { $addFields: { profit: { $subtract: ["$totalSP", "$totalPurchase"] } } },
+      { $sort: { orderDate: -1 } },
+      {
+        $facet: {
+          data: [{ $skip: skip }, { $limit: limitNum }],
+          totalCount: [{ $count: "count" }],
+        }
+      }
+    ];
 
-    const [orders, total] = await Promise.all([
-      Order.find(query)
-        .populate("customer", "name email phone")
-        .sort({ orderDate: -1 })
-        .skip(skip)
-        .limit(parseInt(limit as string)),
-      Order.countDocuments(query),
-    ]);
+    const results = await Order.aggregate(pipeline);
+    const orders = results[0]?.data || [];
+    const total = results[0]?.totalCount?.[0]?.count || 0;
 
     return res.status(200).json({
       success: true,
       message: "POS orders fetched successfully",
       data: orders,
       pagination: {
-        page: parseInt(page as string),
-        limit: parseInt(limit as string),
+        page: pageNum,
+        limit: limitNum,
         total,
-        pages: Math.ceil(total / parseInt(limit as string)),
+        pages: Math.ceil(total / limitNum),
       },
     });
   }
@@ -261,7 +417,7 @@ export const getOrderById = asyncHandler(
         populate: [
           {
             path: "product",
-            select: "productName mainImage price compareAtPrice wholesalePrice variations",
+            select: "productName mainImage price compareAtPrice wholesalePrice purchasePrice variations",
           },
           {
             path: "seller",
@@ -278,10 +434,51 @@ export const getOrderById = asyncHandler(
       });
     }
 
+    // Attach per-item MRP/purchasePrice/profit and a bill-level summary so
+    // the admin bill-detail view can show margins without a second query.
+    const orderObj: any = order.toObject();
+    let billTotalMRP = 0;
+    let billTotalPurchase = 0;
+    let billTotalSP = 0;
+
+    orderObj.items = (orderObj.items || []).map((item: any) => {
+      const product = item.product;
+      const variations = product?.variations || [];
+      const matchedVariant = variations.find(
+        (v: any) => String(v._id) === String(item.variantId)
+      );
+      const purchasePrice =
+        matchedVariant?.purchasePrice ??
+        variations[0]?.purchasePrice ??
+        product?.purchasePrice ??
+        0;
+      const mrp = product?.compareAtPrice ?? item.unitPrice ?? 0;
+      const quantity = item.quantity || 0;
+      const lineSP = (item.unitPrice || 0) * quantity;
+      const linePurchase = purchasePrice * quantity;
+      const lineMRP = mrp * quantity;
+      const lineProfit = lineSP - linePurchase;
+
+      if (!item.isFreeGift) {
+        billTotalMRP += lineMRP;
+        billTotalPurchase += linePurchase;
+        billTotalSP += lineSP;
+      }
+
+      return { ...item, purchasePrice, mrp, lineProfit };
+    });
+
+    orderObj.billSummary = {
+      totalMRP: billTotalMRP,
+      totalPurchase: billTotalPurchase,
+      totalSP: billTotalSP,
+      profit: billTotalSP - billTotalPurchase,
+    };
+
     return res.status(200).json({
       success: true,
       message: "Order fetched successfully",
-      data: order,
+      data: orderObj,
     });
   }
 );
@@ -318,11 +515,13 @@ export const updateOrderStatus = asyncHandler(
 
     if (status === "Delivered") {
       updateData.deliveredAt = new Date();
+      updateData.deliveryWorkflowStage = "Delivered";
     }
 
     if (status === "Cancelled") {
       updateData.cancelledAt = new Date();
       updateData.cancelledBy = req.user?.userId;
+      updateData.deliveryWorkflowStage = "Cancelled";
     }
 
     const order = await Order.findByIdAndUpdate(id, updateData, {
@@ -1032,22 +1231,6 @@ export const assignDeliveryBoy = asyncHandler(
       });
     }
 
-    // Verify delivery boy exists and is active
-    const deliveryBoy = await Delivery.findById(deliveryBoyId);
-    if (!deliveryBoy) {
-      return res.status(404).json({
-        success: false,
-        message: "Delivery boy not found",
-      });
-    }
-
-    if (deliveryBoy.status !== "Active") {
-      return res.status(400).json({
-        success: false,
-        message: "Delivery boy is not active",
-      });
-    }
-
     const order = await Order.findById(id);
     if (!order) {
       return res.status(404).json({
@@ -1056,24 +1239,14 @@ export const assignDeliveryBoy = asyncHandler(
       });
     }
 
-    // Update order
-    order.deliveryBoy = deliveryBoyId as any;
-    order.deliveryBoyStatus = "Assigned";
-    order.assignedAt = new Date();
-    await order.save();
-
-    // Create or update delivery assignment
-    await DeliveryAssignment.findOneAndUpdate(
-      { order: id },
-      {
-        order: id,
-        deliveryBoy: deliveryBoyId,
-        assignedAt: new Date(),
-        assignedBy: req.user?.userId,
-        status: "Assigned",
-      },
-      { upsert: true, new: true }
-    );
+    try {
+      await performDeliveryAssignment(order, deliveryBoyId, req.user?.userId);
+    } catch (err: any) {
+      return res.status(err.statusCode || 500).json({
+        success: false,
+        message: err.message || "Failed to assign delivery boy",
+      });
+    }
 
     const updatedOrder = await Order.findById(id)
       .populate("customer", "name email phone")
@@ -1138,6 +1311,383 @@ export const getOrdersByStatus = asyncHandler(
         total,
         pages: Math.ceil(total / parseInt(limit as string)),
       },
+    });
+  }
+);
+
+const WORKFLOW_STAGES = [
+  "New",
+  "Confirmed",
+  "Shipment Ready",
+  "In Transit",
+  "Delivered",
+  "Cancelled",
+] as const;
+
+/**
+ * Admin "Order Delivery" workflow - list orders grouped by
+ * deliveryWorkflowStage for the tabbed card view. Card projection is
+ * deliberately profit-free (no purchasePrice/lineProfit/billSummary) -
+ * see getOrderWorkflowDetail for the admin-only profit view.
+ */
+// Same channel heuristic used by getOnlineOrders/getPOSOrders - a walk-in
+// (POS) bill has "pos" in adminNotes or the POS placeholder delivery address.
+const ONLINE_CHANNEL_MATCH = {
+  $and: [
+    { adminNotes: { $not: { $regex: "pos", $options: "i" } } },
+    { "deliveryAddress.address": { $ne: "POS Order" } },
+  ],
+};
+const WALK_IN_CHANNEL_MATCH = {
+  $or: [
+    { adminNotes: { $regex: "pos", $options: "i" } },
+    { "deliveryAddress.address": "POS Order" },
+  ],
+};
+
+export const getOrdersByWorkflowStage = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { stage = "All", channel = "Online", page = 1, limit = 20, search } = req.query;
+
+    if (stage !== "All" && !WORKFLOW_STAGES.includes(stage as any)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid stage. Must be one of: All, ${WORKFLOW_STAGES.join(", ")}`,
+      });
+    }
+    if (channel !== "Online" && channel !== "WalkIn") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid channel. Must be one of: Online, WalkIn",
+      });
+    }
+
+    const andConditions: any[] = [
+      channel === "WalkIn" ? WALK_IN_CHANNEL_MATCH : ONLINE_CHANNEL_MATCH,
+    ];
+    if (stage !== "All") {
+      andConditions.push({ deliveryWorkflowStage: stage });
+    }
+    if (search) {
+      const searchRegex = new RegExp(String(search), "i");
+      andConditions.push({
+        $or: [
+          { orderNumber: searchRegex },
+          { customerName: searchRegex },
+          { customerPhone: searchRegex },
+        ],
+      });
+    }
+    const filter: any = { $and: andConditions };
+
+    const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+
+    const channelFilter = channel === "WalkIn" ? WALK_IN_CHANNEL_MATCH : ONLINE_CHANNEL_MATCH;
+
+    const [orders, total, counts] = await Promise.all([
+      Order.find(filter)
+        .select(
+          "orderNumber orderDate customerName customerPhone total paymentMethod paymentStatus amountPaid isPartialPayment deliveryWorkflowStage deliveryBoy deliverySlot items adminNotes"
+        )
+        .populate("deliveryBoy", "name mobile")
+        .populate({
+          path: "items",
+          select: "productName productImage quantity",
+        })
+        .sort({ orderDate: -1 })
+        .skip(skip)
+        .limit(parseInt(limit as string)),
+      Order.countDocuments(filter),
+      Order.aggregate([
+        { $match: channelFilter },
+        { $group: { _id: "$deliveryWorkflowStage", count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const stageCounts: Record<string, number> = { All: 0 };
+    for (const stageName of WORKFLOW_STAGES) stageCounts[stageName] = 0;
+    for (const c of counts) {
+      stageCounts[c._id] = c.count;
+      stageCounts.All += c.count;
+    }
+
+    // orderChannel is derived, not stored - lets the frontend gate the
+    // Confirm/Dispatch/Cancel actions off without re-deriving the heuristic.
+    const ordersWithChannel = orders.map((order) => {
+      const obj: any = order.toObject();
+      obj.orderChannel = channel === "WalkIn" ? "WalkIn" : "Online";
+      delete obj.adminNotes;
+      return obj;
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Orders fetched successfully",
+      data: ordersWithChannel,
+      counts: stageCounts,
+      pagination: {
+        page: parseInt(page as string),
+        limit: parseInt(limit as string),
+        total,
+        pages: Math.ceil(total / parseInt(limit as string)),
+      },
+    });
+  }
+);
+
+/**
+ * Admin-only order detail for the Order Delivery workflow page. Includes
+ * per-item/order profit (billSummary) - do NOT reuse this handler's shape
+ * from customer/delivery-facing controllers.
+ */
+export const getOrderWorkflowDetail = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const order = await Order.findById(id)
+      .populate("customer", "name email phone")
+      .populate("deliveryBoy", "name mobile email")
+      .populate({
+        path: "items",
+        populate: [
+          {
+            path: "product",
+            select: "productName mainImage price compareAtPrice wholesalePrice purchasePrice variations",
+          },
+          {
+            path: "seller",
+            select: "sellerName storeName",
+          },
+        ],
+      });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    const orderObj: any = order.toObject();
+    orderObj.orderChannel =
+      /pos/i.test(order.adminNotes || "") || order.deliveryAddress?.address === "POS Order"
+        ? "WalkIn"
+        : "Online";
+    let billTotalMRP = 0;
+    let billTotalPurchase = 0;
+    let billTotalSP = 0;
+
+    orderObj.items = (orderObj.items || []).map((item: any) => {
+      const product = item.product;
+      const variations = product?.variations || [];
+      const matchedVariant = variations.find(
+        (v: any) => String(v._id) === String(item.variantId)
+      );
+      const purchasePrice =
+        matchedVariant?.purchasePrice ??
+        variations[0]?.purchasePrice ??
+        product?.purchasePrice ??
+        0;
+      const mrp = product?.compareAtPrice ?? item.unitPrice ?? 0;
+      const quantity = item.quantity || 0;
+      const lineSP = (item.unitPrice || 0) * quantity;
+      const linePurchase = purchasePrice * quantity;
+      const lineMRP = mrp * quantity;
+      const lineProfit = lineSP - linePurchase;
+
+      if (!item.isFreeGift) {
+        billTotalMRP += lineMRP;
+        billTotalPurchase += linePurchase;
+        billTotalSP += lineSP;
+      }
+
+      return { ...item, purchasePrice, mrp, lineProfit };
+    });
+
+    orderObj.billSummary = {
+      totalMRP: billTotalMRP,
+      totalPurchase: billTotalPurchase,
+      totalSP: billTotalSP,
+      profit: billTotalSP - billTotalPurchase,
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: "Order fetched successfully",
+      data: orderObj,
+    });
+  }
+);
+
+/**
+ * Confirm a "New" order: attach the chosen delivery time slot and move it
+ * to the "Confirmed" tab.
+ */
+export const confirmOrder = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { deliverySlot } = req.body;
+
+    if (!deliverySlot || !deliverySlot.type) {
+      return res.status(400).json({
+        success: false,
+        message: "deliverySlot with a type is required",
+      });
+    }
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    if (order.deliveryWorkflowStage !== "New") {
+      return res.status(400).json({
+        success: false,
+        message: `Order cannot be confirmed from stage ${order.deliveryWorkflowStage}`,
+      });
+    }
+
+    order.deliveryWorkflowStage = "Confirmed";
+    order.confirmedAt = new Date();
+    order.deliverySlot = deliverySlot;
+    order.status = "Processed";
+    await order.save();
+
+    const io: SocketIOServer = req.app.get("io");
+    if (io) {
+      notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");
+    }
+
+    const updatedOrder = await Order.findById(id)
+      .populate("customer", "name email phone")
+      .populate("deliveryBoy", "name mobile")
+      .populate("items");
+
+    return res.status(200).json({
+      success: true,
+      message: "Order confirmed successfully",
+      data: updatedOrder,
+    });
+  }
+);
+
+/**
+ * Shared delivery-assignment logic used by both the legacy assignDeliveryBoy
+ * endpoint and the new dispatchOrder workflow endpoint.
+ */
+const performDeliveryAssignment = async (
+  order: InstanceType<typeof Order>,
+  deliveryBoyId: string,
+  assignedBy?: string
+) => {
+  const deliveryBoy = await Delivery.findById(deliveryBoyId);
+  if (!deliveryBoy) {
+    throw Object.assign(new Error("Delivery boy not found"), { statusCode: 404 });
+  }
+  if (deliveryBoy.status !== "Active") {
+    throw Object.assign(new Error("Delivery boy is not active"), { statusCode: 400 });
+  }
+
+  order.deliveryBoy = deliveryBoyId as any;
+  order.deliveryBoyStatus = "Assigned";
+  order.assignedAt = new Date();
+  await order.save();
+
+  await DeliveryAssignment.findOneAndUpdate(
+    { order: order._id },
+    {
+      order: order._id,
+      deliveryBoy: deliveryBoyId,
+      assignedAt: new Date(),
+      assignedBy,
+      status: "Assigned",
+    },
+    { upsert: true, new: true }
+  );
+
+  return deliveryBoy;
+};
+
+/**
+ * Dispatch a "Confirmed" order to a chosen delivery partner, move it to
+ * "Shipment Ready", and notify the delivery boy in real time.
+ */
+export const dispatchOrder = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { deliveryBoyId } = req.body;
+
+    if (!deliveryBoyId) {
+      return res.status(400).json({
+        success: false,
+        message: "Delivery boy ID is required",
+      });
+    }
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    if (order.deliveryWorkflowStage !== "Confirmed") {
+      return res.status(400).json({
+        success: false,
+        message: `Order cannot be dispatched from stage ${order.deliveryWorkflowStage}`,
+      });
+    }
+
+    try {
+      await performDeliveryAssignment(order, deliveryBoyId, req.user?.userId);
+    } catch (err: any) {
+      return res.status(err.statusCode || 500).json({
+        success: false,
+        message: err.message || "Failed to assign delivery boy",
+      });
+    }
+
+    order.deliveryWorkflowStage = "Shipment Ready";
+    order.dispatchedAt = new Date();
+    await order.save();
+
+    const io: SocketIOServer = req.app.get("io");
+    if (io) {
+      const assignmentPayload = {
+        orderId: String(order._id),
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        address: order.deliveryAddress,
+        total: order.total,
+        assignedAt: order.assignedAt,
+      };
+      io.to(`delivery-${deliveryBoyId}`).emit("new-assignment", assignmentPayload);
+
+      await Notification.create({
+        recipientType: "Delivery",
+        recipientId: deliveryBoyId,
+        type: "Order",
+        title: "New order assigned",
+        message: `Order ${order.orderNumber} has been assigned to you`,
+        link: `/delivery/orders/${order._id}`,
+        priority: "High",
+      });
+      io.to(`delivery-${deliveryBoyId}`).emit("new-notification", assignmentPayload);
+    }
+
+    const updatedOrder = await Order.findById(id)
+      .populate("customer", "name email phone")
+      .populate("deliveryBoy", "name mobile email")
+      .populate("items");
+
+    return res.status(200).json({
+      success: true,
+      message: "Order dispatched successfully",
+      data: updatedOrder,
     });
   }
 );

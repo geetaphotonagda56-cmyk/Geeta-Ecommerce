@@ -87,7 +87,7 @@ const Icons = {
     )
 };
 
-type DeliveryOrderStatus = 'Pending' | 'Ready for pickup' | 'Picked Up' | 'Out for Delivery' | 'Delivered' | 'Cancelled' | 'Returned';
+type DeliveryOrderStatus = 'Pending' | 'Ready for pickup' | 'Picked Up' | 'In Transit' | 'Delivered' | 'Cancelled' | 'Returned';
 
 export default function DeliveryOrderDetail() {
     const { id } = useParams();
@@ -154,7 +154,7 @@ export default function DeliveryOrderDetail() {
         setShowScanner(false);
         if (!order || !id) return;
 
-        if (order.status === 'Out for Delivery' || order.status === 'Picked Up') {
+        if (order.status === 'In Transit' || order.status === 'Picked Up') {
             // Delivery-completion scan - the printed bill QR encodes
             // "<orderId>:<deliveryQrToken>". The backend (not this client)
             // verifies the token matches this order and that it's assigned
@@ -436,7 +436,7 @@ export default function DeliveryOrderDetail() {
         );
     }
 
-    const statusFlow: DeliveryOrderStatus[] = ['Pending', 'Ready for pickup', 'Picked Up', 'Out for Delivery', 'Delivered'];
+    const statusFlow: DeliveryOrderStatus[] = ['Pending', 'Ready for pickup', 'Picked Up', 'In Transit', 'Delivered'];
 
     let currentStatusIndex = statusFlow.indexOf(order.status as DeliveryOrderStatus);
     // Handle cases where status might not be in the flow (e.g. Cancelled)
@@ -526,12 +526,12 @@ export default function DeliveryOrderDetail() {
                     isTracking={!!deliveryBoyLocation}
                     showRoute={!!deliveryBoyLocation && (
                         order.status === 'Picked Up' ||
-                        order.status === 'Out for Delivery' ||
+                        order.status === 'In Transit' ||
                         (sellerLocations.length > 0 && order.status !== 'Delivered')
                     )}
                     routeOrigin={deliveryBoyLocation || undefined}
                     routeDestination={
-                        order.status === 'Picked Up' || order.status === 'Out for Delivery'
+                        order.status === 'Picked Up' || order.status === 'In Transit'
                             ? {
                                 lat: order.deliveryAddress?.latitude || order.address?.latitude || 0,
                                 lng: order.deliveryAddress?.longitude || order.address?.longitude || 0
@@ -541,14 +541,14 @@ export default function DeliveryOrderDetail() {
                                 : undefined
                     }
                     routeWaypoints={
-                        order.status === 'Picked Up' || order.status === 'Out for Delivery'
+                        order.status === 'Picked Up' || order.status === 'In Transit'
                             ? []
                             : sellerLocations.length > 1
                                 ? sellerLocations.slice(0, -1).map(s => ({ lat: s.latitude, lng: s.longitude }))
                                 : []
                     }
                     destinationName={
-                        order.status === 'Picked Up' || order.status === 'Out for Delivery'
+                        order.status === 'Picked Up' || order.status === 'In Transit'
                             ? order.address?.split(',')[0]
                             : sellerLocations.length > 0
                                 ? sellerLocations[0].storeName
@@ -737,7 +737,7 @@ export default function DeliveryOrderDetail() {
                 printed bill QR is the primary path; OTP remains as a fallback
                 for orders that never had a bill printed (e.g. customer-app
                 orders placed outside POS). */}
-            {order.status === 'Picked Up' && !showOtpInput && (
+            {order.status === 'In Transit' && !showOtpInput && (
                 <div className="fixed bottom-24 left-6 right-6 z-30 flex flex-col gap-2">
                     <button
                         onClick={() => openBarcodeScanner(() => setShowScanner(true))}
@@ -789,11 +789,11 @@ export default function DeliveryOrderDetail() {
                 </div>
             )}
 
-            {/* Floating Glassmorphic Action Button Dock - Order Taken button or status update */}
-            {nextStatus && order.status !== 'Picked Up' && !showOtpInput && (
+            {/* Floating Glassmorphic Action Button Dock - Order Taken / Mark In Transit button */}
+            {nextStatus && order.status !== 'In Transit' && !showOtpInput && (
                 <div className="fixed bottom-24 left-6 right-6 z-30 flex gap-3">
-                    {/* Scan Button (Visible when Out for Delivery or Ready for Pickup) */}
-                   {(order.status === 'Out for Delivery' || order.status === 'Ready for pickup') && (
+                    {/* Scan Button (Visible when In Transit or Ready for Pickup) */}
+                   {(order.status === 'In Transit' || order.status === 'Ready for pickup') && (
                         <button
                             onClick={() => openBarcodeScanner(() => setShowScanner(true))}
                             className="w-16 h-full rounded-2xl bg-neutral-900 text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform"

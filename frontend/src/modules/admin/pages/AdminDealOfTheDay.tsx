@@ -122,7 +122,7 @@ export default function AdminDealOfTheDay() {
                                 onClick={() => !isSelected && handleAddProduct(p)}
                                 className={`p-3 border-b flex items-center gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-[var(--primary-color)]/10 opacity-70 cursor-not-allowed' : 'hover:bg-[var(--primary-color)]/5'}`}
                             >
-                                <img src={p.mainImage || p.imageUrl || 'https://via.placeholder.com/40'} className="w-12 h-12 object-cover rounded bg-white border" alt="" />
+                                <img src={p.mainImage || p.imageUrl || 'https://via.placeholder.com/40'} className="w-12 h-12 object-cover rounded bg-white border" alt="" loading="lazy" decoding="async" />
                                 <div className="flex-1">
                                     <p className="font-medium text-sm text-gray-800 line-clamp-1">{p.productName || p.name}</p>
                                     <div className="flex items-center gap-2 mt-0.5">
@@ -162,7 +162,7 @@ export default function AdminDealOfTheDay() {
                                   </button>
 
                                   <div className="w-32 h-32 mb-4">
-                                     <img src={p.mainImage || p.imageUrl} className="w-full h-full object-contain" alt="" />
+                                     <img src={p.mainImage || p.imageUrl} className="w-full h-full object-contain" alt="" loading="lazy" decoding="async" />
                                   </div>
 
                                   <h3 className="font-bold text-gray-800 text-center line-clamp-2 px-2 text-sm h-10">{p.productName || p.name}</h3>

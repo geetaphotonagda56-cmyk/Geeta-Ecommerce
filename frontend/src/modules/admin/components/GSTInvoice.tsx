@@ -148,7 +148,7 @@ export const GSTInvoice: React.FC<GSTInvoiceProps> = ({ billDetails, shopSetting
 
       {shopSettings?.qrCode && (
         <div style={{ marginTop: 16, display: "flex", justifyContent: "center" }}>
-          <img src={shopSettings.qrCode} alt="QR" style={{ width: 96, height: 96, objectFit: "contain" }} />
+          <img src={shopSettings.qrCode} alt="QR" style={{ width: 96, height: 96, objectFit: "contain" }} loading="lazy" decoding="async" />
         </div>
       )}
     </div>

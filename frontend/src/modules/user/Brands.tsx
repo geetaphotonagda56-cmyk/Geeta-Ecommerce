@@ -120,8 +120,7 @@ export default function Brands() {
                         <img
                             src={brand.image}
                             alt={brand.name}
-                            className="max-w-full max-h-full object-contain"
-                        />
+                            className="max-w-full max-h-full object-contain" loading="lazy" decoding="async" />
                     ) : (
                         <div className="text-4xl font-bold text-neutral-300 select-none">
                             {brand.name.charAt(0)}

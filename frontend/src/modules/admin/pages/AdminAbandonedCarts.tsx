@@ -330,7 +330,7 @@ export default function AdminAbandonedCarts() {
                                      {selectedCart.items.map((item: any) => (
                                          <div key={item._id} className="flex gap-4">
                                              <div className="h-16 w-16 bg-white border border-neutral-200 rounded-xl overflow-hidden flex-shrink-0">
-                                                 <img src={item.product?.mainImage} alt={item.product?.productName} className="h-full w-full object-contain p-1" />
+                                                 <img src={item.product?.mainImage} alt={item.product?.productName} className="h-full w-full object-contain p-1" loading="lazy" decoding="async" />
                                              </div>
                                              <div className="flex-1">
                                                  <div className="font-bold text-neutral-900">{item.product?.productName}</div>

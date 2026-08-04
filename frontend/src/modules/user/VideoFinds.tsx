@@ -331,7 +331,7 @@ const ReelItem = ({
                     <div className="p-3 flex gap-3 items-center">
                        <div className="w-14 h-14 bg-gray-100 rounded-lg shrink-0 overflow-hidden">
                            {product.linkedProduct.mainImage ? (
-                               <img src={product.linkedProduct.mainImage} alt="Product" className="w-full h-full object-cover" />
+                               <img src={product.linkedProduct.mainImage} alt="Product" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                            ) : (
                                <div className="w-full h-full bg-neutral-200 flex items-center justify-center text-xs text-gray-500 font-medium">
                                   Item

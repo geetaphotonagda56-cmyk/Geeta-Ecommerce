@@ -443,8 +443,7 @@ export default function SellerCategoryForm({
                   <img
                     src={imagePreview}
                     alt="Preview"
-                    className="max-h-32 mx-auto rounded-lg object-cover"
-                  />
+                    className="max-h-32 mx-auto rounded-lg object-cover" loading="lazy" decoding="async" />
                   <p className="text-xs text-neutral-600">
                     {imageFile?.name || "Current image"}
                   </p>

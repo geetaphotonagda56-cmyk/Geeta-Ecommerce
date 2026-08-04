@@ -220,13 +220,13 @@ export default function AdminFlashDeal() {
                              />
                              {previewUrl && (
                                 <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity">
-                                    <img src={previewUrl} alt="" className="w-full h-full object-cover" />
+                                    <img src={previewUrl} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                                 </div>
                              )}
                         </label>
                         {previewUrl && (
                             <div className="relative group aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-                                <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                                <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button
                                         onClick={() => fileInputRef.current?.click()}
@@ -293,7 +293,7 @@ export default function AdminFlashDeal() {
                                     className={`p-3 border-b border-neutral-50 flex items-center gap-3 cursor-pointer transition-all ${isSelected ? 'bg-neutral-50 opacity-40 cursor-not-allowed' : 'hover:bg-[var(--primary-color)]/5'}`}
                                 >
                                     <div className="w-12 h-12 flex-shrink-0 bg-white border border-neutral-100 rounded-lg overflow-hidden">
-                                        <img src={p.mainImage || p.imageUrl || 'https://via.placeholder.com/40'} className="w-full h-full object-contain" alt="" />
+                                        <img src={p.mainImage || p.imageUrl || 'https://via.placeholder.com/40'} className="w-full h-full object-contain" alt="" loading="lazy" decoding="async" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-bold text-sm text-gray-800 line-clamp-1">{p.productName || p.name}</p>
@@ -332,7 +332,7 @@ export default function AdminFlashDeal() {
                              {selectedProducts.map((p, index) => (
                                  <div key={(p._id || p.id) + index} className="bg-white p-3 rounded-2xl shadow-sm border border-neutral-100 flex items-center gap-4 group relative">
                                       <div className="w-16 h-16 flex-shrink-0 bg-white border border-neutral-100 rounded-xl overflow-hidden p-1">
-                                         <img src={p.mainImage || p.imageUrl} className="w-full h-full object-contain" alt="" />
+                                         <img src={p.mainImage || p.imageUrl} className="w-full h-full object-contain" alt="" loading="lazy" decoding="async" />
                                       </div>
 
                                       <div className="flex-1 min-w-0">

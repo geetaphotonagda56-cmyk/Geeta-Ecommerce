@@ -455,8 +455,7 @@ export default function SellerSubCategory() {
                                                     className="max-w-full max-h-full object-contain rounded"
                                                     onError={(e) => {
                                                         (e.target as HTMLImageElement).src = 'https://placehold.co/60x40?text=Img';
-                                                    }}
-                                                />
+                                                    }} loading="lazy" decoding="async" />
                                             </div>
                                         </td>
                                         <td className="p-4 px-6 align-middle text-center">
@@ -625,7 +624,7 @@ export default function SellerSubCategory() {
                                 >
                                     {imagePreview ? (
                                         <div className="space-y-2">
-                                            <img src={imagePreview} alt="Preview" className="max-h-32 mx-auto rounded-lg object-cover" />
+                                            <img src={imagePreview} alt="Preview" className="max-h-32 mx-auto rounded-lg object-cover" loading="lazy" decoding="async" />
                                             <p className="text-xs text-neutral-600">{imageFile?.name || "Selected image"}</p>
                                             <button
                                                 type="button"

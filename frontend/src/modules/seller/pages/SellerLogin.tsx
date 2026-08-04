@@ -109,8 +109,7 @@ export default function SellerLogin() {
             <img
               src="/assets/geetastoreslogo.png"
               alt="Geeta Stores"
-              className="h-28 w-auto mx-auto object-contain"
-            />
+              className="h-28 w-auto mx-auto object-contain" loading="lazy" decoding="async" />
           </div>
           <h1 className="text-2xl font-bold text-white mb-1">Seller Login</h1>
           <p className="text-white/80 text-sm">Access your seller dashboard</p>

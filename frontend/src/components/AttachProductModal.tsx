@@ -178,7 +178,7 @@ const AttachProductModal: React.FC<AttachProductModalProps> = ({
                   />
                   <div className="w-9 h-9 rounded-md border border-neutral-200 bg-neutral-50 shrink-0 overflow-hidden flex items-center justify-center">
                     {image ? (
-                      <img src={image} alt={name} className="w-full h-full object-cover" />
+                      <img src={image} alt={name} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                     ) : (
                       <span className="text-[8px] text-neutral-400">No img</span>
                     )}

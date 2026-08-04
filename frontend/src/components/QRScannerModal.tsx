@@ -293,22 +293,38 @@ export default function QRScannerModal({
         )
         .then(async () => {
           setCameraReady(true);
-          try {
-            const caps = scanner.getRunningTrackCameraCapabilities();
-            if (caps.torchFeature()?.isSupported()) setTorchSupported(true);
-            const zoomFeature = caps.zoomFeature();
-            if (zoomFeature?.isSupported()) {
+
+          // Reads camera capabilities and, if zoom is supported, syncs the slider
+          // to the range and the zoom level actually in effect right now.
+          const syncCameraCapabilities = () => {
+            try {
+              const caps = scanner.getRunningTrackCameraCapabilities();
+              if (caps.torchFeature()?.isSupported()) setTorchSupported(true);
+              const zoomFeature = caps.zoomFeature();
+              if (!zoomFeature?.isSupported()) return false;
+
               setZoomRange({
                 min: zoomFeature.min(),
                 max: zoomFeature.max(),
                 step: zoomFeature.step(),
               });
-              setZoom(zoomFeature.min());
+              const currentZoom = scanner.getRunningTrackSettings()?.zoom;
+              setZoom(currentZoom ?? zoomFeature.min());
+              return true;
+            } catch {
+              return false;
             }
-          } catch {
-            setTorchSupported(false);
-          }
+          };
+
+          syncCameraCapabilities();
+
+          // Many phone cameras (facingMode: environment) don't report zoom
+          // capabilities until the track has settled a moment after start() —
+          // applyPostStartCameraEnhancements waits before applying its own
+          // zoom, so re-sync afterwards to catch capabilities/zoom that
+          // weren't ready on the immediate check above.
           await applyPostStartCameraEnhancements(scanner, false);
+          syncCameraCapabilities();
         });
 
     beginLiveScanRef.current = beginLiveScan;

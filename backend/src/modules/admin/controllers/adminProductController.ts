@@ -15,6 +15,7 @@ import {
 } from "../../product/productWriteService";
 import { adminProductPolicy } from "../../product/productPolicies";
 import { toDetail, toListItem, toListItems } from "../../product/productReadMapper";
+import { rankPOSProducts } from "../utils/posSearchRanking";
 
 // ==================== Category Controllers ====================
 
@@ -1465,10 +1466,14 @@ export const getPOSProducts = asyncHandler(
         ];
     }
 
-    const products = await Product.find(query)
+    let products = await Product.find(query)
       .select("productName mainImage price compareAtPrice wholesalePrice purchasePrice discPrice stock sku variations category barcode itemCode hsnCode gst")
       .populate("category", "name")
       .sort({ productName: 1 });
+
+    if (search) {
+      products = rankPOSProducts(products as any, String(search));
+    }
 
     return res.status(200).json({
       success: true,

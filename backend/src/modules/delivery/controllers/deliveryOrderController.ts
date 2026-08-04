@@ -205,6 +205,10 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
 
     if (normalizedStatus === 'Picked Up' || normalizedStatus === 'Out for Delivery') {
         order.deliveryBoyStatus = 'Picked Up';
+    } else if (normalizedStatus === 'In Transit') {
+        order.deliveryBoyStatus = 'In Transit';
+        order.inTransitAt = new Date();
+        order.deliveryWorkflowStage = 'In Transit';
     } else if (normalizedStatus === 'Delivered') {
         return res.status(400).json({
             success: false,
@@ -214,6 +218,13 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
 
     await order.save();
 
+    if (normalizedStatus === 'In Transit') {
+        await DeliveryAssignment.findOneAndUpdate(
+            { order: order._id },
+            { status: 'In Transit', inTransitAt: order.inTransitAt }
+        );
+    }
+
     // Emit socket events for status changes
     const io = (req.app as any).get("io");
     if (io) {
@@ -222,6 +233,17 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
             io.to(`order-${id}`).emit('order-taken', {
                 orderId: id,
                 message: 'Order has been picked up from seller',
+            });
+        }
+
+        if (normalizedStatus === 'In Transit' && previousStatus !== 'In Transit') {
+            io.to('admin-notifications').emit('order-in-transit', {
+                orderId: id,
+                orderNumber: order.orderNumber,
+            });
+            io.to(`order-${id}`).emit('order-taken', {
+                orderId: id,
+                message: 'Order is in transit',
             });
         }
 

@@ -454,7 +454,7 @@ export default function Search() {
                   >
                     <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-500">
                       {item.image ? (
-                        <img src={item.image} alt="" className="h-full w-full rounded-md object-contain" />
+                        <img src={item.image} alt="" className="h-full w-full rounded-md object-contain" loading="lazy" decoding="async" />
                       ) : item.type === "trending" ? (
                         <TrendingUp className="h-4 w-4" />
                       ) : (

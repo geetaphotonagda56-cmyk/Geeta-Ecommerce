@@ -255,7 +255,7 @@ export default function AdminBannerSetup() {
                           <div className="mt-3 grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded border">
                               {previewUrls.map((url, idx) => (
                                   <div key={idx} className="relative aspect-video bg-white rounded border overflow-hidden">
-                                      <img src={url} alt={`Preview ${idx}`} className="h-full w-full object-contain" />
+                                      <img src={url} alt={`Preview ${idx}`} className="h-full w-full object-contain" loading="lazy" decoding="async" />
                                   </div>
                               ))}
                           </div>
@@ -320,7 +320,7 @@ export default function AdminBannerSetup() {
                                     </td>
                                     <td className="px-6 py-4">
                                        <div className="h-12 w-20 bg-gray-50 rounded border overflow-hidden">
-                                           <img src={banner.imageUrl || banner.image} alt="" className="h-full w-full object-cover" />
+                                           <img src={banner.imageUrl || banner.image} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
                                        </div>
                                     </td>
                                     <td className="px-6 py-4">

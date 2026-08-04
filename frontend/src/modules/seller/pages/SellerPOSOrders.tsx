@@ -3709,7 +3709,7 @@ const SellerPOSOrders = () => {
                                      >
                                          <div className="w-14 h-14 bg-white rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-200 shadow-sm group-hover:shadow transition-shadow relative">
                                              {product.mainImage ? (
-                                                 <img src={product.mainImage} alt="" className="w-full h-full object-cover" />
+                                                 <img src={product.mainImage} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                                              ) : (
                                                  <span className="text-[10px] text-gray-400 font-bold">IMG</span>
                                              )}
@@ -3990,7 +3990,7 @@ const SellerPOSOrders = () => {
                                                    {/* Large Image */}
                                                    <div className="w-12 h-12 flex-shrink-0 bg-white rounded-lg border border-gray-100 flex items-center justify-center p-0.5 overflow-hidden shadow-sm">
                                                         {item.mainImage ? (
-                                                            <img src={item.mainImage} alt="" className="w-full h-full object-contain" />
+                                                            <img src={item.mainImage} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" />
                                                         ) : (
                                                             <span className="text-xs text-gray-300">Img</span>
                                                         )}
@@ -4070,7 +4070,7 @@ const SellerPOSOrders = () => {
                                                   <div className="flex items-center gap-2 mb-2">
                                                       <div className="w-10 h-10 flex-shrink-0 bg-white rounded-lg border border-gray-100 flex items-center justify-center p-1 overflow-hidden">
                                                           {item.mainImage ? (
-                                                              <img src={item.mainImage} alt="" className="w-full h-full object-contain" />
+                                                              <img src={item.mainImage} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" />
                                                           ) : (
                                                               <span className="text-[10px] text-gray-300">Img</span>
                                                           )}
@@ -4129,7 +4129,7 @@ const SellerPOSOrders = () => {
                                                <div className="col-span-1 flex justify-center">
                                                    <div className="w-14 h-14 bg-white rounded-lg border border-gray-200 flex items-center justify-center p-1 overflow-hidden shadow-sm">
                                                        {item.mainImage ? (
-                                                           <img src={item.mainImage} alt="" className="w-full h-full object-contain" />
+                                                           <img src={item.mainImage} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" />
                                                        ) : (
                                                            <span className="text-[10px] text-gray-300 font-bold">IMG</span>
                                                        )}
@@ -4715,7 +4715,7 @@ const SellerPOSOrders = () => {
                              {/* Large Image */}
                              <div className="w-16 h-16 flex-shrink-0 bg-white rounded-lg border border-gray-100 flex items-center justify-center p-1 overflow-hidden shadow-sm">
                                   {item.image ? (
-                                      <img src={item.image} alt={item.productName} className="w-full h-full object-contain" />
+                                      <img src={item.image} alt={item.productName} className="w-full h-full object-contain" loading="lazy" decoding="async" />
                                   ) : (
                                       <span className="text-xs text-gray-300">Img</span>
                                   )}
@@ -4799,7 +4799,7 @@ const SellerPOSOrders = () => {
                       <div className="flex gap-3 items-start">
                         <div className="text-xl font-bold text-gray-600">#{index + 1}</div>
                         <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center">
-                          {item.image ? <img src={item.image} alt={item.productName} className="w-full h-full object-contain" /> : <span className="text-xs text-gray-400">IMG</span>}
+                          {item.image ? <img src={item.image} alt={item.productName} className="w-full h-full object-contain" loading="lazy" decoding="async" /> : <span className="text-xs text-gray-400">IMG</span>}
                         </div>
                         <div className="flex-1">
                           <p className="text-xs text-gray-500">MRP: ₹{item.mrp} | Sp.: ₹{item.retailPrice}</p>
@@ -5283,7 +5283,7 @@ const SellerPOSOrders = () => {
                         <div className="flex gap-3">
                           <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                             {product.mainImage ? (
-                              <img src={product.mainImage} alt="" className="w-full h-full object-contain" />
+                              <img src={product.mainImage} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" />
                             ) : (
                               <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
@@ -6236,7 +6236,7 @@ const SellerPOSOrders = () => {
 
                   {posBillSettings?.qrCode && (
                       <div className="mt-4 flex justify-center">
-                          <img src={posBillSettings.qrCode} alt="QR" className="w-24 h-24 object-contain" style={{ WebkitPrintColorAdjust: 'exact' }} />
+                          <img src={posBillSettings.qrCode} alt="QR" className="w-24 h-24 object-contain" style={{ WebkitPrintColorAdjust: 'exact' }} loading="lazy" decoding="async" />
                       </div>
                   )}
               </div>
@@ -6532,7 +6532,7 @@ const SellerPOSOrders = () => {
                           {/* Product Image */}
                           <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                             {product.mainImage ? (
-                              <img src={product.mainImage} alt="" className="w-full h-full object-contain" />
+                              <img src={product.mainImage} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" />
                             ) : (
                               <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>

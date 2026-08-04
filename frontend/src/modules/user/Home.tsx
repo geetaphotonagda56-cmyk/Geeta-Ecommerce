@@ -9,7 +9,7 @@ import BannerSlider from "./components/banners/BannerSlider";
 import HomePopup from "./components/banners/HomePopup";
 import FlashDealSection from "./components/banners/FlashDealSection";
 import FeaturedDeal from "./components/banners/FeaturedDeal";
-// import DealOfTheDay from "./components/banners/DealOfTheDay";
+import DealOfTheDay from "./components/banners/DealOfTheDay";
 import ExploreOurRange from "./components/banners/ExploreOurRange";
 import FirstOrderOfferBanner from "./components/banners/FirstOrderOfferBanner";
 import { getCachedHomeContent, getHomeContent } from "../../services/api/customerHomeService";
@@ -97,7 +97,7 @@ export default function Home() {
   const activeTab = activeCategory;
   const setActiveTab = setActiveCategory;
   const contentRef = useRef<HTMLDivElement>(null);
-  const limit = 1000;
+  const limit = 30;
   const [currentPage, setCurrentPage] = useState(1);
   const cachedHomeResponse = getCachedHomeContent(undefined, undefined, undefined);
   const cachedTabProductsResponse =
@@ -140,6 +140,17 @@ export default function Home() {
   const [products, setProducts] = useState<any[]>(cachedHomeResponse?.data?.bestsellers || []);
   const [tabProducts, setTabProducts] = useState<any[]>(cachedTabProductsResponse?.data || []);
   const [totalPages, setTotalPages] = useState(cachedTabProductsResponse?.pagination?.pages || 1);
+  const [loadingMoreTab, setLoadingMoreTab] = useState(false);
+  const tabSentinelRef = useRef<HTMLDivElement | null>(null);
+  const hasMoreTab = currentPage < totalPages;
+
+  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [allPage, setAllPage] = useState(1);
+  const [allTotalPages, setAllTotalPages] = useState(1);
+  const [allLoadingMore, setAllLoadingMore] = useState(false);
+  const allSentinelRef = useRef<HTMLDivElement | null>(null);
+  const hasMoreAll = allPage < allTotalPages;
+
   const restoreTimeoutRef = useRef<number | null>(null);
   const didMountRef = useRef(false);
 
@@ -405,6 +416,9 @@ export default function Home() {
         setTabProducts([]);
         return;
       }
+      if (currentPage > 1) {
+        setLoadingMoreTab(true);
+      }
       try {
         const res = await getCustomerProducts({
           headerCategorySlug: activeTab,
@@ -414,22 +428,92 @@ export default function Home() {
           longitude: location?.longitude,
         });
         if ((res as any).success && Array.isArray((res as any).data)) {
-          setTabProducts((res as any).data);
+          const data = (res as any).data;
+          setTabProducts((prev) => (currentPage === 1 ? data : [...prev, ...data]));
           if ((res as any).pagination) {
             setTotalPages((res as any).pagination.pages);
           }
-        } else if (!cachedTabProductsResponse?.data) {
+        } else if (currentPage === 1 && !cachedTabProductsResponse?.data) {
           setTabProducts([]);
         }
       } catch (e) {
         console.error("Failed to load tab products:", e);
-        if (!cachedTabProductsResponse?.data) {
+        if (currentPage === 1 && !cachedTabProductsResponse?.data) {
           setTabProducts([]);
         }
+      } finally {
+        setLoadingMoreTab(false);
       }
     };
     void loadTabProducts();
   }, [activeTab, location?.latitude, location?.longitude, currentPage]);
+
+  // Infinite scroll for header-category tabs: load next page when sentinel is visible
+  useEffect(() => {
+    if (!activeTab || activeTab === "all") return;
+    const sentinel = tabSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMoreTab && !loadingMoreTab) {
+          setCurrentPage((prev) => prev + 1);
+        }
+      },
+      { root: document.querySelector("main"), rootMargin: "300px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [activeTab, hasMoreTab, loadingMoreTab, tabProducts.length]);
+
+  // "All" tab: real backend-paginated infinite scroll across every product (no category filter)
+  useEffect(() => {
+    if (activeTab !== "all") return;
+    const loadAllProducts = async () => {
+      if (allPage > 1) {
+        setAllLoadingMore(true);
+      }
+      try {
+        const res = await getCustomerProducts({
+          page: allPage,
+          limit,
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+        });
+        if ((res as any).success && Array.isArray((res as any).data)) {
+          const data = (res as any).data;
+          setAllProducts((prev) => (allPage === 1 ? data : [...prev, ...data]));
+          if ((res as any).pagination) {
+            setAllTotalPages((res as any).pagination.pages);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load all products:", e);
+      } finally {
+        setAllLoadingMore(false);
+      }
+    };
+    void loadAllProducts();
+  }, [activeTab, allPage, location?.latitude, location?.longitude]);
+
+  useEffect(() => {
+    if (activeTab !== "all") return;
+    const sentinel = allSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMoreAll && !allLoadingMore) {
+          setAllPage((prev) => prev + 1);
+        }
+      },
+      { root: document.querySelector("main"), rootMargin: "300px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [activeTab, hasMoreAll, allLoadingMore, allProducts.length]);
 
   const getFilteredProducts = (tabId: string) => {
     if (tabId === "all") return products;
@@ -527,8 +611,8 @@ export default function Home() {
             </div>
         )}
 
-        {/* Deal of the Day Section - commented out, Explore Our Range now lives up near the top (Promo Strip slot) */}
-        {/* <DealOfTheDay /> */}
+        {/* Deal of the Day Section */}
+        <DealOfTheDay />
 
         {/* First Order Offer (First-time users) */}
         <FirstOrderOfferBanner />
@@ -544,12 +628,35 @@ export default function Home() {
             </div>
             <div className="px-4 md:px-6 lg:px-8">
               {filteredProducts.length > 0 ? (
-                <LazyProductGrid
-                  products={filteredProducts}
-                  gridClassName="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4"
-                  showStockInfo={true}
-                  batchSize={10}
-                />
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
+                    {filteredProducts.map((product) => (
+                      <ProductCard
+                        key={product.id || product._id}
+                        product={product}
+                        categoryStyle={true}
+                        showBadge={true}
+                        showPackBadge={false}
+                        showStockInfo={true}
+                      />
+                    ))}
+                  </div>
+                  {hasMoreTab && <div ref={tabSentinelRef} className="h-1 w-full" />}
+                  {loadingMoreTab && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4 mt-2 md:mt-4">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div
+                          key={`tab-loading-${i}`}
+                          className="rounded-xl border border-neutral-200 bg-white p-3 animate-pulse"
+                        >
+                          <div className="aspect-square w-full rounded-lg bg-neutral-100" />
+                          <div className="mt-3 h-3 w-4/5 rounded bg-neutral-100" />
+                          <div className="mt-2 h-3 w-2/3 rounded bg-neutral-100" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-12 md:py-16 text-neutral-500">
                   <p className="text-lg md:text-xl mb-2">No products found</p>
@@ -659,8 +766,7 @@ export default function Home() {
                                   : "")
                               }
                               alt={tile.name}
-                              className="w-full h-20 object-cover transition-transform duration-300 group-hover:scale-105"
-                            />
+                              className="w-full h-20 object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" decoding="async" />
                           ) : (
                             <div
                               className={`w-full h-20 flex items-center justify-center text-3xl text-neutral-300 ${tile.bgColor || "bg-neutral-50"
@@ -681,6 +787,47 @@ export default function Home() {
                 </div>
               </div>
             </div>
+
+            {/* All Products - real backend-paginated infinite scroll */}
+            {allProducts.length > 0 && (
+              <div className="mt-6 mb-6 md:mt-8 md:mb-8">
+                <div className="flex items-center gap-2 mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
+                  <span className="w-1 h-5 md:h-6 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
+                  <h2 className="text-lg md:text-2xl font-bold text-neutral-900 tracking-tight">
+                    All Products
+                  </h2>
+                </div>
+                <div className="px-4 md:px-6 lg:px-8">
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
+                    {allProducts.map((product) => (
+                      <ProductCard
+                        key={product.id || product._id}
+                        product={product}
+                        categoryStyle={true}
+                        showBadge={true}
+                        showPackBadge={false}
+                        showStockInfo={true}
+                      />
+                    ))}
+                  </div>
+                  {hasMoreAll && <div ref={allSentinelRef} className="h-1 w-full" />}
+                  {allLoadingMore && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4 mt-2 md:mt-4">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div
+                          key={`all-loading-${i}`}
+                          className="rounded-xl border border-neutral-200 bg-white p-3 animate-pulse"
+                        >
+                          <div className="aspect-square w-full rounded-lg bg-neutral-100" />
+                          <div className="mt-3 h-3 w-4/5 rounded bg-neutral-100" />
+                          <div className="mt-2 h-3 w-2/3 rounded bg-neutral-100" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </>
         )}
 

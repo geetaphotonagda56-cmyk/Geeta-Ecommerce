@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Staff from "../../../models/Staff";
+import { generateStaffToken } from "../../../services/jwtService";
 
 const getModuleScopeQuery = (req: Request) => {
   if (req.user?.userType === "Seller") {
@@ -116,6 +117,48 @@ export const updateStaff = asyncHandler(async (req: Request, res: Response) => {
     success: true,
     message: "Staff updated successfully",
     data: staff.toObject(),
+  });
+});
+
+/**
+ * Issue a staff-scoped JWT after verifying the phone belongs to a staff
+ * member of the currently logged-in Admin/Seller. The token carries the
+ * staff's permission claims so the backend (not the browser) is the source
+ * of truth for what the staff account can see and do.
+ */
+export const staffLogin = asyncHandler(async (req: Request, res: Response) => {
+  const { phone } = req.body;
+
+  if (!phone || !/^[0-9]{10}$/.test(phone)) {
+    return res.status(400).json({
+      success: false,
+      message: "A valid 10 digit phone number is required",
+    });
+  }
+
+  const staff = await Staff.findOne({ phone, ...getModuleScopeQuery(req) });
+  if (!staff) {
+    return res.status(404).json({
+      success: false,
+      message: "No staff found with this phone number.",
+    });
+  }
+
+  const token = generateStaffToken(
+    req.user!.userId,
+    req.user!.userType as "Admin" | "Seller",
+    String(staff._id),
+    staff.module,
+    staff.permissions || []
+  );
+
+  return res.status(200).json({
+    success: true,
+    message: "Staff login successful",
+    data: {
+      token,
+      staff: staff.toObject(),
+    },
   });
 });
 

@@ -285,8 +285,7 @@ export default function AdminBrand() {
                     <img
                       src={brandImagePreview}
                       alt="Brand preview"
-                      className="max-h-32 mx-auto rounded-lg object-cover"
-                    />
+                      className="max-h-32 mx-auto rounded-lg object-cover" loading="lazy" decoding="async" />
                     <p className="text-xs text-neutral-600">
                       {brandImageFile?.name}
                     </p>
@@ -306,8 +305,7 @@ export default function AdminBrand() {
                     <img
                       src={brandImageUrl}
                       alt="Brand preview"
-                      className="max-h-32 mx-auto rounded-lg object-cover"
-                    />
+                      className="max-h-32 mx-auto rounded-lg object-cover" loading="lazy" decoding="async" />
                     <p className="text-xs text-neutral-600">Current image</p>
                   </div>
                 ) : (
@@ -560,8 +558,7 @@ export default function AdminBrand() {
                               onError={(e) => {
                                 (e.target as HTMLImageElement).src =
                                   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect width="100" height="100" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-size="12"%3ENo Image%3C/text%3E%3C/svg%3E';
-                              }}
-                            />
+                              }} loading="lazy" decoding="async" />
                           ) : (
                             <div className="text-xs text-neutral-400">
                               No Image

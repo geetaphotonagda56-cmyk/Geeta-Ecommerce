@@ -46,6 +46,7 @@ import {
 } from '../../../utils/gstUtils';
 import { SimpleInvoice } from '../components/SimpleInvoice';
 import { GSTInvoice } from '../components/GSTInvoice';
+import POSProductCard from '../components/POSProductCard';
 import DiscountChargesModal, { PosCharges, DEFAULT_POS_CHARGES, hasActiveCharges, computeFinalTotal, computeDiscountAmount, isPartialPaymentActive } from '../components/DiscountChargesModal';
 
 // Interface for Cart Item extending Product
@@ -233,19 +234,26 @@ const AdminPOSOrders = () => {
   const [selectedSeller, setSelectedSeller] = useState('');
   const [scannerKey, setScannerKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showDesktopSearch, setShowDesktopSearch] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
+  const closeDesktopSearch = () => {
+    setShowDesktopSearch(false);
+    setSearchQuery('');
+  };
+
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setSearchQuery('');
+    if (!showDesktopSearch) return;
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        closeDesktopSearch();
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
     };
-  }, []);
+  }, [showDesktopSearch]);
 
   // Multi-Bill State (restored from localStorage if a draft exists, see loadPersistedBills)
   const [bills, setBills] = useState<Bill[]>(() => loadPersistedBills()?.bills ?? [{
@@ -4131,12 +4139,15 @@ const AdminPOSOrders = () => {
                  </div>
                  <input
                      type="text"
-                     className="block w-full pl-11 pr-12 py-2 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] text-base transition-shadow shadow-sm"
+                     readOnly
+                     className="block w-full pl-11 pr-12 py-2 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] text-base transition-shadow shadow-sm cursor-pointer"
                      placeholder="Search products by name, barcode, or SKU (SHIFT + S)"
                      value={searchQuery}
-                     onChange={(e) => setSearchQuery(e.target.value)}
-                     onKeyDown={handleSearchKeyDown}
-                     autoFocus
+                     onClick={() => setShowDesktopSearch(true)}
+                     onFocus={(e) => {
+                         e.currentTarget.blur();
+                         setShowDesktopSearch(true);
+                     }}
                  />
                  <div className="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
                      {searchQuery && (
@@ -4152,75 +4163,104 @@ const AdminPOSOrders = () => {
                         <svg className="w-6 h-6 transform group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 5v2a2 2 0 002 2h2m10 0h2a2 2 0 002-2V5M3 19v-2a2 2 0 012-2h2m10 0h2a2 2 0 012 2v2m-6-13h-4m4 4h-4m4 4h-4m4 4h-4"/></svg>
                      </button>
                  </div>
+             </div>
+          </div>
 
-                 {/* Search Dropdown Results */}
-                 {searchQuery && (
-                     <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-2xl shadow-2xl border border-gray-100 max-h-[60vh] overflow-y-auto z-50 animate-in fade-in slide-in-from-top-2 duration-200 p-2 scrollbar-thin scrollbar-thumb-gray-200">
+          {/* Desktop Search Dialog */}
+          {showDesktopSearch && (
+             <div
+                className="hidden lg:flex fixed inset-0 z-[100] items-start justify-center bg-black/50 backdrop-blur-sm p-6 pt-[10vh] animate-in fade-in duration-200"
+                onMouseDown={(e) => {
+                    if (e.target === e.currentTarget) {
+                        closeDesktopSearch();
+                    }
+                }}
+             >
+                <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[75vh] overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-200">
+                    <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 flex-shrink-0">
+                        <svg className="h-5 w-5 text-gray-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                           <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                        </svg>
+                        <input
+                           autoFocus
+                           type="text"
+                           className="flex-1 text-lg text-gray-900 placeholder-gray-400 outline-none bg-transparent"
+                           placeholder="Search products by name, barcode, or SKU"
+                           value={searchQuery}
+                           onChange={(e) => setSearchQuery(e.target.value)}
+                           onKeyDown={handleSearchKeyDown}
+                        />
+                        {searchQuery && (
+                           <button onClick={() => setSearchQuery('')} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors flex-shrink-0">
+                               <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                           </button>
+                        )}
+                        <button
+                           onClick={() => openBarcodeScanner(() => setShowScanner(true))}
+                           className="p-2 text-gray-500 hover:text-[var(--primary-color)] rounded-xl hover:bg-[var(--primary-color)]/10 transition-colors group flex-shrink-0"
+                           title="Scan Barcode"
+                        >
+                           <svg className="w-5 h-5 transform group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 5v2a2 2 0 002 2h2m10 0h2a2 2 0 002-2V5M3 19v-2a2 2 0 012-2h2m10 0h2a2 2 0 012 2v2m-6-13h-4m4 4h-4m4 4h-4m4 4h-4"/></svg>
+                        </button>
+                        <button
+                           onClick={closeDesktopSearch}
+                           className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors flex-shrink-0"
+                           aria-label="Close search"
+                        >
+                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-200">
                         {loading ? (
-                             <div className="py-12 text-center text-gray-500">
+                             <div className="py-16 text-center text-gray-500">
                                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary-color)] mx-auto mb-3"></div>
                                  <p className="text-sm font-medium">Searching inventory...</p>
                              </div>
+                        ) : !searchQuery.trim() ? (
+                             <div className="py-16 text-center">
+                                 <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
+                                     <svg className="w-8 h-8 text-gray-300" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                                     </svg>
+                                 </div>
+                                 <p className="text-gray-600 font-medium">Start typing to search products</p>
+                                 <p className="text-xs md:text-base text-gray-400 mt-1">Search by name, barcode, or SKU</p>
+                             </div>
                         ) : products.length > 0 ? (
-                             <div className="flex flex-col gap-1">
+                             <div className="grid grid-cols-3 gap-3">
                                  {products.map((product) => {
                                      const lineId = getCartLineId(product as CartItem);
                                      const cartItem = cart.find(c => getCartLineId(c) === lineId);
                                      const qtyInCart = cartItem ? cartItem.qty : 0;
                                      return (
-                                     <div
-                                         key={product._id}
-                                         onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              addToCart(product);
-                                              // setSearchQuery(''); // Kept open for multiple selection
-                                         }}
-                                         className="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 cursor-pointer transition-all border border-transparent hover:border-[var(--primary-color)]/30 group"
-                                     >
-                                         <div className="w-14 h-14 bg-white rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-200 shadow-sm group-hover:shadow transition-shadow relative">
-                                             {product.mainImage ? (
-                                                 <img src={product.mainImage} alt="" className="w-full h-full object-cover" />
-                                             ) : (
-                                                 <span className="text-[10px] md:text-sm text-gray-400 font-bold">IMG</span>
-                                             )}
-                                             {qtyInCart > 0 && (
-                                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                                    <span className="text-white font-bold text-xs md:text-base">x{qtyInCart}</span>
-                                                </div>
-                                             )}
-                                         </div>
-                                         <div className="flex-1 min-w-0">
-                                             <div className="flex justify-between items-start mb-1">
-                                                 <div className="flex items-center gap-2 pr-2">
-                                                     <h4 className="text-sm font-bold text-gray-800 truncate group-hover:text-[var(--primary-color)] transition-colors">{product.productName}</h4>
-                                                     {qtyInCart > 0 && <span className="text-[10px] md:text-sm bg-[var(--primary-color)] text-white px-1.5 py-0.5 rounded-full font-bold">In Cart</span>}
-                                                 </div>
-                                                 <div className="text-right flex-shrink-0">
-                                                     <span className="block text-sm font-bold text-[var(--primary-color)]">₹{orderType === 'Wholesale' && product.wholesalePrice ? product.wholesalePrice : product.price}</span>
-                                                     {(product.compareAtPrice || 0) > (orderType === 'Wholesale' && product.wholesalePrice ? product.wholesalePrice : product.price) && (
-                                                         <span className="block text-[10px] md:text-sm text-gray-400 line-through">₹{product.compareAtPrice}</span>
-                                                     )}
-                                                 </div>
-                                             </div>
-                                             <div className="flex justify-between items-center">
-                                                 <div className="flex items-center gap-3 text-xs md:text-base text-gray-500">
-                                                     <span className={`px-2 py-0.5 rounded-md text-[10px] md:text-sm font-bold ${product.stock > 0 ? 'bg-[var(--primary-alpha-10)] text-[var(--primary-darker)] border border-teal-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
-                                                         {product.stock > 0 ? `Stock: ${product.stock}` : 'Out of Stock'}
-                                                     </span>
-                                                     {product.sku && <span className="hidden sm:inline bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">SKU: {product.sku}</span>}
-                                                     {orderType === 'Wholesale' && product.wholesalePrice && <span className="text-xs md:text-base text-[var(--primary-dark)] font-medium">Wholesale</span>}
-                                                 </div>
-                                                 <button className="text-xs md:text-base bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all font-bold shadow-sm transform translate-x-2 group-hover:translate-x-0">
-                                                     Add +
-                                                 </button>
-                                             </div>
-                                         </div>
-                                     </div>
-                                 )})}
+                                         <POSProductCard
+                                             key={product._id}
+                                             product={product}
+                                             qtyInCart={qtyInCart}
+                                             orderType={orderType}
+                                             onAdd={() => addToCart(product)}
+                                             onIncrease={() => updateQuantity(lineId, 1)}
+                                             onDecrease={() => {
+                                                 if (qtyInCart <= 1) {
+                                                     removeFromCart(lineId);
+                                                 } else {
+                                                     updateQuantity(lineId, -1);
+                                                 }
+                                             }}
+                                             onQuantityChange={(qty) => {
+                                                 if (qty <= 0) {
+                                                     removeFromCart(lineId);
+                                                 } else {
+                                                     setQuantity(lineId, Math.min(qty, product.stock));
+                                                 }
+                                             }}
+                                         />
+                                     );
+                                 })}
                              </div>
                         ) : (
-                             <div className="py-12 text-center">
+                             <div className="py-16 text-center">
                                  <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
                                      <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                  </div>
@@ -4228,10 +4268,10 @@ const AdminPOSOrders = () => {
                                  <p className="text-xs md:text-base text-gray-400 mt-1">Try searching with a different name</p>
                              </div>
                         )}
-                     </div>
-                 )}
+                    </div>
+                </div>
              </div>
-          </div>
+          )}
 
           {/* Bill Tabs */}
 
@@ -5143,7 +5183,7 @@ const AdminPOSOrders = () => {
                              {/* Large Image */}
                              <div className="w-16 h-16 flex-shrink-0 bg-white rounded-lg border border-gray-100 flex items-center justify-center p-1 overflow-hidden shadow-sm">
                                   {item.image ? (
-                                      <img src={item.image} alt={item.productName} className="w-full h-full object-contain" />
+                                      <img src={item.image} alt={item.productName} className="w-full h-full object-contain" loading="lazy" decoding="async" />
                                   ) : (
                                       <span className="text-xs text-gray-300">Img</span>
                                   )}
@@ -5227,7 +5267,7 @@ const AdminPOSOrders = () => {
                       <div className="flex gap-3 items-start">
                         <div className="text-xl font-bold text-gray-600">#{index + 1}</div>
                         <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center">
-                          {item.image ? <img src={item.image} alt={item.productName} className="w-full h-full object-contain" /> : <span className="text-xs text-gray-400">IMG</span>}
+                          {item.image ? <img src={item.image} alt={item.productName} className="w-full h-full object-contain" loading="lazy" decoding="async" /> : <span className="text-xs text-gray-400">IMG</span>}
                         </div>
                         <div className="flex-1">
                           <p className="text-xs text-gray-500">MRP: ₹{item.mrp} | Sp.: ₹{item.retailPrice}</p>
@@ -5666,7 +5706,7 @@ const AdminPOSOrders = () => {
                       <div key={product._id} className="bg-white border border-gray-200 rounded-2xl p-3">
                         <div className="flex gap-3">
                           <div className="w-14 h-14 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center">
-                            {product.mainImage ? <img src={product.mainImage} alt="" className="w-full h-full object-contain" /> : <span className="text-xs md:text-base text-gray-400">IMG</span>}
+                            {product.mainImage ? <img src={product.mainImage} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" /> : <span className="text-xs md:text-base text-gray-400">IMG</span>}
                           </div>
                           <div className="flex-1 min-w-0">
                             <h4 className="font-semibold text-gray-800 leading-tight">{product.productName}</h4>
@@ -6737,7 +6777,7 @@ const AdminPOSOrders = () => {
 
                   {posBillSettings?.qrCode && (
                       <div className="mt-4 flex justify-center">
-                          <img src={posBillSettings.qrCode} alt="QR" className="w-24 h-24 object-contain" style={{ WebkitPrintColorAdjust: 'exact' }} />
+                          <img src={posBillSettings.qrCode} alt="QR" className="w-24 h-24 object-contain" style={{ WebkitPrintColorAdjust: 'exact' }} loading="lazy" decoding="async" />
                       </div>
                   )}
               </div>
@@ -7007,7 +7047,7 @@ const AdminPOSOrders = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary-color)]"></div>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2">
                 {products
                   .filter(product => {
                     if (!mobileSearchQuery) return true;
@@ -7021,85 +7061,31 @@ const AdminPOSOrders = () => {
                   .map(product => {
                     const lineId = getCartLineId(product as CartItem);
                     const cartItem = cart.find(item => getCartLineId(item) === lineId);
-                    const inCart = !!cartItem;
+                    const qtyInCart = cartItem ? cartItem.qty : 0;
 
                     return (
-                      <div
+                      <POSProductCard
                         key={product._id}
-                        className={`bg-white p-4 rounded-lg border shadow-sm ${
-                          product.stock <= 0 ? 'opacity-60 grayscale' : ''
-                        }`}
-                      >
-                        <div className="flex gap-3">
-                          {/* Product Image */}
-                          <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                            {product.mainImage ? (
-                              <img src={product.mainImage} alt="" className="w-full h-full object-contain" />
-                            ) : (
-                              <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                              </svg>
-                            )}
-                          </div>
-
-                          {/* Product Info */}
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-semibold text-gray-800 text-sm line-clamp-2 mb-1">
-                              {product.productName}
-                            </h4>
-                            <div className="flex items-center gap-2 text-xs md:text-base mb-2">
-                              <span className="text-gray-500">
-                                MRP: <span className="line-through">₹{product.compareAtPrice || 0}</span>
-                              </span>
-                              <span className="font-bold text-[var(--primary-color)]">
-                                {orderType === 'Wholesale' && (product.wholesalePrice || 0) > 0
-                                  ? `WSP: ₹${product.wholesalePrice}`
-                                  : `SP: ₹${product.price}`}
-                              </span>
-                            </div>
-                            <div className="text-xs md:text-base text-gray-500">
-                              Quantity: {product.stock} Piece
-                            </div>
-                          </div>
-
-                          {/* Add Button */}
-                          <div className="flex items-center">
-                            {inCart ? (
-                              <div className="flex items-center gap-2 bg-[var(--primary-color)]/10 rounded-lg px-2 py-1">
-                                <button
-                                  onClick={() => updateQuantity(getCartLineId(product as CartItem), -1)}
-                                  className="w-7 h-7 flex items-center justify-center bg-white text-[var(--primary-color)] rounded hover:bg-[var(--primary-color)] hover:text-white transition-colors border border-[var(--primary-color)]"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"></path>
-                                  </svg>
-                                </button>
-                                <span className="font-bold text-[var(--primary-color)] min-w-[20px] text-center">
-                                  {cartItem?.qty || 0}
-                                </span>
-                                <button
-                                  onClick={() => updateQuantity(getCartLineId(product as CartItem), 1)}
-                                  className="w-7 h-7 flex items-center justify-center bg-[var(--primary-color)] text-white rounded hover:bg-[var(--primary-dark)] transition-colors"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
-                                  </svg>
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  addToCart(product);
-                                }}
-                                disabled={product.stock <= 0}
-                                className="px-4 py-2 bg-[var(--primary-color)] text-white rounded-lg hover:bg-[var(--primary-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                              >
-                                Add
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                        product={product}
+                        qtyInCart={qtyInCart}
+                        orderType={orderType}
+                        onAdd={() => addToCart(product)}
+                        onIncrease={() => updateQuantity(lineId, 1)}
+                        onDecrease={() => {
+                          if (qtyInCart <= 1) {
+                            removeFromCart(lineId);
+                          } else {
+                            updateQuantity(lineId, -1);
+                          }
+                        }}
+                        onQuantityChange={(qty) => {
+                          if (qty <= 0) {
+                            removeFromCart(lineId);
+                          } else {
+                            setQuantity(lineId, Math.min(qty, product.stock));
+                          }
+                        }}
+                      />
                     );
                   })}
 

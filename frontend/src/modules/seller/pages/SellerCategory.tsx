@@ -427,8 +427,7 @@ export default function SellerCategory() {
                                                     className="max-w-full max-h-full object-contain rounded"
                                                     onError={(e) => {
                                                         (e.target as HTMLImageElement).src = 'https://placehold.co/60x40?text=Img';
-                                                    }}
-                                                />
+                                                    }} loading="lazy" decoding="async" />
                                             </div>
                                         </td>
                                         <td className="p-4 px-6 align-middle text-center">

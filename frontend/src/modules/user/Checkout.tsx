@@ -1035,7 +1035,7 @@ export default function Checkout() {
                                 {rule.discountType === 'percentage' ? '%' : '₹'}
                               </div>
                             ) : rule.giftProduct?.mainImage ? (
-                              <img src={rule.giftProduct.mainImage} alt="" className="w-6 h-6 object-cover rounded border border-white shadow-sm" />
+                              <img src={rule.giftProduct.mainImage} alt="" className="w-6 h-6 object-cover rounded border border-white shadow-sm" loading="lazy" decoding="async" />
                             ) : (
                               <div className="w-6 h-6 rounded-full bg-[var(--customer-primary-alpha-10)] text-[10px] flex items-center justify-center">🎁</div>
                             )}
@@ -1062,7 +1062,7 @@ export default function Checkout() {
                                 {nextRule.discountType === 'percentage' ? '%' : '₹'}
                               </div>
                             ) : nextRule.giftProduct?.mainImage ? (
-                                <img src={nextRule.giftProduct.mainImage} alt="" className="w-6 h-6 object-cover rounded border border-white shadow-sm" />
+                                <img src={nextRule.giftProduct.mainImage} alt="" className="w-6 h-6 object-cover rounded border border-white shadow-sm" loading="lazy" decoding="async" />
                             ) : null}
                             <span className="text-[10px] text-gray-600">
                                 {nextRule.ruleType === 'discount' ? (
@@ -1093,8 +1093,7 @@ export default function Checkout() {
                     <img
                       src={prod.imageUrl}
                       alt={prod.name}
-                      className="w-full h-full object-contain"
-                    />
+                      className="w-full h-full object-contain" loading="lazy" decoding="async" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-neutral-400">
                       {(prod?.name || '').charAt(0)}

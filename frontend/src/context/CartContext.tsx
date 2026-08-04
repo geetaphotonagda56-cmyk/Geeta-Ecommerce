@@ -76,6 +76,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // flickers). We treat each login transition as a single merge attempt.
   const hasMergedGuestCartRef = useRef(false);
 
+  // Tracks whether the previous render was authenticated, so the effect
+  // below can tell "just logged out" apart from "was never logged in" (a
+  // fresh guest whose own local cart must NOT be wiped).
+  const wasAuthenticatedRef = useRef(isAuthenticated);
+
   // Sync cart from backend on mount or when user logs in.
   //
   // Guest cart merge:
@@ -89,7 +94,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // product P x1 and a logged-in cart that already contained product P x2
   // ends up with P x3 after merge.
   useEffect(() => {
-    if (isAuthenticated) {
+    // AuthContext is shared across Admin/Seller/Customer/Delivery logins -
+    // only sync with the customer cart backend when it's actually a
+    // customer session, so logging into another panel on the same browser
+    // doesn't trigger pointless cart fetches/merges.
+    if (isAuthenticated && (user as any)?.userType === 'Customer') {
       const guestItems = (itemsRef.current || []).filter(
         (i) => i?.product && !i.id && !i.isFreeGift
       );
@@ -100,12 +109,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
         fetchCart();
       }
     } else {
+      // A genuine logout (was authenticated a moment ago) must wipe this
+      // customer's cart from memory + localStorage - otherwise the next
+      // guest or account to use this browser inherits their stale item
+      // count (e.g. a leftover 17-item cart showing for every visitor).
+      // A fresh guest who was never authenticated must NOT be touched here.
+      if (wasAuthenticatedRef.current) {
+        setItems([]);
+        localStorage.removeItem(CART_STORAGE_KEY);
+      }
       // Reset so a future login (after logout) can merge again.
       hasMergedGuestCartRef.current = false;
       setLoading(false);
     }
+    wasAuthenticatedRef.current = isAuthenticated;
     fetchFreeGiftRules();
-  }, [isAuthenticated]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, (user as any)?.userType]);
 
   const fetchCart = async () => {
     setLoading(true);

@@ -125,8 +125,7 @@ export default function CategoryTreeView({
                           const size = isSubcategory ? "w-12 h-12" : "w-16 h-16";
                           parent.innerHTML = `<div class="${size} rounded-lg bg-neutral-100 flex items-center justify-center"><span class="text-lg font-semibold text-neutral-400">${category.name.charAt(0).toUpperCase()}</span></div>`;
                         }
-                      }}
-                    />
+                      }} loading="lazy" decoding="async" />
                   ) : (
                     <div
                       className={`${

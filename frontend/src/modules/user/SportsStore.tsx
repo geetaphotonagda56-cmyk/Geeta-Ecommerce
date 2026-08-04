@@ -38,8 +38,7 @@ export default function SportsStore() {
         <img
           src="/assets/shopbystore/sports.jpg"
           alt="Sports Store"
-          className="w-full h-full object-cover"
-        />
+          className="w-full h-full object-cover" loading="lazy" decoding="async" />
 
         <header className="absolute top-0 left-0 right-0 z-10">
           <div className="px-3 py-2 flex items-center justify-between gap-2">
@@ -118,8 +117,7 @@ export default function SportsStore() {
                         <img
                           src={product.imageUrl}
                           alt={product.name}
-                          className="w-full h-full object-contain"
-                        />
+                          className="w-full h-full object-contain" loading="lazy" decoding="async" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-neutral-100 text-neutral-400 text-2xl">
                           {product.name.charAt(0).toUpperCase()}

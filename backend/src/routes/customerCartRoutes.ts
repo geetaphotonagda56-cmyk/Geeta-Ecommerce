@@ -2,10 +2,12 @@
 import { Router } from 'express';
 import { getCart, addToCart, updateCartItem, removeFromCart, clearCart } from '../modules/customer/controllers/customerCartController';
 import { authenticate } from '../middleware/auth';
+import { stripPurchasePriceAlways } from '../middleware/staffAccessControl';
 
 const router = Router();
 
 router.use(authenticate);
+router.use(stripPurchasePriceAlways);
 
 router.get('/', getCart);
 router.post('/add', addToCart);

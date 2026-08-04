@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Suspense, lazy, startTransition } from "react";
-import CropTestHarness from "./CropTestHarness";
 import { CartProvider } from "./context/CartContext";
 import { OrdersProvider } from "./context/OrdersContext";
 import { AuthProvider } from "./context/AuthContext";
@@ -190,6 +189,8 @@ const AdminCustomerAppPolicy = lazy(() => import("./modules/admin/pages/AdminCus
 const AdminDeliveryAppPolicy = lazy(() => import("./modules/admin/pages/AdminDeliveryAppPolicy"));
 const AdminOrders = lazy(() => import("./modules/admin/pages/AdminOrders"));
 const AdminOrderDetail = lazy(() => import("./modules/admin/pages/AdminOrderDetail"));
+const AdminOrderDelivery = lazy(() => import("./modules/admin/pages/AdminOrderDelivery"));
+const AdminOrderDeliveryDetail = lazy(() => import("./modules/admin/pages/AdminOrderDeliveryDetail"));
 const AdminManageCustomer = lazy(() => import("./modules/admin/pages/AdminManageCustomer"));
 const AdminProfile = lazy(() => import("./modules/admin/pages/AdminProfile"));
 const AdminPOSOrders = lazy(() => import("./modules/admin/pages/AdminPOSOrders"));
@@ -220,6 +221,7 @@ const AdminReplaceRequests = lazy(() => import("./modules/admin/pages/AdminRepla
 const AdminAttributeSetup = lazy(() => import("./modules/admin/pages/AdminAttributeSetup"));
 const AdminVariationTypeSetup = lazy(() => import("./modules/admin/pages/AdminVariationTypeSetup"));
 const AdminReportSalesSummary = lazy(() => import("./modules/admin/pages/AdminReportSalesSummary"));
+const AdminProductSalesReport = lazy(() => import("./modules/admin/pages/AdminProductSalesReport"));
 const AdminReturnExchangeSummary = lazy(() => import("./modules/admin/pages/AdminReturnExchangeSummary"));
 const AdminStockSalesSummary = lazy(() => import("./modules/admin/pages/AdminStockSalesSummary"));
 const AdminDueSummary = lazy(() => import("./modules/admin/pages/AdminDueSummary"));
@@ -231,6 +233,7 @@ const AdminLossSummary = lazy(() => import("./modules/admin/pages/AdminLossSumma
 const AdminGSTSalesReport = lazy(() => import("./modules/admin/pages/AdminGSTSalesReport"));
 const AdminGSTReport = lazy(() => import("./modules/admin/pages/AdminGSTReport"));
 const AdminPaymentReport = lazy(() => import("./modules/admin/pages/AdminPaymentReport"));
+const AdminDeliveryPerformanceReport = lazy(() => import("./modules/admin/pages/AdminDeliveryPerformanceReport"));
 const AdminOnlineOrderReport = lazy(() => import("./modules/admin/pages/AdminOnlineOrderReport"));
 const AdminPOSInvoiceReport = lazy(() => import("./modules/admin/pages/AdminPOSInvoiceReport"));
 const AdminAbandonedCarts = lazy(() => import("./modules/admin/pages/AdminAbandonedCarts"));
@@ -247,6 +250,7 @@ const AdminStoreSettings = lazy(() => import("./modules/admin/pages/AdminStoreSe
 const AdminAppSettings = lazy(() => import("./modules/admin/pages/AdminAppSettings"));
 const StaffLogin = lazy(() => import("./modules/staff/pages/StaffLogin"));
 const StaffBillReport = lazy(() => import("./modules/staff/pages/StaffBillReport"));
+const CropTestHarness = lazy(() => import("./CropTestHarness"));
 
 function NotificationHandler() {
   const { user, token: authToken } = useAuth();
@@ -330,7 +334,14 @@ function App() {
                       <RouteLoaderTrigger />
                       <Routes>
                   {/* Public Routes */}
-                  <Route path="/crop-test" element={<CropTestHarness />} />
+                  <Route
+                    path="/crop-test"
+                    element={
+                      <Suspense fallback={<IconLoader forceShow />}>
+                        <CropTestHarness />
+                      </Suspense>
+                    }
+                  />
                   <Route
                     path="/login"
                     element={
@@ -583,6 +594,8 @@ function App() {
                             <Route path="lowest-prices" element={<AdminLowestPrices />} />
                             <Route path="shop-by-store" element={<AdminShopByStore />} />
                             <Route path="orders/all" element={<AdminAllOrders />} />
+                            <Route path="orders/delivery" element={<AdminOrderDelivery />} />
+                            <Route path="orders/delivery/:id" element={<AdminOrderDeliveryDetail />} />
                             <Route path="orders/pending" element={<AdminPendingOrders />} />
                             <Route path="orders/received" element={<AdminReceivedOrders />} />
                             <Route path="orders/processed" element={<AdminProcessedOrders />} />
@@ -605,6 +618,7 @@ function App() {
 
                             {/* Report Routes */}
                             <Route path="reports/sales/summary" element={<AdminReportSalesSummary />} />
+                            <Route path="reports/products" element={<AdminProductSalesReport />} />
                             <Route path="reports/sales/return-exchange" element={<AdminReturnExchangeSummary />} />
                             <Route path="reports/sales/stock-sales" element={<AdminStockSalesSummary />} />
                             <Route path="reports/sales/due-summary" element={<AdminDueSummary />} />
@@ -616,6 +630,7 @@ function App() {
                             <Route path="reports/gst-sales" element={<AdminGSTSalesReport />} />
                             <Route path="reports/gst-register" element={<AdminGSTReport />} />
                             <Route path="reports/payment" element={<AdminPaymentReport />} />
+                            <Route path="reports/delivery-performance" element={<AdminDeliveryPerformanceReport />} />
                             <Route path="reports/order" element={<AdminOnlineOrderReport />} />
                             <Route path="reports/invoice" element={<AdminPOSInvoiceReport />} />
 

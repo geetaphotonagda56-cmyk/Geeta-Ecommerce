@@ -8,8 +8,10 @@ import {
   semanticSearch,
   trackSearchClick,
 } from "../controllers/searchController";
+import { stripPurchasePriceAlways } from "../middleware/staffAccessControl";
 
 const router = Router();
+router.use(stripPurchasePriceAlways);
 
 const searchRateLimiter = rateLimit({
   windowMs: 60 * 1000,

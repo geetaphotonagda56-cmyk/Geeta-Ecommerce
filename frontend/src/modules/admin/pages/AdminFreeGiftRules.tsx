@@ -180,7 +180,7 @@ export default function AdminFreeGiftRules() {
     return (
       <div className="flex items-center gap-3 min-w-max">
         {rule.giftProduct?.mainImage && (
-          <img src={rule.giftProduct.mainImage} alt="" className="w-10 h-10 object-cover rounded" />
+          <img src={rule.giftProduct.mainImage} alt="" className="w-10 h-10 object-cover rounded" loading="lazy" decoding="async" />
         )}
         <span className="truncate max-w-[150px] md:max-w-xs block">
           {rule.giftProduct?.productName || 'Unknown Product'}
@@ -309,7 +309,7 @@ export default function AdminFreeGiftRules() {
                         >
                           <div className="flex items-center gap-3">
                             {product.mainImage && (
-                              <img src={product.mainImage} alt="" className="w-8 h-8 rounded object-cover" />
+                              <img src={product.mainImage} alt="" className="w-8 h-8 rounded object-cover" loading="lazy" decoding="async" />
                             )}
                             <div>
                               <div className="text-sm font-medium text-gray-900">{product.productName}</div>

@@ -1773,7 +1773,7 @@ export default function AdminStockBulkEdit({
             <div className="flex flex-wrap justify-center items-center gap-2 p-1 min-w-[140px]">
               {product.images.map((img, i) => (
                 <div key={img.id} className="relative group w-12 h-12 border border-gray-200 rounded overflow-hidden bg-white shrink-0">
-                  <img src={img.url} alt={`Img-${i}`} className="w-full h-full object-cover" />
+                  <img src={img.url} alt={`Img-${i}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                   <button onClick={() => handleRemoveImage(originalIndex, img.id)} className="absolute top-0 right-0 bg-red-600 text-white w-4 h-4 flex items-center justify-center rounded-bl opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 z-10" title="Remove">
                     <span className="text-[10px] font-bold leading-none">&times;</span>
                   </button>
@@ -2111,7 +2111,7 @@ export default function AdminStockBulkEdit({
               <div className="flex flex-wrap justify-center items-center gap-2 p-1 min-w-[140px]">
                 {product.images.map((img, i) => (
                   <div key={img.id} className="relative group w-12 h-12 border border-gray-200 rounded overflow-hidden bg-white shrink-0">
-                    <img src={img.url} alt={`Img-${i}`} className="w-full h-full object-cover" />
+                    <img src={img.url} alt={`Img-${i}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                     <button onClick={() => handleRemoveImage(originalIndex, img.id)} className="absolute top-0 right-0 bg-red-600 text-white w-4 h-4 flex items-center justify-center rounded-bl opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 z-10" title="Remove">
                       <span className="text-[10px] font-bold leading-none">&times;</span>
                     </button>
@@ -2142,7 +2142,7 @@ export default function AdminStockBulkEdit({
             <div className="flex flex-wrap justify-center items-center gap-2 p-1 min-w-[140px]">
               {images.map((url, i) => (
                 <div key={`${url}-${i}`} className="relative group w-12 h-12 border border-gray-200 rounded overflow-hidden bg-white shrink-0">
-                  <img src={url} alt={`Img-${i}`} className="w-full h-full object-cover" />
+                  <img src={url} alt={`Img-${i}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                   <button onClick={() => removeVariationImage(i)} className="absolute top-0 right-0 bg-red-600 text-white w-4 h-4 flex items-center justify-center rounded-bl opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 z-10" title="Remove">
                     <span className="text-[10px] font-bold leading-none">&times;</span>
                   </button>

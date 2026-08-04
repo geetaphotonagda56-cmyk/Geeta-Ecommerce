@@ -116,7 +116,7 @@ export default function AdminFeaturedDeal() {
                                 onClick={() => !isSelected && handleAddProduct(p)}
                                 className={`p-3 border-b flex items-center gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-[var(--primary-color)]/10 opacity-70 cursor-not-allowed' : 'hover:bg-[var(--primary-color)]/5'}`}
                             >
-                                <img src={p.mainImage || p.imageUrl || 'https://via.placeholder.com/40'} className="w-12 h-12 object-cover rounded bg-white border" alt="" />
+                                <img src={p.mainImage || p.imageUrl || 'https://via.placeholder.com/40'} className="w-12 h-12 object-cover rounded bg-white border" alt="" loading="lazy" decoding="async" />
                                 <div className="flex-1">
                                     <p className="font-medium text-sm text-gray-800 line-clamp-1">{p.productName || p.name}</p>
                                     <div className="flex items-center gap-2 mt-0.5">
@@ -156,7 +156,7 @@ export default function AdminFeaturedDeal() {
                                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                       </button>
                                   </div>
-                                  <img src={p.mainImage || p.imageUrl} className="w-16 h-16 object-contain rounded bg-white" alt="" />
+                                  <img src={p.mainImage || p.imageUrl} className="w-16 h-16 object-contain rounded bg-white" alt="" loading="lazy" decoding="async" />
                                   <div>
                                       <h3 className="font-medium text-gray-800 line-clamp-1 text-sm">{p.productName || p.name}</h3>
                                       <p className="text-[var(--primary-color)] font-bold text-sm mt-1">₹{(p as any).salePrice || p.price}</p>

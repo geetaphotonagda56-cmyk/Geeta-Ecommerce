@@ -158,8 +158,7 @@ export default function FlashDealSection() {
                    src={config.flashDealImage}
                    alt=""
                    className="w-full h-full object-contain object-center"
-                   aria-hidden
-                 />
+                   aria-hidden loading="lazy" decoding="async" />
                )}
              </div>
 
@@ -177,8 +176,7 @@ export default function FlashDealSection() {
                     src={config.flashDealImage}
                     alt=""
                     className="w-full h-full object-contain object-center"
-                    aria-hidden
-                  />
+                    aria-hidden loading="lazy" decoding="async" />
                 )}
              </div>
 
@@ -255,8 +253,7 @@ export default function FlashDealSection() {
                                     <img
                                         src={product.imageUrl || product.mainImage}
                                         alt={product.name}
-                                        className="w-full h-full object-contain p-1"
-                                    />
+                                        className="w-full h-full object-contain p-1" loading="lazy" decoding="async" />
                                 </div>
                                 <div className="flex-1 min-w-0 md:w-full md:text-left">
                                     <h4 className="font-bold text-neutral-800 text-sm line-clamp-2 leading-snug mb-1 md:text-base md:mb-2">

@@ -454,7 +454,7 @@ export default function AdminHeaderCategory() {
                      <div className="border-2 border-dashed border-neutral-300 rounded-lg p-6 flex flex-col items-center justify-center text-center bg-neutral-50 hover:bg-neutral-100 transition-colors">
                         {headerCategoryImage ? (
                             <div className="relative group">
-                                <img src={headerCategoryImage} alt="Preview" className="h-24 w-24 object-contain rounded mb-3" />
+                                <img src={headerCategoryImage} alt="Preview" className="h-24 w-24 object-contain rounded mb-3" loading="lazy" decoding="async" />
                                 <button
                                     onClick={() => setHeaderCategoryImage('')}
                                     className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -816,7 +816,7 @@ export default function AdminHeaderCategory() {
                         <div className="flex items-center gap-2">
                            {category.image ? (
                                <div className="w-8 h-8 flex-shrink-0 border border-neutral-200 rounded overflow-hidden bg-white">
-                                  <img src={category.image} alt={category.name} className="w-full h-full object-contain" />
+                                  <img src={category.image} alt={category.name} className="w-full h-full object-contain" loading="lazy" decoding="async" />
                                </div>
                            ) : (
                               <div className="text-[var(--primary-color)] w-5 h-5 flex items-center justify-center">

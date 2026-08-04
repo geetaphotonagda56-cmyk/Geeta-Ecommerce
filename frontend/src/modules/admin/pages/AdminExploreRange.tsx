@@ -223,7 +223,7 @@ export default function AdminExploreRange() {
                 </div>
                 {previewUrl && (
                   <div className="mt-3 aspect-square w-32 bg-gray-50 rounded border overflow-hidden">
-                    <img src={previewUrl} alt="Preview" className="h-full w-full object-contain" />
+                    <img src={previewUrl} alt="Preview" className="h-full w-full object-contain" loading="lazy" decoding="async" />
                   </div>
                 )}
               </div>
@@ -267,7 +267,7 @@ export default function AdminExploreRange() {
                         <td className="px-6 py-4 text-gray-500 font-medium">{card.order}</td>
                         <td className="px-6 py-4">
                           <div className="h-12 w-12 bg-gray-50 rounded border overflow-hidden">
-                            <img src={card.imageUrl} alt="" className="h-full w-full object-contain" />
+                            <img src={card.imageUrl} alt="" className="h-full w-full object-contain" loading="lazy" decoding="async" />
                           </div>
                         </td>
                         <td className="px-6 py-4 text-gray-700 font-medium text-sm">{card.label}</td>

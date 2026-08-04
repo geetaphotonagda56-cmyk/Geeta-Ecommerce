@@ -53,4 +53,16 @@ export const deleteStaff = async (
   return response.data;
 };
 
+export interface StaffLoginResult {
+  token: string;
+  staff: Staff;
+}
+
+export const staffLogin = async (
+  phone: string
+): Promise<ApiResponse<StaffLoginResult>> => {
+  const response = await api.post<ApiResponse<StaffLoginResult>>("/admin/staff/login", { phone });
+  return response.data;
+};
+
 

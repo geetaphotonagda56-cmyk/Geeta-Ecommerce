@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { detectModuleFromPath, getModuleAuthToken, getModuleUserData } from "../../../utils/moduleAuth";
+import { detectModuleFromPath, getModuleAuthToken, getModuleUserData, setModuleAuthToken } from "../../../utils/moduleAuth";
 import { getStoredStaffList, normalizeStaffMember, setStaffSession, setStoredStaffList, StaffModule } from "../../../utils/staffSession";
 import { useAuth } from "../../../context/AuthContext";
-import { getStaff as apiGetStaff } from "../../../services/api/admin/adminStaffService";
+import { getStaff as apiGetStaff, staffLogin as apiStaffLogin } from "../../../services/api/admin/adminStaffService";
 
 export default function StaffLogin() {
   const navigate = useNavigate();
@@ -71,7 +71,33 @@ export default function StaffLogin() {
         return;
       }
 
-      setStaffSession(moduleType, matchedStaff);
+      // Exchange for a staff-scoped token so the backend (not just this UI)
+      // enforces the staff member's permissions on every request.
+      let loginResult;
+      try {
+        loginResult = await apiStaffLogin(phone);
+      } catch {
+        setError("Could not verify staff login with the server. Please try again.");
+        return;
+      }
+
+      if (!loginResult.success || !loginResult.data) {
+        setError(loginResult.message || "Staff login failed.");
+        return;
+      }
+
+      setModuleAuthToken(loginResult.data.token, moduleType);
+
+      const loggedInStaff = normalizeStaffMember({
+        id: loginResult.data.staff._id || matchedStaff.id,
+        name: loginResult.data.staff.name,
+        phone: loginResult.data.staff.phone,
+        role: loginResult.data.staff.role,
+        commission: loginResult.data.staff.commission ?? 0,
+        permissions: loginResult.data.staff.permissions,
+      });
+
+      setStaffSession(moduleType, loggedInStaff);
       navigate(`/${moduleType}/pos/orders`, { replace: true });
     } finally {
       setLoading(false);

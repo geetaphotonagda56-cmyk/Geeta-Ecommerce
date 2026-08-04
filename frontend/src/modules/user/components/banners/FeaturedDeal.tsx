@@ -133,8 +133,7 @@ export default function FeaturedDeal() {
                              <img
                                 src={product.imageUrl}
                                 alt={product.name}
-                                className="w-full h-full object-contain p-1"
-                             />
+                                className="w-full h-full object-contain p-1" loading="lazy" decoding="async" />
                          </div>
 
                          {/* Content */}

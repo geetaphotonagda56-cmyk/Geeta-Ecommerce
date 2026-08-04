@@ -24,6 +24,10 @@ export interface IProduct extends Document {
   lowStockQuantity?: number;
   deliveryTime?: string;
 
+  // Fallback cost price for admin profit calculation when a product has
+  // no variant-level purchasePrice set.
+  purchasePrice?: number;
+
   // Variations (canonical sellable SKUs — min 1 required on create)
   variationType?: string; // legacy product-level; prefer per-variant variationType
   variations: Array<{
@@ -187,6 +191,10 @@ export interface IProduct extends Document {
       type: Number,
       min: [0, "GST cannot be negative"],
       default: 5,
+    },
+    purchasePrice: {
+      type: Number,
+      min: [0, "Purchase price cannot be negative"],
     },
     lowStockQuantity: {
       type: Number,

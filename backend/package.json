@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc || true",
     "start": "node dist/server.js",
-    "dev": "tsx watch src/server.ts",
+    "dev": "nodemon",
     "test": "tsx test-auth.ts",
     "test:auth": "tsx src/scripts/testAuth.ts",
     "test:integration": "tsx src/scripts/test-frontend-backend-auth.ts",
@@ -68,6 +68,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^20.10.6",
     "@types/socket.io": "^3.0.1",
+    "nodemon": "^3.1.14",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }

@@ -65,6 +65,7 @@ export interface IOrder extends Document {
   | "Picked Up"
   | "Shipped"
   | "Out for Delivery"
+  | "In Transit"
   | "Delivered"
   | "Cancelled"
   | "Rejected"
@@ -82,6 +83,25 @@ export interface IOrder extends Document {
   deliveryBroadcastAttempts: number;
   lastBroadcastAt?: Date;
   needsManualAssignment: boolean;
+
+  // Admin Order Delivery workflow (tabs: New/Confirmed/Shipment Ready/In Transit/Delivered)
+  deliveryWorkflowStage:
+  | "New"
+  | "Confirmed"
+  | "Shipment Ready"
+  | "In Transit"
+  | "Delivered"
+  | "Cancelled";
+  confirmedAt?: Date;
+  dispatchedAt?: Date;
+  inTransitAt?: Date;
+  deliverySlot?: {
+    type: "Fast" | "Same-day" | "Later" | "Custom";
+    label?: string;
+    scheduledFor?: Date;
+  };
+  // Admin-only computed profit, never surfaced to customer/delivery responses
+  netProfit?: number;
 
   // Tracking
   trackingNumber?: string;
@@ -275,6 +295,7 @@ const OrderSchema = new Schema<IOrder>(
         "Picked Up",
         "Shipped",
         "Out for Delivery",
+        "In Transit",
         "Delivered",
         "Cancelled",
         "Rejected",
@@ -305,6 +326,40 @@ const OrderSchema = new Schema<IOrder>(
     needsManualAssignment: {
       type: Boolean,
       default: false,
+    },
+
+    // Admin Order Delivery workflow
+    deliveryWorkflowStage: {
+      type: String,
+      enum: [
+        "New",
+        "Confirmed",
+        "Shipment Ready",
+        "In Transit",
+        "Delivered",
+        "Cancelled",
+      ],
+      default: "New",
+    },
+    confirmedAt: {
+      type: Date,
+    },
+    dispatchedAt: {
+      type: Date,
+    },
+    inTransitAt: {
+      type: Date,
+    },
+    deliverySlot: {
+      type: {
+        type: String,
+        enum: ["Fast", "Same-day", "Later", "Custom"],
+      },
+      label: { type: String, trim: true },
+      scheduledFor: { type: Date },
+    },
+    netProfit: {
+      type: Number,
     },
 
     // Tracking
@@ -403,6 +458,7 @@ OrderSchema.index({ status: 1 });
 OrderSchema.index({ orderDate: -1 });
 OrderSchema.index({ deliveryBoy: 1 });
 OrderSchema.index({ orderNumber: 1 });
+OrderSchema.index({ deliveryWorkflowStage: 1, orderDate: -1 });
 
 const Order = mongoose.models.Order || mongoose.model<IOrder>("Order", OrderSchema);
 

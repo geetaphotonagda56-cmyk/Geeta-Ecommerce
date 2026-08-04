@@ -39,8 +39,7 @@ export default function PharmaStore() {
         <img
           src="/assets/shopbystore/pharma.jpg"
           alt="Pharma Store"
-          className="w-full h-full object-cover"
-        />
+          className="w-full h-full object-cover" loading="lazy" decoding="async" />
 
         {/* Header Overlay */}
         <header className="absolute top-0 left-0 right-0 z-10">
@@ -126,8 +125,7 @@ export default function PharmaStore() {
                         <img
                           src={product.imageUrl}
                           alt={product.name}
-                          className="w-full h-full object-contain"
-                        />
+                          className="w-full h-full object-contain" loading="lazy" decoding="async" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-neutral-100 text-neutral-400 text-2xl">
                           {product.name.charAt(0).toUpperCase()}

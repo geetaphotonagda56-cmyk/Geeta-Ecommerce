@@ -5,6 +5,11 @@ export interface TokenPayload {
   userId: string;
   userType: UserType;
   role?: string;
+  /** Set when this token was minted for a staff member, not the owning Admin/Seller account. */
+  isStaff?: boolean;
+  staffId?: string;
+  staffModule?: 'admin' | 'seller';
+  permissions?: string[];
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -18,6 +23,33 @@ export function generateToken(userId: string, userType: UserType, role?: string)
     userId,
     userType,
     ...(role && { role }),
+  };
+
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: JWT_EXPIRES_IN,
+  } as jwt.SignOptions);
+}
+
+/**
+ * Generate a JWT token for a staff member. The token carries the owning
+ * Admin/Seller's userId/userType (so existing `requireUserType` checks keep
+ * working unchanged) plus staff identity and permission claims that
+ * server-side middleware uses to restrict what the staff member can see/do.
+ */
+export function generateStaffToken(
+  ownerId: string,
+  ownerUserType: UserType,
+  staffId: string,
+  staffModule: 'admin' | 'seller',
+  permissions: string[]
+): string {
+  const payload: TokenPayload = {
+    userId: ownerId,
+    userType: ownerUserType,
+    isStaff: true,
+    staffId,
+    staffModule,
+    permissions,
   };
 
   return jwt.sign(payload, JWT_SECRET, {

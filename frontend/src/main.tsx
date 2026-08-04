@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 import './styles/anti-flash.css'
+import './styles/fonts.css'
 
 // Set background immediately to prevent flash
 if (document.documentElement) {

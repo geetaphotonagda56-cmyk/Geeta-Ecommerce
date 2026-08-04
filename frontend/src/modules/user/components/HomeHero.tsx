@@ -149,7 +149,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
       label: c.name,
       theme: c.theme || c.slug,
       icon: c.image ? (
-        <img src={c.image} alt={c.name} className="w-full h-full object-cover" />
+        <img src={c.image} alt={c.name} className="w-full h-full object-cover" loading="lazy" decoding="async" />
       ) : (
         getIconByName(c.iconName)
       )
@@ -177,7 +177,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             label: c.name,
             theme: c.theme || c.slug,
             icon: c.image ? (
-                <img src={c.image} alt={c.name} className="w-full h-full object-cover" />
+                <img src={c.image} alt={c.name} className="w-full h-full object-cover" loading="lazy" decoding="async" />
             ) : (
                 getIconByName(c.iconName)
             )

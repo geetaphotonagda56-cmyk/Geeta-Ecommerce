@@ -236,6 +236,80 @@ export const getSalesSummaryReport = async (params?: GetStockSummaryParams): Pro
   return response.data;
 };
 
+export type ProductSalesReportView = "product" | "category" | "location" | "customer";
+
+export interface GetProductSalesReportParams extends GetStockSummaryParams {
+  view?: ProductSalesReportView;
+}
+
+export interface ProductSalesRow {
+  _id: string;
+  productName: string;
+  sku: string;
+  categoryName: string;
+  brandName: string;
+  unitsSold: number;
+  revenue: number;
+  profit: number;
+  totalDiscount: number;
+  avgDiscountPercent: number;
+  ordersCount: number;
+}
+
+export interface CategorySalesRow {
+  _id: string;
+  categoryName: string;
+  unitsSold: number;
+  revenue: number;
+  profit: number;
+  distinctProducts: number;
+  ordersCount: number;
+}
+
+export interface LocationSalesRow {
+  _id: { city: string; state?: string };
+  city: string;
+  state?: string;
+  unitsSold: number;
+  revenue: number;
+  ordersCount: number;
+  distinctCustomers: number;
+}
+
+export interface CustomerSalesRow {
+  _id: string;
+  customerName: string;
+  customerPhone: string;
+  unitsSold: number;
+  revenue: number;
+  ordersCount: number;
+  avgOrderValue: number;
+  lastPurchaseDate: string;
+}
+
+export type ProductSalesReportRow = ProductSalesRow | CategorySalesRow | LocationSalesRow | CustomerSalesRow;
+
+export interface ProductSalesReportSummary {
+  totalUnits: number;
+  totalRevenue: number;
+  totalProfit: number;
+  topProductName: string;
+}
+
+export interface ProductSalesReportResponse<T> extends ApiResponse<T> {
+  summary: ProductSalesReportSummary;
+}
+
+/**
+ * Get Product Sales Report (ranked by product / category / location / customer)
+ */
+export const getProductSalesReport = async <T extends ProductSalesReportRow[]>(
+  params?: GetProductSalesReportParams
+): Promise<ProductSalesReportResponse<T>> => {
+  const response = await api.get<ProductSalesReportResponse<T>>("/admin/inventory/product-sales-report", { params });
+  return response.data;
+};
+
 export interface ReturnExchangeData {
   _id: string;
   date: string;

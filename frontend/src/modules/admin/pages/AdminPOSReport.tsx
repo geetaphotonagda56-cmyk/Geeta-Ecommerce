@@ -967,7 +967,7 @@ const AdminPOSReport = () => {
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-8 h-8 rounded bg-gray-100 flex-shrink-0">
-                                                            {entry.product?.mainImage && <img src={entry.product.mainImage} className="w-full h-full object-cover rounded" alt="" />}
+                                                            {entry.product?.mainImage && <img src={entry.product.mainImage} className="w-full h-full object-cover rounded" alt="" loading="lazy" decoding="async" />}
                                                         </div>
                                                         <div>
                                                             <div className="text-sm font-bold text-gray-800 line-clamp-1">{entry.product?.productName}</div>
@@ -1483,7 +1483,7 @@ const AdminPOSReport = () => {
 
                             {posBillSettings?.qrCode && (
                                 <div className="mt-4 flex justify-center">
-                                    <img src={posBillSettings.qrCode} alt="QR" className="w-24 h-24 object-contain" style={{ WebkitPrintColorAdjust: 'exact' }} />
+                                    <img src={posBillSettings.qrCode} alt="QR" className="w-24 h-24 object-contain" style={{ WebkitPrintColorAdjust: 'exact' }} loading="lazy" decoding="async" />
                                 </div>
                             )}
                         </div>

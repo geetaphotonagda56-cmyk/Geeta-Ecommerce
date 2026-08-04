@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { useRef, useEffect, useState } from 'react';
 import { Product } from '../../../types/domain';
@@ -283,14 +282,9 @@ export default function ProductCard({
   const { currentTheme: theme, currentCategory } = useThemeContext();
 
   return (
-    <motion.div
+    <div
       id={`product-${(product as any).id || product._id}`}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.97 }}
-      transition={{ duration: 0.2 }}
-      className="h-full bg-white overflow-hidden flex flex-col relative rounded-md border border-neutral-100 hover:shadow-md transition-shadow"
+      className="h-full bg-white overflow-hidden flex flex-col relative rounded-md border border-neutral-100 transition-all duration-200 ease-out hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97]"
       style={{ backgroundColor: '#ffffff' }}
     >
       <div
@@ -305,6 +299,8 @@ export default function ProductCard({
               alt={product.name || product.productName || 'Product'}
               className="w-full h-full object-contain"
               referrerPolicy="no-referrer"
+              loading="lazy"
+              decoding="async"
               onError={(e) => {
                 // Hide broken image and show fallback
                 const target = e.target as HTMLImageElement;
@@ -726,6 +722,6 @@ export default function ProductCard({
           </div>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }

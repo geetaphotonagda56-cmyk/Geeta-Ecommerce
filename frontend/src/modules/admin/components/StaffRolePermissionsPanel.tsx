@@ -54,6 +54,7 @@ const BASE_PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'taxes', label: 'Taxes', enabled: true },
       { id: 'barcode_settings', label: 'Barcode Settings', enabled: false },
       { id: 'product_display_settings', label: 'Product Display Settings', enabled: false },
+      { id: 'view_purchase_price', label: 'View Purchase Price', enabled: false },
     ]
   },
   {
@@ -63,6 +64,7 @@ const BASE_PERMISSION_GROUPS: PermissionGroup[] = [
     badgeColor: 'text-orange-500 bg-orange-50',
     permissions: [
       { id: 'all_orders', label: 'All Orders', enabled: true },
+      { id: 'order_delivery_workflow', label: 'Order Delivery', enabled: true },
       { id: 'pending_orders', label: 'Pending Orders', enabled: true },
       { id: 'confirmed_orders', label: 'Confirmed Orders', enabled: true },
       { id: 'processed_orders', label: 'Processed Orders', enabled: true },
@@ -236,6 +238,7 @@ const ADMIN_SIDEBAR_SECTIONS: Array<{
     items: [
       { label: 'Order List', path: '/admin/orders' },
       { label: 'All Order', path: '/admin/orders/all' },
+      { label: 'Order Delivery', path: '/admin/orders/delivery' },
       { label: 'Pending Order', path: '/admin/orders/pending' },
       { label: 'Received Order', path: '/admin/orders/received' },
       { label: 'Processed Order', path: '/admin/orders/processed' },

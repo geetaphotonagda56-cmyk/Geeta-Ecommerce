@@ -89,7 +89,7 @@ export default function Wishlist() {
 
                 <Link to={`/product/${product.id}`} className="aspect-square bg-neutral-50 flex items-center justify-center p-4">
                   {product.imageUrl || product.mainImage ? (
-                    <img src={product.imageUrl || product.mainImage} alt={product.name} className="w-full h-full object-contain" />
+                    <img src={product.imageUrl || product.mainImage} alt={product.name} className="w-full h-full object-contain" loading="lazy" decoding="async" />
                   ) : (
                     <span className="text-4xl">📦</span>
                   )}

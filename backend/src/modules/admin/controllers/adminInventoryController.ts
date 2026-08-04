@@ -1538,6 +1538,325 @@ export const getSalesSummaryReport = asyncHandler(
 );
 
 /**
+ * Get Product Sales Report
+ * Aggregates delivered orders (excluding seller POS orders) into rankings by
+ * product, category, location, or customer depending on the `view` param.
+ */
+export const getProductSalesReport = asyncHandler(
+  async (req: Request, res: Response) => {
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      dateFrom,
+      dateTo,
+      view = "product",
+    } = req.query;
+
+    const pageNum = parseInt(page as string) || 1;
+    const limitNum = parseInt(limit as string) || 20;
+    const skip = (pageNum - 1) * limitNum;
+    const viewType = ["product", "category", "location", "customer"].includes(view as string)
+      ? (view as string)
+      : "product";
+
+    const sanitizedSearch = search ? (search as string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : null;
+    const searchRegex = sanitizedSearch ? new RegExp(sanitizedSearch, "i") : null;
+
+    const matchQuery: any = {
+      status: "Delivered",
+      // Scope: hide seller-created POS orders from the admin product sales report.
+      adminNotes: { $not: { $regex: "POS Order - Seller:", $options: "i" } },
+    };
+    if (dateFrom || dateTo) {
+      matchQuery.orderDate = {};
+      if (dateFrom) {
+        const dFrom = new Date(dateFrom as string);
+        if (!isNaN(dFrom.getTime())) matchQuery.orderDate.$gte = dFrom;
+      }
+      if (dateTo) {
+        const dTo = new Date(dateTo as string);
+        if (!isNaN(dTo.getTime())) matchQuery.orderDate.$lte = dTo;
+      }
+      if (Object.keys(matchQuery.orderDate).length === 0) delete matchQuery.orderDate;
+    }
+
+    // purchasePrice only exists per-variation on Product, not at the top level -
+    // match the ordered variant by its snapshotted variantId, falling back to
+    // the first variation for legacy orders placed before variantId was captured.
+    const purchasePriceExpr = {
+      $let: {
+        vars: { product: { $arrayElemAt: ["$productInfo", 0] } },
+        in: {
+          $let: {
+            vars: {
+              matchedVariant: {
+                $first: {
+                  $filter: {
+                    input: { $ifNull: ["$$product.variations", []] },
+                    as: "v",
+                    cond: { $eq: ["$$v._id", "$items.variantId"] }
+                  }
+                }
+              }
+            },
+            in: {
+              $ifNull: [
+                "$$matchedVariant.purchasePrice",
+                {
+                  $ifNull: [
+                    { $arrayElemAt: ["$$product.variations.purchasePrice", 0] },
+                    { $ifNull: ["$$product.purchasePrice", 0] }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    };
+
+    const baseStages: any[] = [
+      { $match: matchQuery },
+      {
+        $lookup: {
+          from: "orderitems",
+          localField: "_id",
+          foreignField: "order",
+          as: "items"
+        }
+      },
+      { $unwind: "$items" },
+      {
+        $lookup: {
+          from: "products",
+          localField: "items.product",
+          foreignField: "_id",
+          as: "productInfo"
+        }
+      },
+      {
+        $addFields: {
+          "items.purchasePrice": purchasePriceExpr,
+          "items.mrp": { $ifNull: ["$items.mrp", "$items.unitPrice"] },
+          "items.categoryId": { $arrayElemAt: ["$productInfo.category", 0] },
+          "items.brandId": { $arrayElemAt: ["$productInfo.brand", 0] },
+        }
+      },
+      {
+        $lookup: {
+          from: "categories",
+          localField: "items.categoryId",
+          foreignField: "_id",
+          as: "categoryInfo"
+        }
+      },
+      {
+        $lookup: {
+          from: "brands",
+          localField: "items.brandId",
+          foreignField: "_id",
+          as: "brandInfo"
+        }
+      },
+      {
+        $addFields: {
+          "items.categoryName": { $ifNull: [{ $arrayElemAt: ["$categoryInfo.name", 0] }, "Uncategorized"] },
+          "items.brandName": { $ifNull: [{ $arrayElemAt: ["$brandInfo.name", 0] }, "N/A"] },
+          "items.discount": { $subtract: ["$items.mrp", "$items.unitPrice"] },
+        }
+      },
+    ];
+
+    let groupStage: any;
+    let postGroupStages: any[];
+    let searchMatchStage: any = null;
+
+    if (viewType === "category") {
+      groupStage = {
+        $group: {
+          _id: "$items.categoryId",
+          categoryName: { $first: "$items.categoryName" },
+          unitsSold: { $sum: "$items.quantity" },
+          revenue: { $sum: "$items.total" },
+          profit: { $sum: { $multiply: [{ $subtract: ["$items.unitPrice", "$items.purchasePrice"] }, "$items.quantity"] } },
+          products: { $addToSet: "$items.product" },
+          orders: { $addToSet: "$_id" },
+        }
+      };
+      postGroupStages = [
+        { $addFields: { distinctProducts: { $size: "$products" }, ordersCount: { $size: "$orders" } } },
+        { $project: { products: 0, orders: 0 } }
+      ];
+      searchMatchStage = searchRegex ? { $match: { categoryName: searchRegex } } : null;
+    } else if (viewType === "location") {
+      groupStage = {
+        $group: {
+          _id: { city: "$deliveryAddress.city", state: "$deliveryAddress.state" },
+          unitsSold: { $sum: "$items.quantity" },
+          revenue: { $sum: "$items.total" },
+          orders: { $addToSet: "$_id" },
+          customers: { $addToSet: "$customer" },
+        }
+      };
+      postGroupStages = [
+        { $addFields: { city: { $ifNull: ["$_id.city", "Unknown"] }, state: "$_id.state", ordersCount: { $size: "$orders" } } },
+        { $addFields: { distinctCustomers: { $size: "$customers" } } },
+        { $project: { orders: 0, customers: 0 } }
+      ];
+      searchMatchStage = searchRegex ? { $match: { $or: [{ city: searchRegex }, { state: searchRegex }] } } : null;
+    } else if (viewType === "customer") {
+      groupStage = {
+        $group: {
+          _id: "$customer",
+          customerName: { $first: "$customerName" },
+          customerPhone: { $first: "$customerPhone" },
+          unitsSold: { $sum: "$items.quantity" },
+          revenue: { $sum: "$items.total" },
+          orders: { $addToSet: "$_id" },
+          lastPurchaseDate: { $max: "$orderDate" },
+        }
+      };
+      postGroupStages = [
+        { $addFields: { ordersCount: { $size: "$orders" } } },
+        { $addFields: { avgOrderValue: { $cond: [{ $gt: ["$ordersCount", 0] }, { $divide: ["$revenue", "$ordersCount"] }, 0] } } },
+        { $project: { orders: 0 } }
+      ];
+      searchMatchStage = searchRegex ? { $match: { customerName: searchRegex } } : null;
+    } else {
+      groupStage = {
+        $group: {
+          _id: "$items.product",
+          productName: { $first: "$items.productName" },
+          sku: { $first: "$items.sku" },
+          categoryName: { $first: "$items.categoryName" },
+          brandName: { $first: "$items.brandName" },
+          unitsSold: { $sum: "$items.quantity" },
+          revenue: { $sum: "$items.total" },
+          profit: { $sum: { $multiply: [{ $subtract: ["$items.unitPrice", "$items.purchasePrice"] }, "$items.quantity"] } },
+          totalDiscount: { $sum: { $multiply: ["$items.discount", "$items.quantity"] } },
+          orders: { $addToSet: "$_id" },
+        }
+      };
+      postGroupStages = [
+        {
+          $addFields: {
+            ordersCount: { $size: "$orders" },
+            avgDiscountPercent: {
+              $cond: [
+                { $gt: [{ $add: ["$revenue", "$totalDiscount"] }, 0] },
+                { $multiply: [{ $divide: ["$totalDiscount", { $add: ["$revenue", "$totalDiscount"] }] }, 100] },
+                0
+              ]
+            }
+          }
+        },
+        { $project: { orders: 0 } }
+      ];
+      searchMatchStage = searchRegex ? { $match: { $or: [{ productName: searchRegex }, { sku: searchRegex }] } } : null;
+    }
+
+    const pipeline: any[] = [
+      ...baseStages,
+      groupStage,
+      ...postGroupStages,
+      ...(searchMatchStage ? [searchMatchStage] : []),
+      { $sort: { revenue: -1 } },
+      {
+        $facet: {
+          data: [
+            { $skip: skip },
+            { $limit: limitNum }
+          ],
+          totalCount: [
+            { $count: "count" }
+          ]
+        }
+      }
+    ];
+
+    // Grand totals for the stat cards - always product-level, unpaginated,
+    // and unaffected by which tab/search is currently active.
+    const summaryPipeline: any[] = [
+      { $match: matchQuery },
+      {
+        $lookup: {
+          from: "orderitems",
+          localField: "_id",
+          foreignField: "order",
+          as: "items"
+        }
+      },
+      { $unwind: "$items" },
+      {
+        $lookup: {
+          from: "products",
+          localField: "items.product",
+          foreignField: "_id",
+          as: "productInfo"
+        }
+      },
+      { $addFields: { "items.purchasePrice": purchasePriceExpr } },
+      {
+        $group: {
+          _id: "$items.product",
+          productName: { $first: "$items.productName" },
+          unitsSold: { $sum: "$items.quantity" },
+          revenue: { $sum: "$items.total" },
+          profit: { $sum: { $multiply: [{ $subtract: ["$items.unitPrice", "$items.purchasePrice"] }, "$items.quantity"] } }
+        }
+      },
+      { $sort: { revenue: -1 } },
+      {
+        $group: {
+          _id: null,
+          totalUnits: { $sum: "$unitsSold" },
+          totalRevenue: { $sum: "$revenue" },
+          totalProfit: { $sum: "$profit" },
+          topProduct: { $first: "$$ROOT" }
+        }
+      }
+    ];
+
+    try {
+      const [results, summaryResults] = await Promise.all([
+        Order.aggregate(pipeline),
+        Order.aggregate(summaryPipeline)
+      ]);
+
+      const data = results[0]?.data || [];
+      const total = results[0]?.totalCount?.[0]?.count || 0;
+      const summary = summaryResults[0];
+
+      return res.status(200).json({
+        success: true,
+        message: "Product sales report fetched successfully",
+        data,
+        summary: {
+          totalUnits: summary?.totalUnits || 0,
+          totalRevenue: summary?.totalRevenue || 0,
+          totalProfit: summary?.totalProfit || 0,
+          topProductName: summary?.topProduct?.productName || "N/A",
+        },
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          pages: Math.ceil(total / limitNum),
+        },
+      });
+    } catch (error: any) {
+      console.error("Product Sales Aggregation Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error generating product sales report",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+);
+
+/**
  * Get Return and Exchange Report
  */
 export const getReturnExchangeReport = asyncHandler(

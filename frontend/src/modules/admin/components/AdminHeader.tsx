@@ -210,8 +210,7 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen, isDarkMode, on
               src={config?.appLogo || "/assets/geetastoreslogo.png"}
               alt={config?.appName || "Geeta Stores"}
               className="h-10 sm:h-12 w-auto object-contain cursor-pointer"
-              style={{ maxWidth: '200px' }}
-            />
+              style={{ maxWidth: '200px' }} loading="lazy" decoding="async" />
           </button>
         </div>
 

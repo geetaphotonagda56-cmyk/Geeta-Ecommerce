@@ -260,8 +260,7 @@ export default function Invoice() {
                             <img
                               src={item.product.image || item.product.mainImage}
                               alt={productName}
-                              className="w-12 h-12 object-cover rounded"
-                            />
+                              className="w-12 h-12 object-cover rounded" loading="lazy" decoding="async" />
                           ) : null}
                           <div>
                             <p className="font-medium text-gray-900">
