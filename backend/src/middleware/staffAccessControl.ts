@@ -24,6 +24,9 @@ function stripSensitivePriceFields(value: any): any {
   }
   if (value && typeof value === 'object') {
     const source = typeof value.toJSON === 'function' && !(value instanceof Date) ? value.toJSON() : value;
+    if (!source || typeof source !== 'object') {
+      return source;
+    }
     const out: Record<string, any> = {};
     for (const [key, v] of Object.entries(source)) {
       if (SENSITIVE_PRICE_FIELDS.has(key)) continue;
