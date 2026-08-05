@@ -54,6 +54,21 @@ if (mummyResults.includes("dummy") && mummyResults.includes("Mammy poco 399") &&
   console.error(`FAIL single-word typo "mummy": got ${JSON.stringify(mummyResults)}`);
 }
 
+// Barcode scans match against variation-level barcode/sku, not just the
+// (nonexistent on real documents) top-level fields - this is what a
+// hardware/camera scanner query looks like.
+const variationCandidates: POSRankableProduct[] = [
+  { productName: "Parle-G Biscuit 100g", variations: [{ sku: "PG-100", barcode: ["8901030826169"] }] },
+  { productName: "Amul Milk 500ml", variations: [{ sku: "AM-500", barcode: ["8901030999999"] }] },
+];
+const barcodeResults = filterByScore(variationCandidates, "8901030826169");
+if (barcodeResults.length === 1 && barcodeResults[0] === "Parle-G Biscuit 100g") {
+  console.log("PASS variation-level barcode scan surfaces the matching product");
+} else {
+  failures += 1;
+  console.error(`FAIL variation-level barcode scan: got ${JSON.stringify(barcodeResults)}`);
+}
+
 if (failures > 0) {
   console.error(`\n${failures} test(s) failed`);
   process.exit(1);

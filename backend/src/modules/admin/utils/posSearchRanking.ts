@@ -5,6 +5,7 @@ export interface POSRankableProduct {
   sku?: string;
   barcode?: string[] | string;
   itemCode?: string;
+  variations?: Array<{ sku?: string; barcode?: string[] | string }>;
 }
 
 const NAME_WEIGHT = 1;
@@ -20,11 +21,21 @@ export const POS_MATCH_SCORE_THRESHOLD = 0.3;
 
 export function scorePOSProduct(product: POSRankableProduct, queryTokens: string[]): number {
   const nameScore = fieldMatchScore(queryTokens, product.productName) * NAME_WEIGHT;
+  // The Product schema only stores sku/barcode on variations - there is no
+  // top-level sku/barcode field on real documents - so a scan/search must be
+  // scored against every variation's codes, not just the (always-empty)
+  // top-level ones, or every variant-only match gets filtered out below.
+  const variationCodeScores = (product.variations || []).flatMap((variation) => [
+    fieldMatchScore(queryTokens, variation.sku),
+    fieldMatchScore(queryTokens, variation.barcode),
+  ]);
   const codeScore =
     Math.max(
       fieldMatchScore(queryTokens, product.sku),
       fieldMatchScore(queryTokens, product.barcode),
-      fieldMatchScore(queryTokens, product.itemCode)
+      fieldMatchScore(queryTokens, product.itemCode),
+      ...variationCodeScores,
+      0
     ) * CODE_WEIGHT;
   return Math.max(nameScore, codeScore);
 }
