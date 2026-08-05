@@ -1,4 +1,5 @@
-import { rankPOSProducts, POSRankableProduct } from "../modules/admin/utils/posSearchRanking";
+import { rankPOSProducts, scorePOSProduct, POS_MATCH_SCORE_THRESHOLD, POSRankableProduct } from "../modules/admin/utils/posSearchRanking";
+import { getTokens } from "../utils/fuzzyMatch";
 
 let failures = 0;
 
@@ -28,6 +29,30 @@ assertOrder(
 
 // Empty search returns the input order unchanged.
 assertOrder(candidates.length ? rankPOSProducts(candidates, "") : [], candidates.map((p) => p.productName), "empty search is a no-op");
+
+// Single-word typos (no shared literal substring at all) must still surface
+// via score-based filtering, since the DB regex step can't catch these -
+// this is the controller's actual filter, applied here directly.
+function filterByScore(products: POSRankableProduct[], search: string): string[] {
+  const queryTokens = getTokens(search);
+  return rankPOSProducts(products, search)
+    .filter((p) => scorePOSProduct(p, queryTokens) >= POS_MATCH_SCORE_THRESHOLD)
+    .map((p) => p.productName);
+}
+
+const typoCandidates: POSRankableProduct[] = [
+  { productName: "dummy" },
+  { productName: "Mammy poco 399" },
+  { productName: "Colgate Toothpaste" },
+];
+
+const mummyResults = filterByScore(typoCandidates, "mummy");
+if (mummyResults.includes("dummy") && mummyResults.includes("Mammy poco 399") && !mummyResults.includes("Colgate Toothpaste")) {
+  console.log('PASS single-word typo "mummy" surfaces dummy/Mammy, excludes unrelated product');
+} else {
+  failures += 1;
+  console.error(`FAIL single-word typo "mummy": got ${JSON.stringify(mummyResults)}`);
+}
 
 if (failures > 0) {
   console.error(`\n${failures} test(s) failed`);

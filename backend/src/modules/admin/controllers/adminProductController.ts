@@ -15,7 +15,7 @@ import {
 } from "../../product/productWriteService";
 import { adminProductPolicy } from "../../product/productPolicies";
 import { toDetail, toListItem, toListItems } from "../../product/productReadMapper";
-import { rankPOSProducts } from "../utils/posSearchRanking";
+import { rankPOSProducts, scorePOSProduct, POS_MATCH_SCORE_THRESHOLD } from "../utils/posSearchRanking";
 import { getTokens } from "../../../utils/fuzzyMatch";
 
 // ==================== Category Controllers ====================
@@ -1453,33 +1453,60 @@ export const updateProductOrder = asyncHandler(
 export const getPOSProducts = asyncHandler(
   async (req: Request, res: Response) => {
     const { search } = req.query;
-    const query: any = { status: "Active" };
+    const baseQuery: any = { status: "Active" };
+    const selectFields =
+      "productName mainImage price compareAtPrice wholesalePrice purchasePrice discPrice stock sku variations category barcode itemCode hsnCode gst";
 
-    if (search) {
-        // Match per-token (not the whole search string as one literal
-        // substring) so a query like "maggi noodles" still surfaces
-        // "Maggi 2-Minute Noodles" and typos in one word don't exclude a
-        // product outright - rankPOSProducts below does the actual fuzzy
-        // scoring/ordering once these candidates are fetched.
-        const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const phrases = Array.from(new Set([String(search).trim(), ...getTokens(String(search))]))
-            .filter((phrase) => phrase.length > 1);
-        const fields = ["productName", "sku", "barcode", "variations.sku", "variations.barcode", "itemCode"];
+    if (!search) {
+      const products = await Product.find(baseQuery)
+        .select(selectFields)
+        .populate("category", "name")
+        .sort({ productName: 1 });
 
-        query.$or = phrases.flatMap((phrase) => {
+      return res.status(200).json({
+        success: true,
+        message: "POS products fetched successfully",
+        data: products
+      });
+    }
+
+    // A single-word typo (e.g. "mummy" for "dummy"/"Mammy") never appears as
+    // a literal substring anywhere, so no DB regex can pre-filter for it -
+    // the fuzzy (Levenshtein-based) scoring has to see the FULL active
+    // catalog to catch it, the same way the customer-facing hybrid search
+    // treats "all active products" as its fallback candidate pool rather
+    // than gating on a literal match first. Regex hits are fetched too so
+    // large catalogs still get a fast, precise path for exact/near-exact
+    // queries; the two pools are merged before scoring.
+    const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const phrases = Array.from(new Set([String(search).trim(), ...getTokens(String(search))]))
+        .filter((phrase) => phrase.length > 1);
+    const fields = ["productName", "sku", "barcode", "variations.sku", "variations.barcode", "itemCode"];
+    const regexQuery = {
+        ...baseQuery,
+        $or: phrases.flatMap((phrase) => {
             const regex = new RegExp(escapeRegex(phrase), "i");
             return fields.map((field) => ({ [field]: regex }));
-        });
-    }
+        }),
+    };
 
-    let products = await Product.find(query)
-      .select("productName mainImage price compareAtPrice wholesalePrice purchasePrice discPrice stock sku variations category barcode itemCode hsnCode gst")
-      .populate("category", "name")
-      .sort({ productName: 1 });
+    const [regexMatches, allActive] = await Promise.all([
+      Product.find(regexQuery).select(selectFields).populate("category", "name").lean(),
+      Product.find(baseQuery).select(selectFields).populate("category", "name").lean(),
+    ]);
 
-    if (search) {
-      products = rankPOSProducts(products as any, String(search));
-    }
+    const seen = new Set<string>();
+    const candidates = [...regexMatches, ...allActive].filter((product) => {
+      const id = String(product._id);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+
+    const queryTokens = getTokens(String(search));
+    const products = rankPOSProducts(candidates as any, String(search)).filter(
+      (product) => scorePOSProduct(product as any, queryTokens) >= POS_MATCH_SCORE_THRESHOLD
+    );
 
     return res.status(200).json({
       success: true,
