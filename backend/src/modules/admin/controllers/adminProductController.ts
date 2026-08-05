@@ -15,7 +15,7 @@ import {
 } from "../../product/productWriteService";
 import { adminProductPolicy } from "../../product/productPolicies";
 import { toDetail, toListItem, toListItems } from "../../product/productReadMapper";
-import { rankPOSProducts, scorePOSProduct, POS_MATCH_SCORE_THRESHOLD } from "../utils/posSearchRanking";
+import { scorePOSProduct, POS_MATCH_SCORE_THRESHOLD } from "../utils/posSearchRanking";
 import { getTokens } from "../../../utils/fuzzyMatch";
 
 // ==================== Category Controllers ====================
@@ -1470,14 +1470,6 @@ export const getPOSProducts = asyncHandler(
       });
     }
 
-    // A single-word typo (e.g. "mummy" for "dummy"/"Mammy") never appears as
-    // a literal substring anywhere, so no DB regex can pre-filter for it -
-    // the fuzzy (Levenshtein-based) scoring has to see the FULL active
-    // catalog to catch it, the same way the customer-facing hybrid search
-    // treats "all active products" as its fallback candidate pool rather
-    // than gating on a literal match first. Regex hits are fetched too so
-    // large catalogs still get a fast, precise path for exact/near-exact
-    // queries; the two pools are merged before scoring.
     const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const phrases = Array.from(new Set([String(search).trim(), ...getTokens(String(search))]))
         .filter((phrase) => phrase.length > 1);
@@ -1490,23 +1482,27 @@ export const getPOSProducts = asyncHandler(
         }),
     };
 
-    const [regexMatches, allActive] = await Promise.all([
-      Product.find(regexQuery).select(selectFields).populate("category", "name").lean(),
-      Product.find(baseQuery).select(selectFields).populate("category", "name").lean(),
-    ]);
+    const regexMatches = await Product.find(regexQuery).select(selectFields).populate("category", "name").lean();
 
-    const seen = new Set<string>();
-    const candidates = [...regexMatches, ...allActive].filter((product) => {
-      const id = String(product._id);
-      if (seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    });
+    // A single-word typo (e.g. "mummy" for "dummy"/"Mammy") never appears as
+    // a literal substring anywhere, so no DB regex can pre-filter for it -
+    // only in that case (regex found nothing) do we fall back to scanning
+    // the full active catalog with fuzzy (Levenshtein-based) scoring, the
+    // same way the customer-facing hybrid search treats "all active
+    // products" as its fallback pool. This keeps the common case (an exact
+    // barcode/SKU/name hit, which is virtually every POS scan) a single
+    // indexed query instead of fetching + scoring the entire catalog on
+    // every request.
+    const candidates = regexMatches.length > 0
+      ? regexMatches
+      : await Product.find(baseQuery).select(selectFields).populate("category", "name").lean();
 
     const queryTokens = getTokens(String(search));
-    const products = rankPOSProducts(candidates as any, String(search)).filter(
-      (product) => scorePOSProduct(product as any, queryTokens) >= POS_MATCH_SCORE_THRESHOLD
-    );
+    const products = candidates
+      .map((product) => ({ product, score: scorePOSProduct(product as any, queryTokens) }))
+      .filter((entry) => entry.score >= POS_MATCH_SCORE_THRESHOLD)
+      .sort((a, b) => b.score - a.score)
+      .map((entry) => entry.product);
 
     return res.status(200).json({
       success: true,

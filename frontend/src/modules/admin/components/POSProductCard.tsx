@@ -58,7 +58,7 @@ export default function POSProductCard({
       </div>
 
       <div className="p-2 flex-1 flex flex-col gap-1">
-        <h4 className="text-xs font-bold text-gray-800 line-clamp-2 leading-tight min-h-[2rem]">
+        <h4 className="text-xs font-bold text-gray-800 leading-tight">
           {product.productName}
         </h4>
 
@@ -97,7 +97,7 @@ export default function POSProductCard({
               <button
                 onClick={onDecrease}
                 aria-label="Decrease quantity"
-                className="w-10 h-10 flex items-center justify-center rounded-md bg-[var(--primary-color)] text-white text-xl font-black hover:bg-[var(--primary-dark)] transition-colors"
+                className="w-7 h-10 flex-shrink-0 flex items-center justify-center rounded-md bg-[var(--primary-color)] text-white text-xl font-black hover:bg-[var(--primary-dark)] transition-colors"
               >
                 −
               </button>
@@ -121,7 +121,7 @@ export default function POSProductCard({
                 onClick={onIncrease}
                 disabled={atStockLimit}
                 aria-label="Increase quantity"
-                className={`w-10 h-10 flex items-center justify-center rounded-md text-xl font-black transition-colors ${
+                className={`w-7 h-10 flex-shrink-0 flex items-center justify-center rounded-md text-xl font-black transition-colors ${
                   atStockLimit
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     : 'bg-[var(--primary-color)] text-white hover:bg-[var(--primary-dark)]'
