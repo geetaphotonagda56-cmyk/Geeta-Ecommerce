@@ -6,6 +6,7 @@ import { getVideoFinds, VideoFind, toggleLikeVideo, incrementShareCount } from '
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
+import { shareContent } from '../../utils/nativeShare';
 
 // --- Sub-components ---
 
@@ -178,19 +179,15 @@ const ReelItem = ({
       console.error('Error incrementing share count:', err);
     }
 
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: product.title,
-          text: `Check out ${product.title} on Geeta!`,
-          url: window.location.href,
-        });
-      } catch (err) {
-        console.log('Error sharing:', err);
-      }
-    } else {
-      navigator.clipboard.writeText(window.location.href);
+    const result = await shareContent({
+      title: product.title,
+      text: `Check out ${product.title} on Geeta!`,
+      url: window.location.href,
+    });
+    if (result === 'clipboard') {
       showToast('Link copied to clipboard!', 'success');
+    } else if (result === 'failed') {
+      showToast("Couldn't share link", 'error');
     }
   };
 

@@ -444,7 +444,7 @@ export const getProductById = async (req: Request, res: Response) => {
         select: "name parentId status"
       })
       .populate("subcategory", "name parentId")
-      .populate("brand", "name")
+      .populate("brand", "name image")
       .populate(
         "seller",
         "storeName city fssaiLicNo address location serviceRadiusKm email isEnabled category"

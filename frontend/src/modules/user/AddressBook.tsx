@@ -6,6 +6,7 @@ import {
   getAddresses,
   updateAddress,
 } from "../../services/api/customerAddressService";
+import { shareContent } from "../../utils/nativeShare";
 
 const iconStyle = "w-5 h-5 text-amber-600 flex-shrink-0";
 
@@ -56,14 +57,8 @@ export default function AddressBook() {
     const text = `${address.fullName || "Address"}\n${buildAddressLine(
       address
     )}\nPhone: ${address.phone}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Saved address", text });
-      } catch {
-        // user cancelled; no-op
-      }
-    } else if (navigator.clipboard) {
-      await navigator.clipboard.writeText(text);
+    const result = await shareContent({ title: "Saved address", text });
+    if (result === "clipboard") {
       alert("Address copied to clipboard");
     }
   };

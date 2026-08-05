@@ -1526,47 +1526,48 @@ export default function ProductDetail() {
           )}
         </div>
 
-        {/* View More from Brand Single Line Link */}
+        {/* View More from Brand Card */}
         {product?.brand && (
-          <div className="px-4 md:px-6 lg:px-8 py-6 mb-2 border-b border-neutral-100 flex justify-center overflow-hidden">
-            <motion.div
-              whileHover={{ x: 5 }}
+          <div className="px-4 md:px-6 lg:px-8 py-4 mb-2 border-b border-neutral-100">
+            <motion.button
+              whileTap={{ scale: 0.98 }}
               onClick={() => {
                   const brandId = typeof product.brand === 'object' ? (product.brand._id || product.brand.id) : product.brand;
                   navigate(`/brand/${brandId}`);
               }}
-              className="group cursor-pointer flex items-center gap-2 max-w-full"
+              className="w-full flex items-center gap-3 bg-white rounded-2xl border border-neutral-100 shadow-sm px-4 py-3 text-left hover:shadow-md transition-shadow"
             >
-                <div className="flex items-center gap-1.5 sm:gap-2.5">
-                  <span className="text-[10px] sm:text-[11px] md:text-xs font-bold uppercase tracking-[0.12em] text-neutral-400 whitespace-nowrap">
-                    Explore more products from
+              <div className="flex-shrink-0 w-11 h-11 rounded-full bg-neutral-50 border border-neutral-100 flex items-center justify-center overflow-hidden">
+                {typeof product.brand === 'object' && product.brand.image ? (
+                  <img
+                    src={product.brand.image}
+                    alt={product.brand.name}
+                    className="w-full h-full object-contain"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <span className="text-base font-bold text-neutral-300 select-none">
+                    {(typeof product.brand === 'object' ? product.brand.name : 'B')?.charAt(0)}
                   </span>
-                  <motion.div
-                    whileHover={{ scale: 1.05, y: -1 }}
-                    className="relative px-3 py-1 rounded-lg overflow-hidden flex items-center justify-center shadow-[0_4px_12px_rgba(239,68,68,0.25)] border border-white/10"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-br from-[var(--customer-primary)] via-red-600 to-rose-700"></div>
-                    <motion.div 
-                      animate={{ x: ['-120%', '250%'] }}
-                      transition={{ repeat: Infinity, duration: 3, ease: "linear", repeatDelay: 1 }}
-                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg]"
-                    />
-                    <span className="relative text-[11px] sm:text-[12px] md:text-sm font-black uppercase tracking-wider text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.2)]">
-                      {typeof product.brand === 'object' ? product.brand.name : 'this brand'}
-                    </span>
-                  </motion.div>
-                  <span className="text-[10px] sm:text-[11px] md:text-xs font-bold uppercase tracking-[0.12em] text-neutral-400 whitespace-nowrap">
-                    Brand
-                  </span>
-                </div>
-              
-              <div className="flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--customer-primary-alpha-10)] text-[var(--customer-primary)] group-hover:bg-[var(--customer-primary)] group-hover:text-white transition-all duration-300 shadow-sm ml-1">
+                )}
+              </div>
 
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-neutral-900 truncate">
+                  {typeof product.brand === 'object' ? product.brand.name : 'this brand'}
+                </p>
+                <p className="text-xs text-neutral-400 truncate">
+                  Explore all products
+                </p>
+              </div>
+
+              <div className="flex-shrink-0 text-neutral-300">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                 </svg>
               </div>
-            </motion.div>
+            </motion.button>
           </div>
         )}
 

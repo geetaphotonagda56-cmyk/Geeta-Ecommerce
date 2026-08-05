@@ -9,6 +9,7 @@ import { useDeliveryTracking } from "../../hooks/useDeliveryTracking";
 import DeliveryPartnerCard from "../../components/DeliveryPartnerCard";
 import { cancelOrder, updateOrderNotes, getSellerLocationsForOrder, refreshDeliveryOtp, requestReturnOrReplace } from "../../services/api/customerOrderService";
 import { uploadImage } from "../../services/api/uploadService";
+import { shareContent } from "../../utils/nativeShare";
 
 // Icon Components
 const ArrowLeftIcon = ({ className }: { className?: string }) => (
@@ -627,16 +628,11 @@ export default function OrderDetail() {
       url: window.location.href,
     };
 
-    try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-      } else {
-        // Fallback: copy link to clipboard
-        await navigator.clipboard.writeText(window.location.href);
-        alert("Link copied to clipboard!");
-      }
-    } catch (error) {
-      console.error("Error sharing:", error);
+    const result = await shareContent(shareData);
+    if (result === "clipboard") {
+      alert("Link copied to clipboard!");
+    } else if (result === "failed") {
+      console.error("Error sharing: no share method available");
     }
   };
 

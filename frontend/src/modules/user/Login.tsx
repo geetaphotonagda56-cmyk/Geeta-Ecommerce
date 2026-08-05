@@ -265,7 +265,7 @@ export default function Login() {
             )}
           </AnimatePresence>
 
-          <div className="mt-auto pt-6 text-center space-y-2">
+          <div className="mt-6 text-center space-y-2">
             <p className="text-[10px] sm:text-[11px] text-neutral-400">
               Access your saved addresses from Geeta Stores automatically!
             </p>

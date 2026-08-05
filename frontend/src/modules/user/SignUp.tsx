@@ -324,7 +324,7 @@ export default function SignUp() {
             )}
           </AnimatePresence>
 
-          <div className="mt-auto pt-6 text-center space-y-2">
+          <div className="mt-6 text-center space-y-2">
             <p className="text-[10px] sm:text-[11px] text-neutral-400">
               By signing up, you agree to Geeta Stores's Terms of Service and Privacy Policy
             </p>

@@ -1943,7 +1943,7 @@ export const getReturnExchangeReport = asyncHandler(
           paymentMode: { $ifNull: ["$orderDoc.paymentMethod", "N/A"] },
           noOfItems: { $ifNull: ["$quantity", 0] },
           unitPrice: { $ifNull: ["$itemDoc.unitPrice", 0] },
-          mrp: { $ifNull: ["$productDoc.compareAtPrice", { $ifNull: ["$itemDoc.unitPrice", 0] }] },
+          mrp: { $ifNull: ["$itemDoc.mrp", { $ifNull: ["$itemDoc.unitPrice", 0] }] },
           quantity: { $ifNull: ["$quantity", 0] },
           refundAmount: 1,
           billAmt: { $ifNull: ["$orderDoc.total", 0] },

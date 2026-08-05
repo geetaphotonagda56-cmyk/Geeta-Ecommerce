@@ -1,5 +1,6 @@
 import { Share2 } from "lucide-react";
 import { useToast } from "../context/ToastContext";
+import { shareContent } from "../utils/nativeShare";
 
 interface ShareButtonProps {
   title?: string;
@@ -25,24 +26,11 @@ export default function ShareButton({
     // share sheet, so fold the link into the text itself for reliability.
     const shareText = text ? `${text}\n${shareUrl}` : shareUrl;
 
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
-      } catch (err: any) {
-        // AbortError fires when the user just cancels the native share sheet - not an error.
-        if (err?.name !== "AbortError") {
-          console.error("Share failed", err);
-        }
-      }
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(shareUrl);
+    const result = await shareContent({ title: shareTitle, text: shareText, url: shareUrl });
+    if (result === "clipboard") {
       showToast("Link copied to clipboard", "success");
-    } catch (err) {
-      console.error("Copy failed", err);
-      showToast("Couldn't copy link", "error");
+    } else if (result === "failed") {
+      showToast("Couldn't share link", "error");
     }
   };
 

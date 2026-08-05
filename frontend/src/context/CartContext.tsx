@@ -377,11 +377,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const itemVariantId = item.variantId || (prod as any).variantId || (prod as any).selectedVariant?._id;
         const itemVariantTitle = item.variation || (prod as any).variantTitle || (prod as any).pack;
 
-        if (variantId || variantTitle) {
-          return itemProductId === productId &&
-                 (itemVariantId === variantId || itemVariantTitle === variantTitle);
-        }
-        return itemProductId === productId && !itemVariantId && !itemVariantTitle;
+        if (itemProductId !== productId) return false;
+        // Match on whichever identity dimension we actually have. Using OR
+        // here is wrong: if two variants of the same product both lack a
+        // variantTitle, "itemVariantTitle === variantTitle" (undefined ===
+        // undefined) matches the WRONG line whenever variantId differs.
+        if (variantId) return itemVariantId === variantId;
+        if (variantTitle) return itemVariantTitle === variantTitle;
+        return !itemVariantId && !itemVariantTitle;
       });
 
       if (existingItem) {
@@ -446,7 +449,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
         if (prodId !== productId) return false;
         if (!variantId && !variantTitle) return true;
         const identity = getCartLineVariantIdentity(item);
-        return identity.variantId === variantId || identity.variantTitle === variantTitle;
+        // Match on whichever identity dimension the caller supplied - OR-ing
+        // both lets two different variants of the same product (both with
+        // no variantTitle) collide and the wrong line gets removed.
+        if (variantId) return identity.variantId === variantId;
+        if (variantTitle) return identity.variantTitle === variantTitle;
+        return true;
     });
 
     const previousItems = [...items];
@@ -508,7 +516,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       if (!variantId && !variantTitle) return true;
       const identity = getCartLineVariantIdentity(item);
-      return identity.variantId === variantId || identity.variantTitle === variantTitle;
+      // Match on whichever identity dimension the caller supplied - OR-ing
+      // both lets two different variants of the same product (both with no
+      // variantTitle) collide and the wrong line gets updated.
+      if (variantId) return identity.variantId === variantId;
+      if (variantTitle) return identity.variantTitle === variantTitle;
+      return true;
     });
 
     if (!itemToUpdate) {

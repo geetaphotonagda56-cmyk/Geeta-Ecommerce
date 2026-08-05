@@ -16,6 +16,7 @@ import {
 import { adminProductPolicy } from "../../product/productPolicies";
 import { toDetail, toListItem, toListItems } from "../../product/productReadMapper";
 import { rankPOSProducts } from "../utils/posSearchRanking";
+import { getTokens } from "../../../utils/fuzzyMatch";
 
 // ==================== Category Controllers ====================
 
@@ -1455,15 +1456,20 @@ export const getPOSProducts = asyncHandler(
     const query: any = { status: "Active" };
 
     if (search) {
-        const searchRegex = new RegExp(search as string, "i");
-        query.$or = [
-            { productName: searchRegex },
-            { sku: searchRegex },
-            { barcode: searchRegex },
-            { "variations.sku": searchRegex },
-            { "variations.barcode": searchRegex },
-            { itemCode: searchRegex }
-        ];
+        // Match per-token (not the whole search string as one literal
+        // substring) so a query like "maggi noodles" still surfaces
+        // "Maggi 2-Minute Noodles" and typos in one word don't exclude a
+        // product outright - rankPOSProducts below does the actual fuzzy
+        // scoring/ordering once these candidates are fetched.
+        const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const phrases = Array.from(new Set([String(search).trim(), ...getTokens(String(search))]))
+            .filter((phrase) => phrase.length > 1);
+        const fields = ["productName", "sku", "barcode", "variations.sku", "variations.barcode", "itemCode"];
+
+        query.$or = phrases.flatMap((phrase) => {
+            const regex = new RegExp(escapeRegex(phrase), "i");
+            return fields.map((field) => ({ [field]: regex }));
+        });
     }
 
     let products = await Product.find(query)
