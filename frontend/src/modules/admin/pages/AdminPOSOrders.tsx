@@ -599,9 +599,7 @@ const AdminPOSOrders = () => {
                orderItemId: item._id,
                originalQty: item.quantity,
                productName: item.productName || item.product?.productName || item.product || 'Unknown Product',
-               // If we have custom unitPrice, use it as customPrice
                price: unitPrice,
-               customPrice: unitPrice,
                qty: item.quantity,
                mainImage: item.productImage || item.product?.mainImage,
                originalProductId: resolvedProductId || null,
@@ -6553,7 +6551,17 @@ const AdminPOSOrders = () => {
               .admin-order-print-wrapper .grid { display: grid !important; }
               .admin-order-print-wrapper .flex { display: flex !important; }
 
-              .receipt-container { 
+              /* Fix for GST/Simple invoice tables in print (the universal
+                 display:block rule above otherwise collapses table
+                 layout, running every cell onto its own line) */
+              .admin-order-print-wrapper table { display: table !important; width: 100%; }
+              .admin-order-print-wrapper thead { display: table-header-group !important; }
+              .admin-order-print-wrapper tbody { display: table-row-group !important; }
+              .admin-order-print-wrapper tr { display: table-row !important; }
+              .admin-order-print-wrapper th,
+              .admin-order-print-wrapper td { display: table-cell !important; }
+
+              .receipt-container {
                 width: 100% !important; 
                 margin: 0 !important; 
                 padding: 10px !important;

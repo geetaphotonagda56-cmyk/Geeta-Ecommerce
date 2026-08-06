@@ -5,11 +5,28 @@ import {
   updateSellerBillSettings as apiUpdateSellerBillSettings,
 } from "../../../services/api/seller/sellerPurchaseService";
 import { SELLER_BILL_SETTINGS_KEY, SELLER_BILL_SETTINGS_UPDATED_EVENT } from "../../../utils/sellerPosBillSettings";
+import { SimpleInvoice } from "../../admin/components/SimpleInvoice";
+import { GSTInvoice } from "../../admin/components/GSTInvoice";
+
+const SAMPLE_INVOICE_BILL = {
+  invoiceNum: "INV-0001",
+  date: "17/07/2026",
+  time: "05:30 PM",
+  customerName: "Walk-in Customer",
+  customerPhone: "9876543210",
+  paymentMethod: "Cash",
+  total: 342.5,
+  cart: [
+    { productName: "Aashirvaad Atta 5kg", qty: 1, price: 249, compareAtPrice: 275, hsnCode: "1101", gst: 5 },
+    { productName: "Amul Butter 100g", qty: 2, price: 55, compareAtPrice: 62, hsnCode: "0405", gst: 12 },
+  ],
+};
 
 interface BillSettings {
   shopName: string;
   address: string;
   phone: string;
+  invoiceFormat?: "simple" | "gst";
   notes?: {
       text: string;
       enabled: boolean;
@@ -34,6 +51,7 @@ const SellerBillSettings = () => {
     shopName: "",
     address: "",
     phone: "",
+    invoiceFormat: "simple",
     notes: {
         text: "Thank you for your business",
         enabled: true
@@ -207,6 +225,56 @@ const SellerBillSettings = () => {
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)]"
               placeholder="Enter contact number"
             />
+          </div>
+
+          <div className="pt-4 border-t border-gray-100">
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+                Invoice Format
+                <span className="block text-xs text-gray-500 font-normal">Select the format used when printing POS bills</span>
+            </label>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => setSettings(prev => ({ ...prev, invoiceFormat: "simple" }))}
+                className={`p-4 rounded-md border-2 text-left transition-all ${
+                  (settings.invoiceFormat ?? "simple") === "simple"
+                    ? 'border-[var(--primary-color)] bg-[var(--primary-color)]/5'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="text-sm font-bold text-gray-800">Simple Format</div>
+                <div className="text-xs text-gray-500 mt-1">Minimal display: Product, Qty, Price, Total</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSettings(prev => ({ ...prev, invoiceFormat: "gst" }))}
+                className={`p-4 rounded-md border-2 text-left transition-all ${
+                  settings.invoiceFormat === "gst"
+                    ? 'border-[var(--primary-color)] bg-[var(--primary-color)]/5'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="text-sm font-bold text-gray-800">GST Format</div>
+                <div className="text-xs text-gray-500 mt-1">Professional format with HSN codes & tax breakup</div>
+              </button>
+            </div>
+
+            <div className="pt-4">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                Preview {settings.invoiceFormat === "gst" ? "— GST Format" : "— Simple Format"}
+              </p>
+              <div className="rounded-md border border-gray-200 bg-gray-50/50 p-4 overflow-hidden">
+                <div className="mx-auto max-w-full overflow-auto rounded-md bg-white shadow-sm border border-gray-100" style={{ maxHeight: 420 }}>
+                  <div style={{ transform: "scale(0.62)", transformOrigin: "top center", width: "161.3%", marginLeft: "-30.65%" }}>
+                    {settings.invoiceFormat === "gst" ? (
+                      <GSTInvoice billDetails={SAMPLE_INVOICE_BILL} shopSettings={settings} />
+                    ) : (
+                      <SimpleInvoice billDetails={SAMPLE_INVOICE_BILL} shopSettings={settings} />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="pt-4 border-t border-gray-100">

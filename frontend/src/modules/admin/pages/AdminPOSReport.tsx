@@ -7,6 +7,10 @@ import { useToast } from "../../../context/ToastContext";
 import { readAdminPosBillSettings, ADMIN_POS_BILL_SETTINGS_KEY, ADMIN_POS_BILL_SETTINGS_UPDATED_EVENT } from "../../../utils/adminPosBillSettings";
 import { useAppContext } from "../../../context/AppContext";
 import { formatAmount } from "../../../utils/priceUtils";
+import { resolveGstFromProduct } from "../../../utils/gstUtils";
+import { InvoiceBillDetails } from "../../../utils/invoiceFormats";
+import { SimpleInvoice } from "../components/SimpleInvoice";
+import { GSTInvoice } from "../components/GSTInvoice";
 
 const FiTrendingUp = ({ className }: { className?: string }) => (
   <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -373,6 +377,26 @@ const AdminPOSReport = () => {
              setLoading(false);
          }
     };
+
+    // Maps a raw POS order into the shape SimpleInvoice/GSTInvoice expect,
+    // for the "Simple Format" / "GST Format" print options chosen in Bill Settings.
+    const toInvoiceBillDetails = (order: any): InvoiceBillDetails => ({
+        invoiceNum: order.orderNumber || order._id.slice(-6).toUpperCase(),
+        date: new Date(order.orderDate || order.createdAt).toLocaleDateString('en-IN'),
+        time: new Date(order.orderDate || order.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        paymentMethod: order.paymentMethod,
+        total: Number(order.total || 0),
+        cart: (order.items || []).map((item: any) => ({
+            productName: item.productName || item.product?.productName || item.name || "Unknown Item",
+            qty: Number(item.quantity || item.qty || 0),
+            price: Number(item.unitPrice || item.price || 0),
+            compareAtPrice: Number(item.mrp || item.compareAtPrice || 0),
+            hsnCode: item.hsnCode,
+            gst: resolveGstFromProduct(item.gst),
+        })),
+    });
 
     const handlePrintBill = async (order: any) => {
         if (!order) return;
@@ -1333,8 +1357,18 @@ const AdminPOSReport = () => {
                   /* Fix grid/flex children layout in print */
                   body.is-printing-admin-report .admin-report-print-wrapper .grid { display: grid !important; }
                   body.is-printing-admin-report .admin-report-print-wrapper .flex { display: flex !important; }
-                  
-                  body.is-printing-admin-report .receipt-container { 
+
+                  /* Fix for GST/Simple invoice tables in print (the universal
+                     display:block rule above otherwise collapses table
+                     layout, running every cell onto its own line) */
+                  body.is-printing-admin-report .admin-report-print-wrapper table { display: table !important; width: 100%; }
+                  body.is-printing-admin-report .admin-report-print-wrapper thead { display: table-header-group !important; }
+                  body.is-printing-admin-report .admin-report-print-wrapper tbody { display: table-row-group !important; }
+                  body.is-printing-admin-report .admin-report-print-wrapper tr { display: table-row !important; }
+                  body.is-printing-admin-report .admin-report-print-wrapper th,
+                  body.is-printing-admin-report .admin-report-print-wrapper td { display: table-cell !important; }
+
+                  body.is-printing-admin-report .receipt-container {
                     width: 100% !important; 
                     margin: 0 !important; 
                     padding: 15px !important;
@@ -1363,6 +1397,15 @@ const AdminPOSReport = () => {
 
             {/* --- HIDDEN THERMAL RECEIPT (MOVED TO PORTAL FOR ISOLATION) --- */}
             {printOrder && createPortal(
+                (posBillSettings?.invoiceFormat === 'simple' || posBillSettings?.invoiceFormat === 'gst') ? (
+                <div className="hidden admin-report-print-wrapper bg-white p-0 m-0">
+                    {posBillSettings?.invoiceFormat === 'simple' ? (
+                        <SimpleInvoice billDetails={toInvoiceBillDetails(printOrder)} shopSettings={posBillSettings} />
+                    ) : (
+                        <GSTInvoice billDetails={toInvoiceBillDetails(printOrder)} shopSettings={posBillSettings} />
+                    )}
+                </div>
+                ) : (
                 <div className="hidden admin-report-print-wrapper bg-white p-0 m-0">
                     <div className="receipt-container text-black font-medium" style={{ fontFamily: "'Times New Roman', serif" }}>
                         {/* Header */}
@@ -1488,7 +1531,8 @@ const AdminPOSReport = () => {
                             )}
                         </div>
                     </div>
-                </div>,
+                </div>
+                ),
                 document.body
             )}
         </div>

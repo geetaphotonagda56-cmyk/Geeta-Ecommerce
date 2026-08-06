@@ -625,6 +625,7 @@ export const updateSellerBillSettings = asyncHandler(
       shopName: billSettings?.shopName || "",
       address: billSettings?.address || "",
       phone: billSettings?.phone || "",
+      invoiceFormat: billSettings?.invoiceFormat === "gst" ? "gst" : "simple",
       notes: {
         text: billSettings?.notes?.text || "Thank you for your business",
         enabled: !!billSettings?.notes?.enabled,

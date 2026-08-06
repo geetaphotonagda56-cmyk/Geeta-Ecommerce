@@ -73,6 +73,7 @@ export interface ISeller extends Document {
     shopName?: string;
     address?: string;
     phone?: string;
+    invoiceFormat?: "simple" | "gst";
     notes?: {
       text?: string;
       enabled?: boolean;
