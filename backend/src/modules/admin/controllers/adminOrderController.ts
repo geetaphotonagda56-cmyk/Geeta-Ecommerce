@@ -452,7 +452,12 @@ export const getOrderById = asyncHandler(
         variations[0]?.purchasePrice ??
         product?.purchasePrice ??
         0;
-      const mrp = product?.compareAtPrice ?? item.unitPrice ?? 0;
+      const mrp =
+        item.mrp ||
+        matchedVariant?.compareAtPrice ||
+        product?.compareAtPrice ||
+        item.unitPrice ||
+        0;
       const quantity = item.quantity || 0;
       const lineSP = (item.unitPrice || 0) * quantity;
       const linePurchase = purchasePrice * quantity;
@@ -1488,7 +1493,12 @@ export const getOrderWorkflowDetail = asyncHandler(
         variations[0]?.purchasePrice ??
         product?.purchasePrice ??
         0;
-      const mrp = product?.compareAtPrice ?? item.unitPrice ?? 0;
+      const mrp =
+        item.mrp ||
+        matchedVariant?.compareAtPrice ||
+        product?.compareAtPrice ||
+        item.unitPrice ||
+        0;
       const quantity = item.quantity || 0;
       const lineSP = (item.unitPrice || 0) * quantity;
       const linePurchase = purchasePrice * quantity;

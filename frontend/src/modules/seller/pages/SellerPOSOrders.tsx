@@ -489,7 +489,7 @@ const SellerPOSOrders = () => {
                stock: 9999, // Assume available for edit or fetch fresh?
                description: '',
                sku: item.sku || '',
-               compareAtPrice: item.unitPrice * 1.2, // Mock if missing
+               compareAtPrice: Number(item.mrp || item.compareAtPrice) || item.unitPrice,
                purchasePrice: 0,
                wholesalePrice: 0,
                hsnCode: resolvedHsn,

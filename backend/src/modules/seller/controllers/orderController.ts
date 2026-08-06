@@ -206,6 +206,18 @@ export const getOrders = asyncHandler(
         }
       }
 
+      // Resolve MRP: prefer the snapshotted value on the order line itself
+      // (set at sale time), then the matched variant's compareAtPrice, then
+      // the parent product's compareAtPrice, finally the selling price.
+      let mrp = item.mrp || 0;
+      if (!mrp && product) {
+        const matchedVariant = resolvedVariationId
+          ? product.variations?.find((v: any) => v._id.toString() === resolvedVariationId)
+          : undefined;
+        mrp = matchedVariant?.compareAtPrice || product.compareAtPrice || 0;
+      }
+      if (!mrp) mrp = item.unitPrice || 0;
+
       return {
         _id: item._id,
         srNo: item._id.toString().slice(-4), // Use last 4 chars of ID as srNo
@@ -217,6 +229,8 @@ export const getOrders = asyncHandler(
         unit: unit,
         price: item.unitPrice || 0,
         unitPrice: item.unitPrice || 0,
+        mrp,
+        compareAtPrice: mrp,
         tax: 0,
         taxPercent: 0,
         qty: item.quantity || 0,
