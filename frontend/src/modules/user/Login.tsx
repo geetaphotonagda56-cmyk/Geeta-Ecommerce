@@ -278,7 +278,7 @@ export default function Login() {
           </div>
 
           <p className="mt-auto pt-4 pb-6 sm:pb-8 text-center text-xs sm:text-sm text-neutral-600">
-            Powered by - Geeta Stationery
+            Powered by - Geeta Stationary
           </p>
         </div>
       </motion.div>
