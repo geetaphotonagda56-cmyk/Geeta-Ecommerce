@@ -341,7 +341,7 @@ export default function SignUp() {
           </div>
 
           <p className="mt-4 text-center text-[9px] sm:text-[10px] text-neutral-300">
-            Powered by - Geeta Stationary
+            Powered by - Geeta Stationery
           </p>
         </div>
       </motion.div>
