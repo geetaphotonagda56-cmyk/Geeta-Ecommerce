@@ -172,7 +172,7 @@ export default function SignUp() {
           </motion.div>
           <div className="text-center">
             <h1 className="text-white font-bold text-base sm:text-lg tracking-tight">Join Geeta Stores</h1>
-            <p className="text-white/80 text-xs mt-0.5">Groceries delivered in 10–15 mins</p>
+            <p className="text-white/80 text-xs mt-0.5">Fast Product Delivery App</p>
           </div>
         </motion.div>
       </div>
@@ -340,7 +340,7 @@ export default function SignUp() {
             </p>
           </div>
 
-          <p className="mt-4 text-center text-[9px] sm:text-[10px] text-neutral-300">
+          <p className="mt-4 text-center text-xs sm:text-sm  text-neutral-600">
             Powered by - Geeta Stationery
           </p>
         </div>

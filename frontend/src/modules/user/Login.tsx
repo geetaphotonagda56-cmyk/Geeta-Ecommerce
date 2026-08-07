@@ -131,7 +131,7 @@ export default function Login() {
           </motion.div>
           <div className="text-center">
             <h1 className="text-white font-bold text-lg sm:text-xl tracking-tight">Welcome back</h1>
-            <p className="text-white/80 text-xs sm:text-sm mt-0.5">Groceries delivered in 10–15 mins</p>
+            <p className="text-white/80 text-xs sm:text-sm mt-0.5">Fast Product Delivery App</p>
           </div>
         </motion.div>
       </div>
@@ -266,9 +266,6 @@ export default function Login() {
           </AnimatePresence>
 
           <div className="mt-6 text-center space-y-2">
-            <p className="text-[10px] sm:text-[11px] text-neutral-400">
-              Access your saved addresses from Geeta Stores automatically!
-            </p>
             <p className="text-xs sm:text-sm text-neutral-600">
               Don't have an account?{' '}
               <button
@@ -280,7 +277,7 @@ export default function Login() {
             </p>
           </div>
 
-          <p className="mt-4 text-center text-[9px] sm:text-[10px] text-neutral-300">
+          <p className="mt-4 text-center text-xs sm:text-sm  text-neutral-600">
             Powered by - Geeta Stationery
           </p>
         </div>
