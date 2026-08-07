@@ -5,6 +5,7 @@ import { OrdersProvider } from "./context/OrdersContext";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { LocationProvider } from "./context/LocationContext";
+import { LanguageProvider } from "./context/LanguageContext";
 import { ToastProvider } from "./context/ToastContext";
 import { ConfirmationProvider } from "./context/ConfirmationContext";
 
@@ -320,6 +321,7 @@ function App() {
             <NotificationHandler />
             <BrandingThemeProvider>
             <ThemeProvider>
+              <LanguageProvider>
               <LocationProvider>
                 <ToastProvider>
                   <ConfirmationProvider>
@@ -710,6 +712,7 @@ function App() {
                   </ConfirmationProvider>
                 </ToastProvider>
               </LocationProvider>
+              </LanguageProvider>
 
             </ThemeProvider>
             </BrandingThemeProvider>

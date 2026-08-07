@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Mic,
   Search as SearchIcon,
   SlidersHorizontal,
   Sparkles,
@@ -25,6 +26,26 @@ import { getProducts as getCustomerProducts } from "../../services/api/customerP
 import ShareButton from "../../components/ShareButton";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useLocation } from "../../hooks/useLocation";
+import { useLanguage } from "../../context/LanguageContext";
+import { useToast } from "../../context/ToastContext";
+
+type SpeechRecognitionResultLike = { transcript: string };
+type SpeechRecognitionEventLike = { results: ArrayLike<ArrayLike<SpeechRecognitionResultLike>> };
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
+  const w = window as unknown as Record<string, unknown>;
+  return (w.SpeechRecognition || w.webkitSpeechRecognition) as (new () => SpeechRecognitionLike) | null;
+}
 
 type SortOption = "relevance" | "price_asc" | "price_desc" | "popular";
 
@@ -69,6 +90,11 @@ export default function Search() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { location } = useLocation();
+  const { language } = useLanguage();
+  const { showToast } = useToast();
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const SpeechRecognitionCtor = useMemo(() => getSpeechRecognition(), []);
   const initialQuery = searchParams.get("q") || "";
   const initialPriceSlug = parsePriceSlug(initialQuery);
   const [inputValue, setInputValue] = useState(initialPriceSlug ? initialPriceSlug.label : initialQuery);
@@ -324,6 +350,10 @@ export default function Search() {
   }, [activeQuery, sort, debouncedMinPrice, debouncedMaxPrice]);
 
   useEffect(() => {
+    return () => recognitionRef.current?.stop();
+  }, []);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (suggestionBoxRef.current && !suggestionBoxRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
@@ -346,6 +376,40 @@ export default function Search() {
     setPage(1);
     setShowSuggestions(false);
     setSearchParams(nextQuery ? { q: nextQuery } : {}, { replace: false });
+  };
+
+  const handleVoiceSearch = () => {
+    if (!SpeechRecognitionCtor) {
+      showToast("Voice search isn't supported on this browser.", "error");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = language === "HI" ? "hi-IN" : "en-IN";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript;
+      if (transcript) applySearch(transcript);
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error !== "aborted" && event.error !== "no-speech") {
+        showToast("Couldn't hear that. Please try again.", "error");
+      }
+    };
+
+    recognition.onend = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+    setIsListening(true);
+    recognition.start();
   };
 
   const handleSuggestionClick = (item: SearchSuggestion) => {
@@ -428,6 +492,21 @@ export default function Search() {
                 autoFocus={!initialPriceSlug}
               />
               {suggestionsLoading && <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />}
+              {SpeechRecognitionCtor && (
+                <button
+                  type="button"
+                  onClick={handleVoiceSearch}
+                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
+                    isListening
+                      ? "animate-pulse bg-red-50 text-red-500"
+                      : "text-neutral-500 hover:bg-neutral-100"
+                  }`}
+                  aria-label={isListening ? "Stop voice search" : "Search by voice"}
+                  title={isListening ? "Listening..." : "Search by voice"}
+                >
+                  <Mic className="h-4 w-4" />
+                </button>
+              )}
               {inputValue && (
                 <button
                   type="button"

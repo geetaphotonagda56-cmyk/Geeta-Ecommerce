@@ -279,6 +279,10 @@ export default function Login() {
               </button>
             </p>
           </div>
+
+          <p className="mt-4 text-center text-[9px] sm:text-[10px] text-neutral-300">
+            Powered by - Geeta Stationary
+          </p>
         </div>
       </motion.div>
     </div>

@@ -13,6 +13,7 @@ import { getCachedHeaderCategoriesPublic, getHeaderCategoriesPublic } from '../.
 import { getIconByName } from '../../../utils/iconLibrary';
 import { useThemeContext } from '../../../context/ThemeContext';
 import { useAppContext } from '../../../context/AppContext';
+import { useLanguage, AppLanguage } from '../../../context/LanguageContext';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -39,8 +40,8 @@ const ALL_TAB: Tab = {
 };
 
 interface LanguageDropdownProps {
-  language: string;
-  setLanguage: (lang: string) => void;
+  language: AppLanguage;
+  setLanguage: (lang: AppLanguage) => void;
   isSticky: boolean;
   themeKey: string; // Added themeKey prop
 }
@@ -68,7 +69,7 @@ const LanguageDropdown = ({ language, setLanguage, isSticky, themeKey }: Languag
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  const options = [
+  const options: { value: AppLanguage; label: string }[] = [
     { value: 'EN', label: 'English' },
     { value: 'HI', label: 'Hindi' }
   ];
@@ -218,7 +219,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   const [isSticky, setIsSticky] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
-  const [language, setLanguage] = useState('EN');
+  const { language, setLanguage } = useLanguage();
 
   // Format location display text
   const locationDisplayText = useMemo(() => {
