@@ -340,7 +340,7 @@ export default function SignUp() {
             </p>
           </div>
 
-          <p className="mt-4 text-center text-xs sm:text-sm  text-neutral-600">
+          <p className="mt-auto pt-4 pb-6 sm:pb-8 text-center text-xs sm:text-sm text-neutral-600">
             Powered by - Geeta Stationery
           </p>
         </div>
