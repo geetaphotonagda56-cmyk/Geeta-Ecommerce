@@ -6,6 +6,7 @@ interface ShareButtonProps {
   title?: string;
   text?: string;
   url?: string; // defaults to the current page URL
+  imageUrl?: string; // shown in the share sheet/preview instead of the app icon
   className?: string;
   iconOnly?: boolean;
 }
@@ -14,6 +15,7 @@ export default function ShareButton({
   title,
   text,
   url,
+  imageUrl,
   className = "",
   iconOnly = false,
 }: ShareButtonProps) {
@@ -26,7 +28,7 @@ export default function ShareButton({
     // share sheet, so fold the link into the text itself for reliability.
     const shareText = text ? `${text}\n${shareUrl}` : shareUrl;
 
-    const result = await shareContent({ title: shareTitle, text: shareText, url: shareUrl });
+    const result = await shareContent({ title: shareTitle, text: shareText, url: shareUrl, imageUrl });
     if (result === "clipboard") {
       showToast("Link copied to clipboard", "success");
     } else if (result === "failed") {

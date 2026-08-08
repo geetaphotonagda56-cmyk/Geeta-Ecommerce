@@ -621,7 +621,14 @@ export default function ProductDetail() {
               <ShareButton
                 iconOnly
                 title={product.name || product.productName}
-                text={`Check out ${product.name || product.productName} on Geeta Stores`}
+                text={`🛍️ गीता स्टोर्स ऐप पर यह प्रोडक्ट देखें!
+
+✔️ सिर्फ 1 दिन में डिलीवरी
+✔️ स्टेशनरी की बड़ी रेंज
+✔️ डील अलर्ट: ${product.name || product.productName}${discount > 0 ? ` सिर्फ ₹${Math.round(variantPrice)} में (${discount}% की छूट!)` : ` सिर्फ ₹${Math.round(variantPrice)} में`}
+
+👇 अभी ऑर्डर करें 👇`}
+                imageUrl={currentImage || allImages[0]}
                 className="!bg-transparent !shadow-none !rounded-full text-neutral-600 hover:bg-neutral-100 p-2 flex items-center justify-center"
               />
             )}
@@ -1535,9 +1542,9 @@ export default function ProductDetail() {
                   const brandId = typeof product.brand === 'object' ? (product.brand._id || product.brand.id) : product.brand;
                   navigate(`/brand/${brandId}`);
               }}
-              className="w-full flex items-center gap-3 bg-white rounded-2xl border border-neutral-100 shadow-sm px-4 py-3 text-left hover:shadow-md transition-shadow"
+              className="w-full flex items-center gap-3 bg-gradient-to-r from-red-500 to-red-600 rounded-2xl border border-red-600/20 shadow-lg shadow-red-500/40 px-4 py-3 text-left hover:shadow-xl hover:shadow-red-500/50 transition-shadow"
             >
-              <div className="flex-shrink-0 w-11 h-11 rounded-full bg-neutral-50 border border-neutral-100 flex items-center justify-center overflow-hidden">
+              <div className="flex-shrink-0 w-11 h-11 rounded-full bg-white/90 border border-white/50 flex items-center justify-center overflow-hidden">
                 {typeof product.brand === 'object' && product.brand.image ? (
                   <img
                     src={product.brand.image}
@@ -1547,22 +1554,22 @@ export default function ProductDetail() {
                     decoding="async"
                   />
                 ) : (
-                  <span className="text-base font-bold text-neutral-300 select-none">
+                  <span className="text-base font-bold text-neutral-400 select-none">
                     {(typeof product.brand === 'object' ? product.brand.name : 'B')?.charAt(0)}
                   </span>
                 )}
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-neutral-900 truncate">
+                <p className="text-sm font-bold text-white truncate">
                   {typeof product.brand === 'object' ? product.brand.name : 'this brand'}
                 </p>
-                <p className="text-xs text-neutral-400 truncate">
+                <p className="text-xs text-white/80 font-medium truncate">
                   Explore all products
                 </p>
               </div>
 
-              <div className="flex-shrink-0 text-neutral-300">
+              <div className="flex-shrink-0 text-white/80">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                 </svg>

@@ -12,7 +12,7 @@ import mongoose from 'mongoose';
 async function test() {
   console.log('--- Testing sendSmsOtp ---');
   console.log('Env Path:', envPath);
-  console.log('SMS_INDIA_HUB_API_KEY:', process.env.SMS_INDIA_HUB_API_KEY ? '*****' + process.env.SMS_INDIA_HUB_API_KEY.slice(-4) : 'NOT SET');
+  console.log('BULK_SMS_AUTH_KEY:', process.env.BULK_SMS_AUTH_KEY ? '*****' + process.env.BULK_SMS_AUTH_KEY.slice(-4) : 'NOT SET');
 
   // Connect to DB if needed (otpService saves to DB)
   // We need a dummy mongo connection or mock the DB call if we don't want to rely on real DB
@@ -35,7 +35,7 @@ async function test() {
   try {
     // Use a dummy number or the user's number if known.
     // Using a random 10 digit number to avoid spamming real people unless it's a test number.
-    // SMS India HUB might reject invalid numbers.
+    // Bulk SMS gateway might reject invalid numbers.
     // Let's use a standard test number if possible, or just a random one.
     const testMobile = '9876543210';
     console.log(`Sending OTP to ${testMobile}...`);

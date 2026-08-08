@@ -26,11 +26,11 @@ import { getProducts as getCustomerProducts } from "../../services/api/customerP
 import ShareButton from "../../components/ShareButton";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useLocation } from "../../hooks/useLocation";
-import { useLanguage } from "../../context/LanguageContext";
 import { useToast } from "../../context/ToastContext";
 
 type SpeechRecognitionResultLike = { transcript: string };
-type SpeechRecognitionEventLike = { results: ArrayLike<ArrayLike<SpeechRecognitionResultLike>> };
+type SpeechRecognitionResultListLike = ArrayLike<SpeechRecognitionResultLike> & { isFinal?: boolean };
+type SpeechRecognitionEventLike = { results: ArrayLike<SpeechRecognitionResultListLike> };
 interface SpeechRecognitionLike {
   lang: string;
   interimResults: boolean;
@@ -90,9 +90,9 @@ export default function Search() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { location } = useLocation();
-  const { language } = useLanguage();
   const { showToast } = useToast();
   const [isListening, setIsListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const SpeechRecognitionCtor = useMemo(() => getSpeechRecognition(), []);
   const initialQuery = searchParams.get("q") || "";
@@ -390,13 +390,17 @@ export default function Search() {
     }
 
     const recognition = new SpeechRecognitionCtor();
-    recognition.lang = language === "HI" ? "hi-IN" : "en-IN";
-    recognition.interimResults = false;
+    recognition.lang = "en-IN";
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
     recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript;
-      if (transcript) applySearch(transcript);
+      const result = event.results[event.results.length - 1];
+      const transcript = result?.[0]?.transcript ?? "";
+      setVoiceTranscript(transcript);
+      if (result?.isFinal && transcript) {
+        applySearch(transcript);
+      }
     };
 
     recognition.onerror = (event) => {
@@ -405,11 +409,19 @@ export default function Search() {
       }
     };
 
-    recognition.onend = () => setIsListening(false);
+    recognition.onend = () => {
+      setIsListening(false);
+      setVoiceTranscript("");
+    };
 
     recognitionRef.current = recognition;
+    setVoiceTranscript("");
     setIsListening(true);
     recognition.start();
+  };
+
+  const stopVoiceSearch = () => {
+    recognitionRef.current?.stop();
   };
 
   const handleSuggestionClick = (item: SearchSuggestion) => {
@@ -735,6 +747,40 @@ export default function Search() {
           </div>
         )}
       </div>
+
+      {isListening && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Voice search"
+          onClick={stopVoiceSearch}
+        >
+          <div
+            className="mx-4 flex w-full max-w-xs flex-col items-center rounded-2xl bg-white px-6 py-8 text-center shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="relative flex h-24 w-24 items-center justify-center">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--customer-primary)]/30" />
+              <span className="absolute inline-flex h-16 w-16 animate-pulse rounded-full bg-[var(--customer-primary)]/20" />
+              <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-[var(--customer-primary)] text-white shadow-lg">
+                <Mic className="h-6 w-6" />
+              </span>
+            </div>
+            <p className="mt-5 text-base font-semibold text-neutral-900">Listening&hellip;</p>
+            <p className="mt-1 min-h-[1.5rem] text-sm text-neutral-500">
+              {voiceTranscript || "Speak now (in English)"}
+            </p>
+            <button
+              type="button"
+              onClick={stopVoiceSearch}
+              className="mt-6 rounded-full border border-neutral-200 px-5 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -12,6 +12,7 @@ export default function Categories() {
   const [homeData, setHomeData] = useState<any>({
     homeSections: [],
   });
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -123,6 +124,9 @@ export default function Categories() {
 
         if (response.success || sections.length > 0) { // Allow if only seller cats exist too
           setHomeData({ ...(response.data || {}), homeSections: sections });
+          if (sections.length > 0) {
+            setSelectedSectionId(sections[0].id);
+          }
         } else {
           setError("Failed to load categories. Please try again.");
         }
@@ -161,84 +165,147 @@ export default function Categories() {
     );
   }
 
+  const sections: any[] = homeData.homeSections || [];
+  const selectedSection = sections.find((s) => s.id === selectedSectionId) || sections[0];
 
   return (
-    <div className="pb-4 md:pb-8 bg-white min-h-screen">
+    <div className="flex flex-col bg-white h-screen overflow-hidden">
       {/* Page Header */}
-      {/* Page Header */}
-      <div className="px-4 py-4 md:px-6 md:py-6 bg-white border-b border-neutral-200 fixed top-0 left-0 right-0 z-20 shadow-sm md:sticky md:top-0">
+      <div className="px-4 py-3 md:px-6 md:py-4 bg-white border-b border-neutral-200 flex-shrink-0">
         <h1 className="text-xl md:text-2xl font-bold text-neutral-900">Categories</h1>
       </div>
-      {/* Spacer for fixed header on mobile */}
-      <div className="h-[61px] md:hidden"></div>
 
-      <div className="bg-neutral-50 pt-1 space-y-5 md:space-y-8 md:pt-4">
-        {/* Render all admin-created home sections */}
-        {homeData.homeSections && homeData.homeSections.length > 0 ? (
-          <>
-            {homeData.homeSections.map((section: any) => {
-              const columnCount = Number(section.columns) || 4;
-
-              if (section.displayType === "products" && section.data && section.data.length > 0) {
-                // Products display - same as home page
-                const gridClass = {
-                  2: "grid-cols-2",
-                  3: "grid-cols-3",
-                  4: "grid-cols-4",
-                  6: "grid-cols-6",
-                  8: "grid-cols-8"
-                }[columnCount] || "grid-cols-4";
-
-                const isCompact = columnCount >= 4;
-                const gapClass = columnCount >= 4 ? "gap-2" : "gap-3 md:gap-4";
-
+      {sections.length === 0 ? (
+        <div className="text-center py-12 md:py-16 text-neutral-500 px-4">
+          <p className="text-lg md:text-xl mb-2">No categories found</p>
+          <p className="text-sm md:text-base">
+            Please create home sections from the admin panel
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left Sidebar - Section Headings */}
+          <div className="w-20 bg-white border-r border-neutral-100 overflow-y-auto scrollbar-hide flex-shrink-0 py-2">
+            <div className="space-y-1">
+              {sections.map((section) => {
+                const isSelected = section.id === selectedSection?.id;
+                const sectionImage =
+                  section.data && section.data.length > 0
+                    ? section.data[0].image ||
+                      (section.data[0].productImages &&
+                        section.data[0].productImages.find(Boolean))
+                    : undefined;
+                const title = section.title || "Categories";
                 return (
-                  <div key={section.id} className="mt-6 mb-6 md:mt-8 md:mb-8">
-                    {section.title && (
-                      <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight capitalize">
-                        {section.title}
-                      </h2>
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setSelectedSectionId(section.id)}
+                    className={`w-full flex flex-col items-center justify-center py-2 relative transition-all duration-200 group ${
+                      isSelected ? "bg-[var(--customer-primary-alpha-10)]" : "hover:bg-neutral-50"
+                    }`}
+                    style={{ minHeight: "72px" }}
+                  >
+                    {isSelected && (
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-[var(--customer-primary-dark)] rounded-r-full"></div>
                     )}
-                    <div className="px-4 md:px-6 lg:px-8">
-                      <div className={`grid ${gridClass} ${gapClass}`}>
-                        {section.data.map((product: any) => (
-                          <ProductCard
-                            key={product.id || product._id}
-                            product={product}
-                            categoryStyle={true}
-                            showBadge={true}
-                            showPackBadge={false}
-                            showStockInfo={false}
-                            compact={isCompact}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
 
-              // Categories/Subcategories display - same as home page
-              return (
-                <CategoryTileSection
-                  key={section.id}
-                  title={section.title}
-                  tiles={section.data || []}
-                  columns={columnCount as 2 | 3 | 4 | 6 | 8}
-                  showProductCount={false}
-                />
-              );
-            })}
-          </>
-        ) : (
-          <div className="text-center py-12 md:py-16 text-neutral-500 px-4">
-            <p className="text-lg md:text-xl mb-2">No categories found</p>
-            <p className="text-sm md:text-base">
-              Please create home sections from the admin panel
-            </p>
+                    <div
+                      className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg mb-1 flex-shrink-0 overflow-hidden transition-all duration-200 shadow-sm ${
+                        isSelected
+                          ? "ring-2 ring-[var(--customer-primary-dark)] ring-offset-2 bg-white"
+                          : "bg-neutral-50 border border-neutral-100 group-hover:shadow-md"
+                      }`}
+                    >
+                      {sectionImage ? (
+                        <img
+                          src={sectionImage}
+                          alt={title}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = "none";
+                            const parent = target.parentElement;
+                            if (parent) {
+                              parent.textContent = "📦";
+                            }
+                          }}
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <span className="text-2xl">📦</span>
+                      )}
+                    </div>
+
+                    <span
+                      className={`text-[10px] text-center leading-tight px-1 capitalize transition-colors ${
+                        isSelected
+                          ? "font-bold text-[var(--customer-primary-dark)]"
+                          : "text-neutral-500 group-hover:text-neutral-900"
+                      }`}
+                      style={{
+                        wordBreak: "break-word",
+                        maxWidth: "100%",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {title}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Main Content Area - Selected Section's Tiles */}
+          <div className="flex-1 overflow-y-auto scrollbar-hide bg-white">
+            {selectedSection && (
+              <div className="pt-4 pb-4 md:pt-6 md:pb-8">
+                {selectedSection.displayType === "products" &&
+                selectedSection.data &&
+                selectedSection.data.length > 0 ? (
+                  (() => {
+                    const columnCount = Number(selectedSection.columns) || 2;
+                    const gridClass =
+                      {
+                        2: "grid-cols-2",
+                        3: "grid-cols-3",
+                      }[Math.min(columnCount, 3)] || "grid-cols-2";
+                    return (
+                      <div className="px-4">
+                        <div className={`grid ${gridClass} gap-2`}>
+                          {selectedSection.data.map((product: any) => (
+                            <ProductCard
+                              key={product.id || product._id}
+                              product={product}
+                              categoryStyle={true}
+                              showBadge={true}
+                              showPackBadge={false}
+                              showStockInfo={false}
+                              compact={true}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <CategoryTileSection
+                    title=""
+                    tiles={selectedSection.data || []}
+                    columns={3}
+                    showProductCount={false}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

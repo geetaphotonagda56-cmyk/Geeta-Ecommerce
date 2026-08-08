@@ -14,6 +14,42 @@ import { cache } from "../../../utils/cache";
 import { findSellersWithinRange } from "../../../utils/locationHelper";
 import { toListItem } from "../../product/productReadMapper";
 
+// Collects up to 3 preview images for a category/subcategory tile so the
+// storefront can auto-cycle through them, starting with the tile's own
+// image (if any) and filling the rest from its active products.
+async function fetchPreviewImages(
+  productMatch: { category?: any } | { subcategory?: any },
+  tileImage?: string
+): Promise<string[]> {
+  const images: string[] = tileImage ? [tileImage] : [];
+
+  const products = await Product.find({
+    ...productMatch,
+    status: "Active",
+    publish: true,
+  })
+    .select("mainImage galleryImages")
+    .sort({ createdAt: -1 })
+    .limit(4)
+    .lean();
+
+  for (const product of products as any[]) {
+    if (images.length >= 3) break;
+    if (product.mainImage && !images.includes(product.mainImage)) {
+      images.push(product.mainImage);
+    }
+  }
+  for (const product of products as any[]) {
+    if (images.length >= 3) break;
+    const galleryImage = product.galleryImages?.[0];
+    if (galleryImage && !images.includes(galleryImage)) {
+      images.push(galleryImage);
+    }
+  }
+
+  return images;
+}
+
 // Helper function to fetch data for a home section based on its configuration
 async function fetchSectionData(
   section: any,
@@ -38,15 +74,21 @@ async function fetchSectionData(
         .limit(limit || 10)
         .lean();
 
-      return subcategories.map((sub: any) => ({
-        id: sub._id.toString(),
-        subcategoryId: sub._id.toString(),
-        categoryId: sub.category?.toString() || "",
-        name: sub.name,
-        image: sub.image || "",
-        slug: sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-        type: "subcategory",
-      }));
+      return Promise.all(
+        subcategories.map(async (sub: any) => {
+          const productImages = await fetchPreviewImages({ subcategory: sub._id }, sub.image);
+          return {
+            id: sub._id.toString(),
+            subcategoryId: sub._id.toString(),
+            categoryId: sub.category?.toString() || "",
+            name: sub.name,
+            image: sub.image || "",
+            productImages,
+            slug: sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+            type: "subcategory",
+          };
+        })
+      );
     }
 
     // If displayType is "products", fetch products
@@ -155,14 +197,20 @@ async function fetchSectionData(
           .limit(limit || 8)
           .lean();
 
-        return fetchedCategories.map((c: any) => ({
-          id: c._id.toString(),
-          categoryId: c.slug || c._id.toString(), // Use slug for SEO-friendly URLs, fallback to _id
-          name: c.name,
-          image: c.image,
-          slug: c.slug,
-          type: "category",
-        }));
+        return Promise.all(
+          fetchedCategories.map(async (c: any) => {
+            const productImages = await fetchPreviewImages({ category: c._id }, c.image);
+            return {
+              id: c._id.toString(),
+              categoryId: c.slug || c._id.toString(), // Use slug for SEO-friendly URLs, fallback to _id
+              name: c.name,
+              image: c.image,
+              productImages,
+              slug: c.slug,
+              type: "category",
+            };
+          })
+        );
       } else {
         // If no categories specified, return empty array
         return [];

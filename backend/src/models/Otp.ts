@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export type UserType = 'Admin' | 'Seller' | 'Customer' | 'Delivery';
+export type UserType = 'Admin' | 'Seller' | 'Customer' | 'Delivery' | 'Staff';
 
 export interface IOtp extends Document {
   mobile: string;
@@ -32,7 +32,7 @@ const OtpSchema = new Schema<IOtp>(
     userType: {
       type: String,
       required: [true, 'User type is required'],
-      enum: ['Admin', 'Seller', 'Customer', 'Delivery'],
+      enum: ['Admin', 'Seller', 'Customer', 'Delivery', 'Staff'],
     },
     expiresAt: {
       type: Date,

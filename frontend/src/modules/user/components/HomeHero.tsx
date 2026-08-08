@@ -14,8 +14,29 @@ import { getIconByName } from '../../../utils/iconLibrary';
 import { useThemeContext } from '../../../context/ThemeContext';
 import { useAppContext } from '../../../context/AppContext';
 import { useLanguage, AppLanguage } from '../../../context/LanguageContext';
+import { Mic } from 'lucide-react';
+import { useToast } from '../../../context/ToastContext';
 
 gsap.registerPlugin(ScrollTrigger);
+
+type SpeechRecognitionResultLike = { transcript: string };
+type SpeechRecognitionResultListLike = ArrayLike<SpeechRecognitionResultLike> & { isFinal?: boolean };
+type SpeechRecognitionEventLike = { results: ArrayLike<SpeechRecognitionResultListLike> };
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
+  const w = window as unknown as Record<string, unknown>;
+  return (w.SpeechRecognition || w.webkitSpeechRecognition) as (new () => SpeechRecognitionLike) | null;
+}
 
 interface HomeHeroProps {
   activeTab?: string;
@@ -216,6 +237,55 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const SpeechRecognitionCtor = useMemo(() => getSpeechRecognition(), []);
+  const { showToast } = useToast();
+
+  const stopVoiceSearch = () => {
+    recognitionRef.current?.stop();
+  };
+
+  const handleVoiceSearch = () => {
+    if (!SpeechRecognitionCtor) {
+      showToast("Voice search isn't supported on this browser.", "error");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = "en-IN";
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      const result = event.results[event.results.length - 1];
+      const transcript = result?.[0]?.transcript ?? "";
+      setVoiceTranscript(transcript);
+      if (result?.isFinal && transcript) {
+        navigate(`/search?q=${encodeURIComponent(transcript)}`);
+      }
+    };
+
+    recognition.onerror = () => {
+      // Silently stop; the popup closing is feedback enough.
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      setVoiceTranscript("");
+    };
+
+    recognitionRef.current = recognition;
+    setVoiceTranscript("");
+    setIsListening(true);
+    recognition.start();
+  };
   const [isSticky, setIsSticky] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
@@ -444,13 +514,18 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             isSticky={isSticky}
             themeKey={currentThemeKey}
           />
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 md:w-4 md:h-4">
-            <path d="M12 1C13.1 1 14 1.9 14 3C14 4.1 13.1 5 12 5C10.9 5 10 4.1 10 3C10 1.9 10.9 1 12 1Z" fill={isSticky ? "#9ca3af" : "#6b7280"} />
-            <path d="M19 10V17C19 18.1 18.1 19 17 19H7C5.9 19 5 18.1 5 17V10" stroke={isSticky ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M12 11V17" stroke={isSticky ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
-            <path d="M8 11V17" stroke={isSticky ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
-            <path d="M16 11V17" stroke={isSticky ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
-          </svg>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleVoiceSearch();
+            }}
+            className="flex-shrink-0 flex items-center justify-center w-6 h-6 md:w-5 md:h-5 rounded-full bg-gradient-to-r from-red-500 to-red-600 shadow-sm shadow-red-500/40 hover:shadow-md hover:shadow-red-500/50 active:scale-95 transition-all"
+            aria-label="Search by voice"
+            title="Search by voice"
+          >
+            <Mic className="h-3.5 w-3.5 md:h-3 md:w-3 text-white" />
+          </button>
         </div>
       </div>
 
@@ -582,6 +657,41 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
         </>
       ) : (
         renderStickyContent()
+      )}
+
+      {isListening && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Voice search"
+          onClick={stopVoiceSearch}
+        >
+          <div
+            className="mx-4 flex w-full max-w-xs flex-col items-center rounded-2xl bg-white px-6 py-8 text-center shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="relative flex h-24 w-24 items-center justify-center">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500/30" />
+              <span className="absolute inline-flex h-16 w-16 animate-pulse rounded-full bg-red-500/20" />
+              <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg">
+                <Mic className="h-6 w-6" />
+              </span>
+            </div>
+            <p className="mt-5 text-base font-semibold text-neutral-900">Listening&hellip;</p>
+            <p className="mt-1 min-h-[1.5rem] text-sm text-neutral-500">
+              {voiceTranscript || "Speak now (in English)"}
+            </p>
+            <button
+              type="button"
+              onClick={stopVoiceSearch}
+              className="mt-5 rounded-full border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

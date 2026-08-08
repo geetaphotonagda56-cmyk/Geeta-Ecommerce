@@ -19,6 +19,9 @@ export default function AdminExploreRange() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [cropperFile, setCropperFile] = useState<File | null>(null);
+  const [extraImages, setExtraImages] = useState<string[]>([]);
+  const [uploadingExtra, setUploadingExtra] = useState(false);
+  const extraFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadCards();
@@ -57,7 +60,33 @@ export default function AdminExploreRange() {
     setOrder('0');
     setSelectedFile(null);
     setPreviewUrl('');
+    setExtraImages([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (extraFileInputRef.current) extraFileInputRef.current.value = '';
+  };
+
+  const handleExtraImagesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setUploadingExtra(true);
+    try {
+      const uploaded = await Promise.all(
+        files.map(async (file) => {
+          const res = await uploadImage(file, 'range-cards');
+          return res.secureUrl || res.url;
+        })
+      );
+      setExtraImages((prev) => [...prev, ...uploaded.filter(Boolean)]);
+    } catch (e) {
+      showToast('Failed to upload additional image', 'error');
+    } finally {
+      setUploadingExtra(false);
+      if (extraFileInputRef.current) extraFileInputRef.current.value = '';
+    }
+  };
+
+  const removeExtraImage = (url: string) => {
+    setExtraImages((prev) => prev.filter((img) => img !== url));
   };
 
   const handleSave = async () => {
@@ -81,6 +110,7 @@ export default function AdminExploreRange() {
         maxPrice: maxPrice ? Number(maxPrice) : undefined,
         order: Number(order) || 0,
         imageUrl: finalImageUrl,
+        images: extraImages,
       };
 
       if (editingCardId) {
@@ -109,6 +139,7 @@ export default function AdminExploreRange() {
     setOrder(String(card.order ?? 0));
     setPreviewUrl(card.imageUrl);
     setSelectedFile(null);
+    setExtraImages(card.images || []);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -224,6 +255,43 @@ export default function AdminExploreRange() {
                 {previewUrl && (
                   <div className="mt-3 aspect-square w-32 bg-gray-50 rounded border overflow-hidden">
                     <img src={previewUrl} alt="Preview" className="h-full w-full object-contain" loading="lazy" decoding="async" />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Additional Images (optional)
+                </label>
+                <p className="text-xs text-gray-400 mb-2">
+                  Cycled automatically with the card image on the storefront.
+                </p>
+                <label className={`inline-block cursor-pointer bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 px-4 py-2 rounded-md transition-colors text-sm font-medium ${uploadingExtra ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {uploadingExtra ? 'Uploading...' : 'Add Images'}
+                  <input
+                    type="file"
+                    ref={extraFileInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    multiple
+                    onChange={handleExtraImagesChange}
+                    disabled={uploadingExtra}
+                  />
+                </label>
+                {extraImages.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {extraImages.map((img) => (
+                      <div key={img} className="relative h-16 w-16 bg-gray-50 rounded border overflow-hidden group">
+                        <img src={img} alt="" className="h-full w-full object-contain" loading="lazy" decoding="async" />
+                        <button
+                          type="button"
+                          onClick={() => removeExtraImage(img)}
+                          className="absolute top-0 right-0 bg-red-600 text-white rounded-bl px-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

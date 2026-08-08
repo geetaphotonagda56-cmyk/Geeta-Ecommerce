@@ -3,6 +3,7 @@ import api from './api/config';
 export interface RangeCard {
   id: string;
   imageUrl: string;
+  images?: string[];
   label: string;
   minPrice?: number;
   maxPrice?: number;

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate, requireUserType } from "../middleware/auth";
 import { hidePurchasePriceForStaff, blockStaffReportMutation, stripPurchasePriceFromStaffWrites } from "../middleware/staffAccessControl";
+import { otpRateLimiter, loginRateLimiter } from "../middleware/rateLimiter";
 import { uploadMultipleDocuments } from "../middleware/upload";
 
 // Dashboard Controllers
@@ -100,7 +101,8 @@ router.get("/staff", requireUserType("Admin", "Seller"), staffController.getStaf
 router.post("/staff", requireUserType("Admin", "Seller"), staffController.createStaff);
 router.put("/staff/:id", requireUserType("Admin", "Seller"), staffController.updateStaff);
 router.delete("/staff/:id", requireUserType("Admin", "Seller"), staffController.deleteStaff);
-router.post("/staff/login", requireUserType("Admin", "Seller"), staffController.staffLogin);
+router.post("/staff/send-otp", requireUserType("Admin", "Seller"), otpRateLimiter, staffController.sendStaffLoginOtp);
+router.post("/staff/login", requireUserType("Admin", "Seller"), loginRateLimiter, staffController.staffLogin);
 
 // Order Edit (POS) - Accessible to both Admin and Seller
 router.patch("/orders/:id/items", requireUserType("Admin", "Seller"), orderController.updateOrderItems);

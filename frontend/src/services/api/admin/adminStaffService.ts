@@ -58,10 +58,18 @@ export interface StaffLoginResult {
   staff: Staff;
 }
 
-export const staffLogin = async (
+export const sendStaffLoginOtp = async (
   phone: string
+): Promise<ApiResponse<void>> => {
+  const response = await api.post<ApiResponse<void>>("/admin/staff/send-otp", { phone });
+  return response.data;
+};
+
+export const staffLogin = async (
+  phone: string,
+  otp: string
 ): Promise<ApiResponse<StaffLoginResult>> => {
-  const response = await api.post<ApiResponse<StaffLoginResult>>("/admin/staff/login", { phone });
+  const response = await api.post<ApiResponse<StaffLoginResult>>("/admin/staff/login", { phone, otp });
   return response.data;
 };
 

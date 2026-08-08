@@ -1,16 +1,18 @@
 import axios from 'axios';
 import Otp from '../models/Otp';
 
-// SMS India HUB Configuration
-const SMS_INDIA_HUB_API_KEY = process.env.SMS_INDIA_HUB_API_KEY;
-const SMS_INDIA_HUB_SENDER_ID = process.env.SMS_INDIA_HUB_SENDER_ID;
-const SMS_INDIA_HUB_DLT_TEMPLATE_ID = process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID;
-const SMS_INDIA_HUB_API_URL = process.env.SMS_INDIA_HUB_API_URL || 'http://cloud.smsindiahub.in/vendorsms/pushsms.aspx';
+// Bulk SMS (yourbulksms / Appzeto) Configuration
+const BULK_SMS_AUTH_KEY = process.env.BULK_SMS_AUTH_KEY;
+const BULK_SMS_SENDER_ID = process.env.BULK_SMS_SENDER_ID || 'GEETST';
+const BULK_SMS_DLT_TEMPLATE_ID = process.env.BULK_SMS_DLT_TEMPLATE_ID || '1777178609731509474';
+const BULK_SMS_API_URL = process.env.BULK_SMS_API_URL || 'http://control.yourbulksms.com/api/sendhttp.php';
+const BULK_SMS_ROUTE = process.env.BULK_SMS_ROUTE || '2';
+const BULK_SMS_COUNTRY = process.env.BULK_SMS_COUNTRY || '0';
 const API_TIMEOUT = 30000; // 30 seconds
 
-if (!SMS_INDIA_HUB_API_KEY || !SMS_INDIA_HUB_SENDER_ID) {
+if (!BULK_SMS_AUTH_KEY) {
   if (process.env.NODE_ENV === 'production' || process.env.USE_MOCK_OTP === 'false') {
-    console.warn('SMS India HUB credentials are not fully set in environment variables');
+    console.warn('Bulk SMS credentials are not fully set in environment variables');
   }
 }
 
@@ -23,22 +25,7 @@ interface OtpResponse {
   message: string;
 }
 
-/**
- * SMS India HUB API Response Interface
- */
-interface SmsIndiaHubResponse {
-  ErrorCode?: string;
-  ErrorMessage?: string;
-  JobId?: string;
-  MessageId?: string;
-  MessageData?: Array<{
-    Number: string;
-    MessageId: string;
-    Message: string;
-  }>;
-}
-
-type UserType = 'Customer' | 'Delivery' | 'Seller' | 'Admin';
+type UserType = 'Customer' | 'Delivery' | 'Seller' | 'Admin' | 'Staff';
 
 /**
  * Generate numeric OTP
@@ -71,86 +58,61 @@ function normalizeMobileNumber(mobile: string): string {
 
 /**
  * Build DLT-compliant message
+ *
+ * Must match the registered DLT template exactly (DLT_TE_ID above), only the
+ * {#var#} placeholder is substituted with the OTP.
  */
 function buildOtpMessage(otp: string): string {
-  const appName = process.env.APP_NAME || 'Geeta Stores';
-  return `Welcome to the ${appName} powered by SMSINDIAHUB. Your OTP for registration is ${otp}`;
+  return `Your OTP is ${otp} for registration to the Geeta Stores and wholesale. https://www.geeta.today/login GEETA STATIONARY`;
 }
 
 /**
- * Parse and handle SMS India HUB API response
+ * Parse and handle the Bulk SMS (yourbulksms) API response
  *
- * The API doesn't always return JSON. On some failures (e.g. invalid sender ID)
- * it returns a plain-text body like "Failed#senderid not valid" with
- * Content-Type: text/html, which axios hands back as a raw string. That string
- * has no ErrorCode/ErrorMessage fields, so it must be checked separately or it
- * silently falls through as a "success".
+ * The API returns a plain-text body, not JSON. A successful send looks like
+ * "<numeric-message-id>" (optionally per-number, comma separated), while
+ * failures look like "Failed#<reason>" or contain the words
+ * "error"/"invalid". Anything else is treated as failure rather than
+ * silently succeeding.
  */
-function handleSmsResponse(responseData: SmsIndiaHubResponse | string): void {
-  if (typeof responseData === 'string') {
-    const text = responseData.trim();
-    if (/^failed/i.test(text)) {
-      throw new Error(`SMS India HUB API Error: ${text}`);
-    }
-    if (/^success/i.test(text) || text === '') {
-      return; // Success
-    }
-    // Unknown plain-text shape - treat as failure rather than silently succeeding
-    throw new Error(`SMS India HUB API Error: Unrecognized response - ${text}`);
+function handleSmsResponse(responseData: string | Record<string, unknown>): void {
+  const text = typeof responseData === 'string' ? responseData.trim() : JSON.stringify(responseData);
+
+  if (!text) {
+    throw new Error('Bulk SMS API Error: Empty response');
   }
 
-  const errorCode = responseData.ErrorCode || '';
-  const errorMsg = responseData.ErrorMessage || '';
-
-  // Success indicators
-  if (errorCode === '000' || errorMsg === 'Done' || responseData.JobId || responseData.MessageData) {
-    return; // Success
+  if (/^failed/i.test(text) || /error|invalid/i.test(text)) {
+    throw new Error(`Bulk SMS API Error: ${text}`);
   }
 
-  // Error handling
-  if (errorCode || errorMsg) {
-    switch (errorCode) {
-      case '001':
-        throw new Error('SMS India HUB: Account details cannot be blank.');
-      case '006':
-        throw new Error('SMS India HUB: Invalid DLT template. Message does not match registered template.');
-      case '007':
-        throw new Error('SMS India HUB: Invalid API key or credentials.');
-      case '021':
-        throw new Error('SMS India HUB: Insufficient credits in your account.');
-      default:
-        throw new Error(`SMS India HUB API Error (Code: ${errorCode}): ${errorMsg}`);
-    }
-  }
-
-  // Neither JSON error/success fields nor a recognizable text response - fail closed
-  throw new Error('SMS India HUB API Error: Unrecognized response format');
+  // Otherwise treat as success (e.g. a numeric message/job id was returned)
 }
 
 /**
- * Send SMS via SMS India HUB API
+ * Send SMS via the Bulk SMS (yourbulksms / Appzeto) HTTP API
  */
 async function sendSmsViaApi(mobile: string, message: string): Promise<void> {
-  if (!SMS_INDIA_HUB_API_KEY || !SMS_INDIA_HUB_SENDER_ID) {
-    throw new Error('SMS India HUB credentials are missing. Please check environment variables.');
+  if (!BULK_SMS_AUTH_KEY) {
+    throw new Error('Bulk SMS credentials are missing. Please check environment variables.');
   }
 
   const cleanMobile = normalizeMobileNumber(mobile);
 
   const params: Record<string, string> = {
-    APIKey: SMS_INDIA_HUB_API_KEY.trim(),
-    msisdn: cleanMobile,
-    sid: SMS_INDIA_HUB_SENDER_ID.trim(),
-    msg: message,
-    fl: '0',
-    gwid: '2',
+    authkey: BULK_SMS_AUTH_KEY.trim(),
+    mobiles: cleanMobile,
+    message,
+    sender: BULK_SMS_SENDER_ID.trim(),
+    route: BULK_SMS_ROUTE,
+    country: BULK_SMS_COUNTRY,
   };
 
-  if (SMS_INDIA_HUB_DLT_TEMPLATE_ID?.trim()) {
-    params.DLT_TE_ID = SMS_INDIA_HUB_DLT_TEMPLATE_ID.trim();
+  if (BULK_SMS_DLT_TEMPLATE_ID?.trim()) {
+    params.DLT_TE_ID = BULK_SMS_DLT_TEMPLATE_ID.trim();
   }
 
-  const response = await axios.get<SmsIndiaHubResponse | string>(SMS_INDIA_HUB_API_URL, {
+  const response = await axios.get<string | Record<string, unknown>>(BULK_SMS_API_URL, {
     params,
     paramsSerializer: (params) => {
       return Object.keys(params)
@@ -246,7 +208,7 @@ function getSpecialBypassOtp(mobile: string): string {
  * Check if mock mode should be used
  */
 function isMockMode(): boolean {
-  return process.env.USE_MOCK_OTP === 'true' || !SMS_INDIA_HUB_API_KEY || !SMS_INDIA_HUB_SENDER_ID;
+  return process.env.USE_MOCK_OTP === 'true' || !BULK_SMS_AUTH_KEY;
 }
 
 /**
@@ -288,7 +250,7 @@ export async function sendSmsOtp(
       };
     }
 
-    // Real mode - Send via SMS India HUB
+    // Real mode - Send via Bulk SMS gateway
     await saveOtpToDb(mobile, otp, userType);
     const message = buildOtpMessage(otp);
     await sendSmsViaApi(mobile, message);
@@ -305,7 +267,7 @@ export async function sendSmsOtp(
       code: error.code,
       mobile,
       userType,
-      url: SMS_INDIA_HUB_API_URL
+      url: BULK_SMS_API_URL
     });
     throw new Error(`SMS Service Error: ${errorMessage}`);
   }
@@ -372,7 +334,7 @@ export async function verifySmsOtp(
 
 export async function sendOTP(
   mobile: string,
-  userType: 'Seller' | 'Admin' | 'Customer' | 'Delivery',
+  userType: 'Seller' | 'Admin' | 'Customer' | 'Delivery' | 'Staff',
   _isLogin: boolean = true
 ): Promise<OtpResponse> {
   try {
@@ -397,7 +359,7 @@ export async function sendOTP(
       };
     }
 
-    // Real mode - Send via SMS India HUB
+    // Real mode - Send via Bulk SMS gateway
     await saveOtpToDb(mobile, otp, userType);
     const message = buildOtpMessage(otp);
     await sendSmsViaApi(mobile, message);
@@ -413,7 +375,7 @@ export async function sendOTP(
       code: error.code,
       mobile,
       userType,
-      url: SMS_INDIA_HUB_API_URL
+      url: BULK_SMS_API_URL
     });
     throw new Error(`SMS Service Error: ${errorMessage}`);
   }
@@ -422,7 +384,7 @@ export async function sendOTP(
 export async function verifyOTP(
   mobile: string,
   otpInput: string,
-  userType: 'Seller' | 'Admin' | 'Customer' | 'Delivery'
+  userType: 'Seller' | 'Admin' | 'Customer' | 'Delivery' | 'Staff'
 ): Promise<boolean> {
   if (isDeveloperBypass(otpInput)) {
     return true;

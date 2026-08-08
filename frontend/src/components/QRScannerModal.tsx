@@ -91,7 +91,14 @@ export default function QRScannerModal({
   const [torchOn, setTorchOn] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1 });
+  // Default to a usable fallback range rather than {min:1,max:1}. The `zoom`
+  // field on MediaStreamTrack.getCapabilities() is a non-standard Chromium
+  // extension that many embedded WebViews (e.g. Flutter's Android WebView)
+  // don't report even though they DO honor applyConstraints({zoom}) — so we
+  // show the control unconditionally and let handleZoomChange's try/catch
+  // handle environments where it's truly unsupported. Real device capabilities
+  // (when reported) overwrite this via syncCameraCapabilities/readIosZoomRange.
+  const [zoomRange, setZoomRange] = useState({ min: 1, max: 3, step: 0.1 });
   const [isHighContrast, setIsHighContrast] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);

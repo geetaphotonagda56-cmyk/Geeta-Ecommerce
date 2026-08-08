@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IRangeCard extends Document {
   imageUrl: string;
+  images?: string[]; // Extra images cycled alongside imageUrl on the storefront
   label: string; // e.g. "UNDER ₹49", "ABOVE ₹1000"
   minPrice?: number;
   maxPrice?: number;
@@ -16,6 +17,10 @@ const rangeCardSchema = new Schema<IRangeCard>(
     imageUrl: {
       type: String,
       required: true,
+    },
+    images: {
+      type: [String],
+      default: [],
     },
     label: {
       type: String,

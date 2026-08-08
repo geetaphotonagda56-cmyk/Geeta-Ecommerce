@@ -62,7 +62,15 @@ const escapeRegex = (value: string): string => {
 
 
 
-const keywordScore = (query: string, product: any): number => {
+export const variantText = (product: any): string => {
+  if (!Array.isArray(product.variations)) return "";
+  return product.variations
+    .flatMap((variation: any) => [variation?.name, variation?.value])
+    .filter(Boolean)
+    .join(" ");
+};
+
+export const keywordScore = (query: string, product: any): number => {
   const queryTokens = getTokens(query);
   if (!queryTokens.length) return 0;
 
@@ -70,11 +78,12 @@ const keywordScore = (query: string, product: any): number => {
   const brandName = product.brand?.name || "";
 
   return (
-    fieldMatchScore(queryTokens, product.productName) * 0.42 +
-    fieldMatchScore(queryTokens, categoryName) * 0.2 +
-    fieldMatchScore(queryTokens, product.tags) * 0.16 +
-    fieldMatchScore(queryTokens, brandName) * 0.12 +
-    fieldMatchScore(queryTokens, `${product.smallDescription || ""} ${product.description || ""}`) * 0.1
+    fieldMatchScore(queryTokens, product.productName) * 0.35 +
+    fieldMatchScore(queryTokens, categoryName) * 0.15 +
+    fieldMatchScore(queryTokens, product.tags) * 0.14 +
+    fieldMatchScore(queryTokens, brandName) * 0.1 +
+    fieldMatchScore(queryTokens, `${product.smallDescription || ""} ${product.description || ""}`) * 0.08 +
+    fieldMatchScore(queryTokens, variantText(product)) * 0.18
   );
 };
 

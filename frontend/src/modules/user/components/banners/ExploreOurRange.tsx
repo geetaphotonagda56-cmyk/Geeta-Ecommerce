@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { rangeCardService, RangeCard } from '../../../../services/rangeCardService';
+import AutoScrollImages from '../AutoScrollImages';
 
 // Admin-managed Customer App Theme tokens, matching the pattern used by
 // DealOfTheDay.tsx so this section follows the brand color picked in the
@@ -126,11 +127,9 @@ export default function ExploreOurRange() {
             className="flex flex-col items-center gap-3 text-left group"
           >
             <div className="relative w-full aspect-square overflow-hidden flex items-center justify-center p-3 transition-transform group-hover:scale-[1.03]">
-              <img
-                src={card.imageUrl}
+              <AutoScrollImages
+                images={[card.imageUrl, ...(card.images || [])]}
                 alt={card.label}
-                className="w-full h-full object-contain"
-                loading="lazy"
               />
 
               {/* Discount Badge - Top Right of Image */}

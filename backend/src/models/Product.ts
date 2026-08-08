@@ -437,6 +437,7 @@ const SEARCHABLE_PRODUCT_FIELDS = [
   "seoTitle",
   "seoDescription",
   "pack",
+  "variations",
 ];
 
 const readName = (value: unknown): string => {
@@ -480,6 +481,9 @@ export const buildProductSearchText = async (product: Partial<IProduct> | Record
     product.seoKeywords,
     product.seoDescription,
     product.pack,
+    Array.isArray(product.variations)
+      ? product.variations.flatMap((v: any) => [v?.name, v?.value]).filter(Boolean).join(" ")
+      : "",
   ];
 
   return pieces

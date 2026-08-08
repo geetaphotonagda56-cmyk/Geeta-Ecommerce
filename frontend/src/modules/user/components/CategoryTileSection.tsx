@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import ViewAllButton from "./ViewAllButton";
+import AutoScrollImages from "./AutoScrollImages";
 
 interface CategoryTile {
   id: string;
@@ -181,24 +182,13 @@ export default function CategoryTileSection({
                           )}
                         </div>
                       ) : (
-                        // Other sections: Single image - use contain to show full image without cropping
-                        <img
-                          src={images[0]}
-                          alt={tile.name}
-                          className="w-full h-full object-contain"
-                          onError={(e) => {
-                            // Hide broken image and show fallback
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const parent = target.parentElement;
-                            if (parent) {
-                              parent.innerHTML = `<div class="w-full h-full flex items-center justify-center text-3xl text-neutral-300">${tile.name.charAt(0)}</div>`;
-                            }
-                          }} loading="lazy" decoding="async" />
+                        // Other sections: auto-cycles through the tile's images when
+                        // more than one is available, otherwise shows a static image
+                        <AutoScrollImages images={images} alt={tile.name} />
                       )
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-3xl text-neutral-300">
-                        {tile.name.charAt(0)}
+                      <div className="w-full h-full flex items-center justify-center text-3xl">
+                        📦
                       </div>
                     )}
                   </div>
