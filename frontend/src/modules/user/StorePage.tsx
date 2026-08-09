@@ -185,6 +185,7 @@ export default function StorePage() {
                                 iconOnly
                                 title={storeName}
                                 text={`Check out ${storeName} on Geeta Stores`}
+                                imageUrl={bannerImage ? (bannerImage.startsWith("http") ? bannerImage : `${window.location.origin}${bannerImage}`) : undefined}
                                 className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-lg bg-white/70 shadow-sm hover:bg-white/80 transition-colors border border-white/20"
                             />
                             <button

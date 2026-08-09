@@ -89,6 +89,7 @@ export default function SpiritualStore() {
                 iconOnly
                 title="Spiritual Store"
                 text="Check out Spiritual Store on Geeta Stores"
+                imageUrl={`${window.location.origin}/assets/shopbystore/spiritual/spiritualheader.png`}
                 className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-lg bg-white/70 shadow-sm hover:bg-white/80 transition-colors border border-white/20"
               />
             </div>

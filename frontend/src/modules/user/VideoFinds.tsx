@@ -183,6 +183,7 @@ const ReelItem = ({
       title: product.title,
       text: `Check out ${product.title} on Geeta!`,
       url: window.location.href,
+      imageUrl: product.linkedProduct?.mainImage,
     });
     if (result === 'clipboard') {
       showToast('Link copied to clipboard!', 'success');

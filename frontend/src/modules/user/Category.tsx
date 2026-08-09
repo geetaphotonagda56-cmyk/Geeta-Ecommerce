@@ -409,6 +409,7 @@ export default function CategoryPage() {
               iconOnly
               title={category?.name}
               text={category?.name ? `Check out ${category.name} on Geeta Stores` : undefined}
+              imageUrl={category?.image}
               className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors flex-shrink-0"
             />
           </div>

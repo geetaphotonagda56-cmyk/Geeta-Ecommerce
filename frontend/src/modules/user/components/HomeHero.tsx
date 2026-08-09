@@ -644,6 +644,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
               iconOnly
               title={config?.appName || "Geeta Stores"}
               text={`Check out ${config?.appName || "Geeta Stores"} - fast grocery delivery!`}
+              imageUrl={config?.appLogo || `${window.location.origin}/assets/geetastoreslogo.png`}
               className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-neutral-700 hover:bg-black/5 transition-colors"
             />
           </div>

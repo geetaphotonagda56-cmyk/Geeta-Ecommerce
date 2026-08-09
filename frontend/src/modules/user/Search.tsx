@@ -596,6 +596,7 @@ export default function Search() {
                   iconOnly
                   title={`"${activeQuery.trim()}" on Geeta Stores`}
                   text={`Check out "${activeQuery.trim()}" on Geeta Stores`}
+                  imageUrl={results[0]?.imageUrl || undefined}
                   className="ml-1 flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 transition-colors"
                 />
               )}

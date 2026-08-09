@@ -85,6 +85,7 @@ export default function Brands() {
                 iconOnly
                 title="Shop by Brand"
                 text="Check out these brands on Geeta Stores"
+                imageUrl={`${window.location.origin}/assets/geetastoreslogo.png`}
                 className="w-8 h-8 flex items-center justify-center hover:bg-neutral-50 rounded-full transition-colors text-neutral-700 ml-auto flex-shrink-0"
             />
         </div>

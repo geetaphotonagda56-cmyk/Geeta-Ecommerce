@@ -114,6 +114,7 @@ export default function BrandProducts() {
                 iconOnly
                 title={brand?.name}
                 text={brand?.name ? `Check out ${brand.name} on Geeta Stores` : undefined}
+                imageUrl={brand?.image}
                 className="w-8 h-8 flex items-center justify-center hover:bg-neutral-50 rounded-full transition-colors text-neutral-700 ml-auto flex-shrink-0"
             />
         </div>

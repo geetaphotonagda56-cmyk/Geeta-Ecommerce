@@ -70,6 +70,7 @@ export default function LowestPricesEverPage() {
             iconOnly
             title="Lowest Prices Ever on Geeta Stores"
             text="Check out these unbeatable deals on Geeta Stores"
+            imageUrl={`${window.location.origin}/assets/geetastoreslogo.png`}
             className="ml-auto w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors flex-shrink-0"
           />
         </div>
