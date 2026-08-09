@@ -53,10 +53,13 @@ async function fetchPreviewImages(
 // Helper function to fetch data for a home section based on its configuration
 async function fetchSectionData(
   section: any,
-  nearbySellerIds?: mongoose.Types.ObjectId[]
+  nearbySellerIds?: mongoose.Types.ObjectId[],
+  overrides?: { limit?: number; skip?: number }
 ): Promise<any[]> {
   try {
-    const { categories, subCategories, displayType, limit } = section;
+    const { categories, subCategories, displayType } = section;
+    const limit = overrides?.limit ?? section.limit;
+    const skip = overrides?.skip ?? 0;
 
     // If displayType is "subcategories", fetch subcategories
     if (
@@ -74,8 +77,15 @@ async function fetchSectionData(
         .limit(limit || 10)
         .lean();
 
-      return Promise.all(
+      const subcategoryTiles = await Promise.all(
         subcategories.map(async (sub: any) => {
+          const hasProducts = await Product.exists({
+            subcategory: sub._id,
+            status: "Active",
+            publish: true,
+          });
+          if (!hasProducts) return null;
+
           const productImages = await fetchPreviewImages({ subcategory: sub._id }, sub.image);
           return {
             id: sub._id.toString(),
@@ -89,6 +99,7 @@ async function fetchSectionData(
           };
         })
       );
+      return subcategoryTiles.filter(Boolean) as any[];
     }
 
     // If displayType is "products", fetch products
@@ -146,6 +157,7 @@ async function fetchSectionData(
 
       const products = await Product.find(query)
         .sort({ createdAt: -1 }) // Show newest items first
+        .skip(skip)
         .limit(limit || 8)
         .select("productName mainImage price discPrice variations unitPricing mrp discount rating reviewsCount pack seller")
         .lean();
@@ -197,8 +209,15 @@ async function fetchSectionData(
           .limit(limit || 8)
           .lean();
 
-        return Promise.all(
+        const categoryTiles = await Promise.all(
           fetchedCategories.map(async (c: any) => {
+            const hasProducts = await Product.exists({
+              category: c._id,
+              status: "Active",
+              publish: true,
+            });
+            if (!hasProducts) return null;
+
             const productImages = await fetchPreviewImages({ category: c._id }, c.image);
             return {
               id: c._id.toString(),
@@ -211,6 +230,7 @@ async function fetchSectionData(
             };
           })
         );
+        return categoryTiles.filter(Boolean) as any[];
       } else {
         // If no categories specified, return empty array
         return [];
@@ -344,6 +364,8 @@ export const getHomeContent = async (req: Request, res: Response) => {
           .sort({ createdAt: -1 })
           .limit(4)
           .lean();
+
+        if (categoryProducts.length === 0) return null;
 
         // Extract exactly 4 product images (prefer mainImage, fallback to galleryImages[0])
         const productImages: string[] = [];
@@ -699,6 +721,59 @@ export const getLowestPricesProducts = async (req: Request, res: Response) => {
   }
 };
 
+// Get the full contents of a single admin-created home section (unlike the
+// home feed, which caps each section at its configured preview `limit`),
+// for the section's "View All" page. Category/subcategory sections return
+// their whole (bounded) list in one page; product sections are paginated.
+export const getHomeSectionBySlug = async (req: Request, res: Response) => {
+  const { slug } = req.params;
+  const { latitude, longitude, page, limit } = req.query;
+
+  try {
+    const section = await HomeSection.findOne({ slug, isActive: true })
+      .populate("categories", "name slug image")
+      .populate("subCategories", "name")
+      .lean();
+
+    if (!section) {
+      return res.status(404).json({ success: false, message: "Section not found" });
+    }
+
+    const userLat = latitude ? parseFloat(latitude as string) : null;
+    const userLng = longitude ? parseFloat(longitude as string) : null;
+    const nearbySellerIds =
+      userLat !== null && userLng !== null ? await findSellersWithinRange(userLat, userLng) : [];
+
+    const isProducts = (section as any).displayType === "products";
+    const pageNum = Math.max(1, parseInt((page as string) || "1", 10) || 1);
+    const pageLimit = isProducts ? Math.min(50, Math.max(1, parseInt((limit as string) || "20", 10) || 20)) : 200;
+    const skip = isProducts ? (pageNum - 1) * pageLimit : 0;
+
+    const data = await fetchSectionData(section, nearbySellerIds, { limit: pageLimit, skip });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: (section as any)._id.toString(),
+        title: (section as any).title,
+        slug: (section as any).slug,
+        displayType: (section as any).displayType,
+        columns: (section as any).columns,
+        items: data,
+      },
+      pagination: isProducts
+        ? { page: pageNum, limit: pageLimit, hasMore: data.length === pageLimit }
+        : undefined,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching section",
+      error: error.message,
+    });
+  }
+};
+
 // Get all active bestseller category cards (unlike the home feed, which caps
 // at 6 for the preview row, this returns the full curated list for the
 // "View All" page).
@@ -729,6 +804,8 @@ export const getAllBestsellers = async (_req: Request, res: Response) => {
             .sort({ createdAt: -1 })
             .limit(4)
             .lean();
+
+          if (categoryProducts.length === 0) return null;
 
           const productImages: string[] = [];
           categoryProducts.forEach((product: any) => {

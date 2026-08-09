@@ -76,12 +76,19 @@ export default function AdminOrderDetail() {
   const handleStatusUpdate = async (newStatus: string) => {
     if (!order) return;
 
+    let reason: string | undefined;
+    if (newStatus === 'Rejected' || newStatus === 'Cancelled') {
+      const entered = window.prompt(`Enter reason to ${newStatus === 'Rejected' ? 'reject' : 'cancel'} this order:`);
+      if (!entered || !entered.trim()) return;
+      reason = entered.trim();
+    }
+
     setUpdating(true);
     try {
-      const response = await updateOrderStatus(order._id, { status: newStatus });
+      const response = await updateOrderStatus(order._id, { status: newStatus, reason });
       if (response.success && response.data) {
         setOrder(response.data);
-        alert('Order status updated successfully');
+        alert((response as any).warning || 'Order status updated successfully');
       } else {
         alert('Failed to update order status');
       }

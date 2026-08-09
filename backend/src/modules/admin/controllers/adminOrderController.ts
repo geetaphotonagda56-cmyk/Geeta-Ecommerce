@@ -32,6 +32,7 @@ import {
   isPhonePeConfigured,
 } from "../../../services/phonepeService";
 import { completePosOnlinePayment } from "../../pos/completePosOnlinePayment";
+import { sendPushNotification } from "../../../services/firebaseAdmin";
 import { computeCharges, resolveSalesPerson, resolvePaymentStatus } from "./orderChargesUtils";
 
 /**
@@ -494,7 +495,7 @@ export const getOrderById = asyncHandler(
 export const updateOrderStatus = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { status, adminNotes } = req.body;
+    const { status, adminNotes, reason } = req.body;
 
     const validStatuses = [
       "Received",
@@ -515,6 +516,36 @@ export const updateOrderStatus = asyncHandler(
       });
     }
 
+    const existingOrder = await Order.findById(id);
+    if (!existingOrder) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // Once an order has reached a terminal state, it cannot be silently
+    // moved to a different status from here (e.g. rejecting an order that
+    // has already been delivered/cancelled).
+    const TERMINAL_STATUSES = ["Delivered", "Cancelled", "Rejected", "Returned"];
+    if (
+      TERMINAL_STATUSES.includes(existingOrder.status) &&
+      existingOrder.status !== status
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Order cannot be updated because it is already ${existingOrder.status}`,
+      });
+    }
+
+    const isRejectingOrCancelling = status === "Rejected" || status === "Cancelled";
+    if (isRejectingOrCancelling && !reason) {
+      return res.status(400).json({
+        success: false,
+        message: `A reason is required to ${status === "Rejected" ? "reject" : "cancel"} an order`,
+      });
+    }
+
     const updateData: any = { status };
     if (adminNotes) updateData.adminNotes = adminNotes;
 
@@ -523,10 +554,53 @@ export const updateOrderStatus = asyncHandler(
       updateData.deliveryWorkflowStage = "Delivered";
     }
 
-    if (status === "Cancelled") {
+    if (isRejectingOrCancelling) {
       updateData.cancelledAt = new Date();
       updateData.cancelledBy = req.user?.userId;
+      updateData.cancellationReason = reason;
       updateData.deliveryWorkflowStage = "Cancelled";
+
+      // Restore stock for every item on the order - it was decremented at
+      // checkout and would otherwise be permanently locked out of inventory.
+      const orderItems = await OrderItem.find({ order: existingOrder._id });
+      for (const item of orderItems) {
+        if (!item.product) continue;
+        const qty = Number(item.quantity) || 0;
+        if (qty <= 0) continue;
+
+        const productId = String(item.product);
+        const product = await Product.findById(productId).lean();
+        if (!product) continue;
+
+        const variantId = resolveOrderItemVariantId(product, {
+          variantId: (item as any).variantId,
+          sku: item.sku,
+          variation: item.variation,
+          productName: item.productName,
+          unitPrice: item.unitPrice,
+        });
+        if (!variantId) {
+          console.warn(`Order ${status.toLowerCase()} restock skip: no variant for product ${productId}`);
+          continue;
+        }
+
+        const prevStock = await getVariantStock(productId, variantId);
+        const restored = await incrementVariantStock(productId, variantId, qty);
+        if (restored) {
+          await StockLedger.create({
+            product: item.product,
+            variationId: variantId,
+            sku: resolveLedgerSku(item.sku),
+            quantity: qty,
+            type: "IN",
+            source: status === "Rejected" ? "ORDER_REJECTED" : "ORDER_CANCELLED",
+            referenceId: existingOrder._id,
+            previousStock: prevStock,
+            newStock: prevStock + qty,
+            admin: req.user?.userId,
+          });
+        }
+      }
     }
 
     const order = await Order.findByIdAndUpdate(id, updateData, {
@@ -552,10 +626,61 @@ export const updateOrderStatus = asyncHandler(
       }
     }
 
+    // Notify the customer directly on the two events they actually care
+    // about - their order being accepted, or rejected/cancelled - since
+    // this endpoint previously left them with no signal beyond manually
+    // refreshing their order page.
+    let paidOrderNeedsManualRefund = false;
+    let customerTitle: string | undefined;
+    let customerBody: string | undefined;
+    if (isRejectingOrCancelling) {
+      paidOrderNeedsManualRefund = order.paymentStatus === "Paid";
+      customerTitle = status === "Rejected" ? "Order rejected" : "Order cancelled";
+      customerBody = `Your order #${order.orderNumber} was ${status.toLowerCase()}: ${reason}`;
+    } else if (status === "Processed") {
+      customerTitle = "Order accepted";
+      customerBody = `Your order #${order.orderNumber} has been accepted and is being prepared.`;
+    }
+
+    if (customerTitle && customerBody) {
+      try {
+        const customerDoc = await Customer.findById(order.customer)
+          .select("fcmToken fcmTokenMobile")
+          .lean();
+        const tokens = [
+          (customerDoc as any)?.fcmTokenMobile,
+          (customerDoc as any)?.fcmToken,
+        ].filter(Boolean) as string[];
+
+        if (tokens.length) {
+          await sendPushNotification(tokens, {
+            title: customerTitle,
+            body: customerBody,
+            data: { orderId: String(order._id), type: "OrderStatus" },
+          });
+        }
+
+        await Notification.create({
+          recipientType: "Customer",
+          recipientId: order.customer,
+          type: "Order",
+          title: customerTitle,
+          message: customerBody,
+          link: `/orders/${order._id}`,
+          priority: "High",
+        });
+      } catch (err) {
+        console.error(`Failed to notify customer of order status "${status}":`, err);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message: "Order status updated successfully",
       data: order,
+      ...(paidOrderNeedsManualRefund
+        ? { warning: "This order was paid online - process a manual refund for the customer." }
+        : {}),
     });
   }
 );

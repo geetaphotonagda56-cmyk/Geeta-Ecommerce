@@ -64,6 +64,7 @@ const FeaturedDealsPage = lazy(() => import("./modules/user/FeaturedDealsPage"))
 const LowestPricesEverPage = lazy(() => import("./modules/user/LowestPricesEverPage"));
 const ExploreRangeProducts = lazy(() => import("./modules/user/ExploreRangeProducts"));
 const BestsellersPage = lazy(() => import("./modules/user/BestsellersPage"));
+const HomeSectionPage = lazy(() => import("./modules/user/HomeSectionPage"));
 // Lazy load delivery routes
 const DeliveryLayout = lazy(() => import("./modules/delivery/components/DeliveryLayout"));
 const DeliveryDashboard = lazy(() => import("./modules/delivery/pages/DeliveryDashboard"));
@@ -700,6 +701,7 @@ function App() {
                             <Route path="/lowest-prices-ever" element={<LowestPricesEverPage />} />
                             <Route path="/explore-range" element={<ExploreRangeProducts />} />
                             <Route path="/bestsellers" element={<BestsellersPage />} />
+                            <Route path="/section/:slug" element={<HomeSectionPage />} />
                           </Routes>
                         </Suspense>
                       </AppLayout>

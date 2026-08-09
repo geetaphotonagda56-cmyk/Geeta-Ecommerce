@@ -6,7 +6,7 @@ export interface IStockLedger extends Document {
   sku: string;
   quantity: number;
   type: "IN" | "OUT";
-  source: "POS" | "RETURN" | "EXCHANGE" | "MANUAL" | "RESTOCK" | "POS_CANCEL" | "ORDER_EDIT_RESTORE" | "ORDER_EDIT_DEDUCT";
+  source: "POS" | "RETURN" | "EXCHANGE" | "MANUAL" | "RESTOCK" | "POS_CANCEL" | "ORDER_EDIT_RESTORE" | "ORDER_EDIT_DEDUCT" | "ORDER_REJECTED" | "ORDER_CANCELLED";
   referenceId?: mongoose.Types.ObjectId; // Order ID or special marker
   previousStock: number;
   newStock: number;
@@ -41,7 +41,7 @@ const StockLedgerSchema = new Schema<IStockLedger>(
     },
     source: {
       type: String,
-      enum: ["POS", "RETURN", "EXCHANGE", "MANUAL", "RESTOCK", "POS_CANCEL", "ORDER_EDIT_RESTORE", "ORDER_EDIT_DEDUCT"],
+      enum: ["POS", "RETURN", "EXCHANGE", "MANUAL", "RESTOCK", "POS_CANCEL", "ORDER_EDIT_RESTORE", "ORDER_EDIT_DEDUCT", "ORDER_REJECTED", "ORDER_CANCELLED"],
       required: true,
     },
     referenceId: {

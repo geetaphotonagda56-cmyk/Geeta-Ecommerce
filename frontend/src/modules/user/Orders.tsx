@@ -13,6 +13,9 @@ const getStatusColor = (status: string) => {
       return 'bg-yellow-100 text-yellow-700';
     case 'Placed':
       return 'bg-neutral-100 text-neutral-700';
+    case 'Rejected':
+    case 'Cancelled':
+      return 'bg-red-100 text-red-700';
     default:
       return 'bg-neutral-100 text-neutral-700';
   }

@@ -59,12 +59,24 @@ const AdminNotificationAlert: React.FC<AdminNotificationAlertProps> = ({ notific
 
   const handleStatusUpdate = async (newStatus: string) => {
     if (isProcessing) return;
+
+    let reason: string | undefined;
+    if (newStatus === "Rejected") {
+      const entered = window.prompt("Enter rejection reason:");
+      if (!entered || !entered.trim()) return;
+      reason = entered.trim();
+    }
+
     setIsProcessing(true);
     try {
-      const response = await api.put(`/admin/orders/${notification.orderId}/status`, {
+      const response = await api.patch(`/admin/orders/${notification.orderId}/status`, {
         status: newStatus,
+        reason,
       });
       if (response.data.success) {
+        if (response.data.warning) {
+          alert(response.data.warning);
+        }
         onActionComplete();
         onClose();
       } else {

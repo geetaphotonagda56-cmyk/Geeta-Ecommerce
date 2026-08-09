@@ -842,8 +842,17 @@ export default function OrderDetail() {
     },
     Cancelled: {
       title: "Order cancelled",
-      subtitle: "This order has been cancelled",
-      color: "bg-[var(--customer-primary-dark)]",
+      subtitle: order?.cancellationReason
+        ? `Reason: ${order.cancellationReason}`
+        : "This order has been cancelled",
+      color: "bg-red-600",
+    },
+    Rejected: {
+      title: "Order rejected",
+      subtitle: order?.cancellationReason
+        ? `Reason: ${order.cancellationReason}`
+        : "This order was rejected by the store",
+      color: "bg-red-600",
     },
     Returned: {
       title: "Order returned",

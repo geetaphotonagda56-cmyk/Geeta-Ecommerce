@@ -4,6 +4,7 @@ import HomeHero from "./components/HomeHero";
 // import PromoStrip from "./components/PromoStrip";
 import LowestPricesEver from "./components/LowestPricesEver";
 import CategoryTileSection from "./components/CategoryTileSection";
+import ViewAllButton from "./components/ViewAllButton";
 import ProductCard from "./components/ProductCard";
 import BannerSlider from "./components/banners/BannerSlider";
 import HomePopup from "./components/banners/HomePopup";
@@ -693,11 +694,16 @@ export default function Home() {
                     return (
                       <div key={section.id} className="mt-6 mb-6 md:mt-8 md:mb-8">
                         {section.title && (
-                          <div className="flex items-center gap-2 mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
-                            <span className="w-1 h-5 md:h-6 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
-                            <h2 className="text-lg md:text-2xl font-bold text-neutral-900 tracking-tight capitalize">
-                              {section.title}
-                            </h2>
+                          <div className="flex items-center justify-between mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
+                            <div className="flex items-center gap-2">
+                              <span className="w-1 h-5 md:h-6 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
+                              <h2 className="text-lg md:text-2xl font-bold text-neutral-900 tracking-tight capitalize">
+                                {section.title}
+                              </h2>
+                            </div>
+                            {section.slug && (
+                              <ViewAllButton onClick={() => navigate(`/section/${section.slug}`)} />
+                            )}
                           </div>
                         )}
                         <div className="px-4 md:px-6 lg:px-8">
@@ -713,13 +719,16 @@ export default function Home() {
                     );
                   }
 
+                  if (!section.data || section.data.length === 0) return null;
+
                   return (
                     <CategoryTileSection
                       key={section.id}
                       title={section.title}
-                      tiles={section.data || []}
+                      tiles={section.data}
                       columns={columnCount as 2 | 3 | 4 | 6 | 8}
                       showProductCount={false}
+                      viewAllLink={section.slug ? `/section/${section.slug}` : undefined}
                     />
                   );
                 })}

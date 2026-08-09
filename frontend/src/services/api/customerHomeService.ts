@@ -92,6 +92,22 @@ export const getAllBestsellers = async (): Promise<{ success: boolean; data: any
 };
 
 /**
+ * Get the full contents of an admin-created home section (e.g. "Office
+ * Stationery") for its "View All" page. Product sections are paginated.
+ */
+export const getHomeSection = async (
+  slug: string,
+  params?: { page?: number; limit?: number; latitude?: number; longitude?: number }
+): Promise<{
+  success: boolean;
+  data: { id: string; title: string; slug: string; displayType: string; columns: number; items: any[] };
+  pagination?: { page: number; limit: number; hasMore: boolean };
+}> => {
+  const response = await api.get(`/customer/home/section/${slug}`, { params });
+  return response.data;
+};
+
+/**
  * Get products for a specific "shop" (e.g. Spiritual Store)
  */
 export const getStoreProducts = async (

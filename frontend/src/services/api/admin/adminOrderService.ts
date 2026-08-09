@@ -170,6 +170,8 @@ export interface GetOrdersParams {
 export interface UpdateOrderStatusData {
   status: string;
   adminNotes?: string;
+  /** Required by the backend when status is "Rejected" or "Cancelled". */
+  reason?: string;
 }
 
 export interface AssignDeliveryBoyData {
