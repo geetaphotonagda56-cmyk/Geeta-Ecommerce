@@ -87,7 +87,23 @@ const Icons = {
     )
 };
 
-type DeliveryOrderStatus = 'Pending' | 'Ready for pickup' | 'Picked Up' | 'In Transit' | 'Delivered' | 'Cancelled' | 'Returned';
+type DeliveryOrderStatus = 'Picked Up' | 'In Transit' | 'Delivered';
+
+// Order.status (backend) never has a "Ready for pickup" value - that was a
+// frontend-only invention that doesn't exist in the Order schema's enum, so
+// sending it back via updateOrderStatus fails Mongoose validation. The real
+// statuses an assigned-but-not-yet-picked-up order can have are Received /
+// Pending / Processed / Shipped; group them into one "Assigned" stage.
+const STAGE_LABELS = ['Assigned', 'Picked Up', 'In Transit', 'Delivered'];
+const NOT_PICKED_UP_STATUSES = ['Received', 'Pending', 'Processed', 'Shipped'];
+
+const getOrderStage = (status: string): number => {
+    if (status === 'Delivered') return 3;
+    if (status === 'In Transit') return 2;
+    if (status === 'Picked Up' || status === 'Out for Delivery') return 1;
+    if (NOT_PICKED_UP_STATUSES.includes(status)) return 0;
+    return -1; // Cancelled / Rejected / Returned / unknown
+};
 
 export default function DeliveryOrderDetail() {
     const { id } = useParams();
@@ -182,7 +198,7 @@ export default function DeliveryOrderDetail() {
             return;
         }
 
-        if (order.status === 'Ready for pickup') {
+        if (getOrderStage(order.status) === 0) {
              await handleStatusChange('Picked Up');
         } else {
              alert(`Scanned Order: ${decodedText}. Current Order: ${order.orderId}`);
@@ -436,14 +452,7 @@ export default function DeliveryOrderDetail() {
         );
     }
 
-    const statusFlow: DeliveryOrderStatus[] = ['Pending', 'Ready for pickup', 'Picked Up', 'In Transit', 'Delivered'];
-
-    let currentStatusIndex = statusFlow.indexOf(order.status as DeliveryOrderStatus);
-    // Handle cases where status might not be in the flow (e.g. Cancelled)
-    if (currentStatusIndex === -1 && (order.status === 'Cancelled' || order.status === 'Returned')) {
-        // Maybe show a different UI for cancelled/returned orders
-        currentStatusIndex = -1;
-    }
+    const currentStatusIndex = getOrderStage(order.status);
 
     const handleStatusChange = async (newStatus: DeliveryOrderStatus) => {
         if (!id) return;
@@ -463,10 +472,12 @@ export default function DeliveryOrderDetail() {
         }
     };
 
-    const getNextStatus = () => {
-        if (currentStatusIndex !== -1 && currentStatusIndex < statusFlow.length - 1) {
-            return statusFlow[currentStatusIndex + 1];
-        }
+    const getNextStatus = (): DeliveryOrderStatus | null => {
+        // Delivered is never reachable via this generic transition - it must
+        // go through the QR-scan/OTP completion flow (see updateOrderStatus
+        // on the backend, which rejects a direct 'Delivered' transition).
+        if (currentStatusIndex === 0) return 'Picked Up';
+        if (currentStatusIndex === 1) return 'In Transit';
         return null;
     };
 
@@ -491,7 +502,7 @@ export default function DeliveryOrderDetail() {
                 <div className="ml-auto">
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${order.status === 'Delivered' ? 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]' :
                         order.status === 'Picked Up' ? 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]' :
-                            order.status === 'Ready for pickup' ? 'bg-yellow-100 text-yellow-700' :
+                            currentStatusIndex === 0 ? 'bg-yellow-100 text-yellow-700' :
                                 'bg-orange-100 text-orange-700'
                         }`}>
                         {order.status}
@@ -601,7 +612,7 @@ export default function DeliveryOrderDetail() {
                         {/* Status Progress Bar */}
                         <div className="relative">
                             <div className="flex justify-between mb-2 relative z-10">
-                                {statusFlow.map((step, idx) => (
+                                {STAGE_LABELS.map((step, idx) => (
                                     <div key={idx} className="flex flex-col items-center flex-1">
                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all duration-300 ${idx <= currentStatusIndex
                                             ? 'bg-[var(--primary-dark)] border-[var(--primary-dark)] text-white'
@@ -616,13 +627,13 @@ export default function DeliveryOrderDetail() {
                             <div className="absolute top-4 left-0 w-full h-0.5 bg-neutral-100 -z-0">
                                 <div
                                     className="h-full bg-[var(--primary-dark)] transition-all duration-500"
-                                    style={{ width: `${(currentStatusIndex / (statusFlow.length - 1)) * 100}%` }}
+                                    style={{ width: `${(currentStatusIndex / (STAGE_LABELS.length - 1)) * 100}%` }}
                                 ></div>
                             </div>
                             <div className="flex justify-between text-[10px] text-neutral-500 font-medium mt-2">
-                                {statusFlow.map((step, idx) => (
+                                {STAGE_LABELS.map((step, idx) => (
                                     <span key={idx} className={`text-center flex-1 transition-colors ${idx === currentStatusIndex ? 'text-[var(--primary-dark)] font-bold' : ''}`}>
-                                        {step === 'Ready for pickup' ? 'Ready' : step}
+                                        {step}
                                     </span>
                                 ))}
                             </div>
@@ -804,7 +815,7 @@ export default function DeliveryOrderDetail() {
                 <div className="fixed bottom-24 left-6 right-6 z-30 flex gap-3">
                     {/* Legacy pre-pickup scan: confirms pickup by matching the
                         order number, distinct from the delivery-completion scan. */}
-                   {order.status === 'Ready for pickup' && (
+                   {currentStatusIndex === 0 && (
                         <button
                             onClick={() => openBarcodeScanner(() => setShowScanner(true))}
                             className="w-16 h-full rounded-2xl bg-neutral-900 text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform"

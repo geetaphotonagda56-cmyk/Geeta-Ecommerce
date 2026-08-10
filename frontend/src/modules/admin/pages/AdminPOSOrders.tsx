@@ -12,7 +12,6 @@ import { useToast } from '../../../context/ToastContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
-import { generateBillQrDataUrl } from "../../../utils/generateBillQrCode";
 import { Html5QrcodeSupportedFormats } from "html5-qrcode";
 import QRScannerModal from '../../../components/QRScannerModal';
 import { openBarcodeScanner } from '../../../utils/scannerPlatform';
@@ -747,23 +746,6 @@ const AdminPOSOrders = () => {
   const [returnConfirmCandidates, setReturnConfirmCandidates] = useState<Array<{ orderItemId: string; productName: string; reducedQty: number }> | null>(null);
   const [showModalBreakdown, setShowModalBreakdown] = useState(false);
   const [lastBillDetails, setLastBillDetails] = useState<{total: number, invoiceNum: string, date: string, time: string, cart: CartItem[], isPaid: boolean, isQuotation?: boolean, quotationEntry?: PurchaseEntryRecord, paymentMethod?: string, isEdit?: boolean, orderId?: string, deliveryQrToken?: string, customerName?: string, customerPhone?: string, subtotal?: number, discountAmount?: number, deliveryCharge?: number, salesPersonName?: string, isPartialPayment?: boolean, amountPaid?: number} | null>(null);
-  const [deliveryQrImage, setDeliveryQrImage] = useState<string | null>(null);
-
-  // Render the delivery-completion QR on the printed bill so the delivery
-  // boy has something to scan at drop-off (see completeDeliveryByScan).
-  useEffect(() => {
-    const orderId = lastBillDetails?.orderId;
-    const token = lastBillDetails?.deliveryQrToken;
-    if (!orderId || !token) {
-      setDeliveryQrImage(null);
-      return;
-    }
-    let cancelled = false;
-    generateBillQrDataUrl(orderId, token).then((dataUrl) => {
-      if (!cancelled) setDeliveryQrImage(dataUrl);
-    });
-    return () => { cancelled = true; };
-  }, [lastBillDetails?.orderId, lastBillDetails?.deliveryQrToken]);
 
   const captureBillCustomerFields = () => ({
     customerName: selectedCustomer?.name || customerSearch?.trim() || 'Walk-in Customer',
@@ -3459,17 +3441,6 @@ const AdminPOSOrders = () => {
             if (y > 240) { doc.addPage(); y = 20; }
             doc.addImage(billPdf.qrCode, 'PNG', 14, y, 30, 30);
         }
-    }
-
-    // Delivery-completion QR code - the delivery boy scans this at drop-off
-    // to mark the order Delivered (see completeDeliveryByScan on the backend).
-    if (lastBillDetails?.orderId && lastBillDetails?.deliveryQrToken) {
-        const qrDataUrl = await generateBillQrDataUrl(lastBillDetails.orderId, lastBillDetails.deliveryQrToken);
-        const pageHeight = doc.internal.pageSize.getHeight();
-        doc.addImage(qrDataUrl, "PNG", 160, pageHeight - 40, 30, 30);
-        doc.setFontSize(7);
-        doc.setFont("helvetica", "normal");
-        doc.text("Scan at delivery to confirm receipt", 145, pageHeight - 8);
     }
 
     doc.save(`Invoice_${invoiceNum}.pdf`);
@@ -6803,13 +6774,6 @@ const AdminPOSOrders = () => {
                   {posBillSettings?.qrCode && (
                       <div className="mt-4 flex justify-center">
                           <img src={posBillSettings.qrCode} alt="QR" className="w-24 h-24 object-contain" style={{ WebkitPrintColorAdjust: 'exact' }} loading="lazy" decoding="async" />
-                      </div>
-                  )}
-
-                  {deliveryQrImage && (
-                      <div className="mt-4 flex flex-col items-center">
-                          <img src={deliveryQrImage} alt="Delivery QR" className="w-24 h-24 object-contain" style={{ WebkitPrintColorAdjust: 'exact' }} loading="lazy" decoding="async" />
-                          <p className="text-[9px] mt-1">Scan at delivery to confirm receipt</p>
                       </div>
                   )}
               </div>

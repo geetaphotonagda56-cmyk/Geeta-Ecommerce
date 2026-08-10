@@ -269,8 +269,27 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
         ? 'Picked Up'
         : status;
 
+    if (normalizedStatus === 'Delivered') {
+        return res.status(400).json({
+            success: false,
+            message: "Delivery must be completed by scanning the bill QR code, not by direct status update.",
+        });
+    }
+
+    // This endpoint only knows how to drive these three transitions - reject
+    // anything else (e.g. a stale/invalid client-side status value) with a
+    // clean 400 instead of letting it hit Order.status's Mongoose enum
+    // validation and fail as an unhandled 500 on save.
+    const ALLOWED_STATUSES = ['Picked Up', 'Out for Delivery', 'In Transit'];
+    if (!ALLOWED_STATUSES.includes(normalizedStatus)) {
+        return res.status(400).json({
+            success: false,
+            message: `Invalid status "${status}". Expected one of: ${ALLOWED_STATUSES.join(', ')}.`,
+        });
+    }
+
     // Status transition logic
-    if (normalizedStatus) order.status = normalizedStatus;
+    order.status = normalizedStatus;
 
     if (normalizedStatus === 'Picked Up' || normalizedStatus === 'Out for Delivery') {
         order.deliveryBoyStatus = 'Picked Up';
@@ -278,11 +297,6 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
         order.deliveryBoyStatus = 'In Transit';
         order.inTransitAt = new Date();
         order.deliveryWorkflowStage = 'In Transit';
-    } else if (normalizedStatus === 'Delivered') {
-        return res.status(400).json({
-            success: false,
-            message: "Delivery must be completed by scanning the bill QR code, not by direct status update.",
-        });
     }
 
     await order.save();

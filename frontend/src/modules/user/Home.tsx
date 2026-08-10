@@ -162,7 +162,7 @@ export default function Home() {
           setLoading(true);
         }
         setError(null);
-        const response = await getHomeContent(undefined, undefined, undefined, true, 5 * 60 * 1000, true);
+        const response = await getHomeContent(undefined, location?.latitude, location?.longitude, true, 5 * 60 * 1000, true);
         if (response.success && response.data) {
           let finalData = { ...response.data };
 
@@ -245,7 +245,7 @@ export default function Home() {
           const batch = slugsToPreload.slice(i, i + batchSize);
           await Promise.all(
             batch.map(slug =>
-              getHomeContent(slug, undefined, undefined, true, 5 * 60 * 1000, true).catch(err => {
+              getHomeContent(slug, location?.latitude, location?.longitude, true, 5 * 60 * 1000, true).catch(err => {
                 console.debug(`Failed to preload data for ${slug}:`, err);
               })
             )
@@ -260,7 +260,11 @@ export default function Home() {
     };
 
     preloadHeaderCategories();
-  }, []);
+    // Re-run once geolocation resolves (it's async and often unavailable on
+    // first mount) so home sections get real nearbySellerIds instead of
+    // permanently marking every product "Out of Range".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location?.latitude, location?.longitude]);
 
   useEffect(() => {
     return () => {
