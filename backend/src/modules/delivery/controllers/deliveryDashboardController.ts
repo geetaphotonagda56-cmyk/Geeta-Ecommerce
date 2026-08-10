@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Delivery from "../../../models/Delivery";
 import Order from "../../../models/Order";
+import DeliveryAssignment from "../../../models/DeliveryAssignment";
 import mongoose from "mongoose";
 
 /**
@@ -48,29 +49,21 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
         {
             $group: {
                 _id: null,
-                // Pending: Active statuses
+                // Pending: assigned to this delivery boy and not yet in a
+                // terminal state. "Ready for pickup"/"Assigned" are values of
+                // deliveryBoyStatus/DeliveryAssignment.status, not Order.status
+                // - matching them here never matched real orders, which is why
+                // a just-dispatched order (Order.status stays "Processed")
+                // never showed up as pending.
                 pendingOrders: {
                     $sum: {
-                        $cond: [{ $in: ["$status", ["Ready for pickup", "Out for Delivery", "Picked Up", "Assigned", "In Transit"]] }, 1, 0]
+                        $cond: [{ $not: [{ $in: ["$status", ["Delivered", "Cancelled", "Rejected", "Returned"]] }] }, 1, 0]
                     }
                 },
                 // All Orders Today: Created today OR Updated today
                 allOrdersToday: {
                     $sum: {
                         $cond: [{ $and: [{ $gte: ["$updatedAt", todayStart] }, { $lte: ["$updatedAt", todayEnd] }] }, 1, 0]
-                    }
-                },
-                // Return Orders Today
-                returnOrdersToday: {
-                    $sum: {
-                        $cond: [
-                            {
-                                $and: [
-                                    { $in: ["$status", ["Returned", "Cancelled"]] },
-                                    { $gte: ["$updatedAt", todayStart] },
-                                    { $lte: ["$updatedAt", todayEnd] }
-                                ]
-                            }, 1, 0]
                     }
                 },
                 // Daily Collection: Cash collected from COD orders delivered TODAY
@@ -119,22 +112,62 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
     const result = stats[0] || {
         pendingOrders: 0,
         allOrdersToday: 0,
-        returnOrdersToday: 0,
         dailyCollection: 0,
         todayDeliveredCount: 0,
         totalDeliveredCount: 0
     };
 
-    // Calculate Earnings (Mock logic: 40 per delivery)
-    // You should replace this with real commission logic stored in DB
-    const COMMISSION_PER_ORDER = 40;
-    const todayEarning = result.todayDeliveredCount * COMMISSION_PER_ORDER;
-    const totalEarning = result.totalDeliveredCount * COMMISSION_PER_ORDER;
+    // Earnings: sum of the real commission snapshotted per delivery on
+    // DeliveryAssignment (reflects this delivery boy's actual commission
+    // config), not a flat per-order multiplication.
+    const earningsAgg = await DeliveryAssignment.aggregate([
+        {
+            $match: {
+                deliveryBoy: objectId,
+                status: "Delivered",
+                assignmentType: "Order",
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                totalEarning: { $sum: { $ifNull: ["$commissionAmount", 0] } },
+                todayEarning: {
+                    $sum: {
+                        $cond: [
+                            { $and: [{ $gte: ["$deliveredAt", todayStart] }, { $lte: ["$deliveredAt", todayEnd] }] },
+                            { $ifNull: ["$commissionAmount", 0] },
+                            0
+                        ]
+                    }
+                }
+            }
+        }
+    ]);
+    const { todayEarning = 0, totalEarning = 0 } = earningsAgg[0] || {};
+
+    // Return & Replace Tasks: sourced from DeliveryAssignment (same source
+    // the "Return & Replace Tasks" page - getReturnTasks - reads from), not
+    // Order.status, so the dashboard count actually matches what's shown
+    // when the delivery boy taps into that page.
+    const activeReturnTaskCount = await DeliveryAssignment.countDocuments({
+        deliveryBoy: deliveryId,
+        assignmentType: { $in: ["Return", "Replacement"] },
+        status: { $in: ["Assigned", "Accepted", "Picked Up", "In Transit"] }
+    });
+
+    // Items currently in the delivery boy's possession awaiting drop-off at
+    // the store (picked up from the customer, not yet handed back).
+    const returnItemsHeldCount = await DeliveryAssignment.countDocuments({
+        deliveryBoy: deliveryId,
+        assignmentType: "Return",
+        status: { $in: ["Picked Up", "In Transit"] }
+    });
 
     // Fetch list of Pending Orders for the "Today's Pending Order" section
     const pendingOrdersList = await Order.find({
         deliveryBoy: deliveryId,
-        status: { $in: ["Ready for pickup", "Out for Delivery", "Picked Up", "Assigned", "In Transit"] }
+        status: { $nin: ["Delivered", "Cancelled", "Rejected", "Returned"] }
     })
         .select("orderNumber customerName deliveryAddress status total estimatedDeliveryDate") // Select necessary fields
         .sort({ createdAt: -1 })
@@ -158,8 +191,8 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
             cashBalance: deliveryPartner.cashCollected, // This field stores total cash holding
             pendingOrders: result.pendingOrders,
             allOrders: result.allOrdersToday,
-            returnOrders: result.returnOrdersToday,
-            returnItems: 0, // Need 'OrderItem' logic for this, keeping 0 for now
+            returnOrders: activeReturnTaskCount,
+            returnItems: returnItemsHeldCount,
             todayEarning: todayEarning,
             totalEarning: totalEarning,
             pendingOrdersList: formattedPendingList

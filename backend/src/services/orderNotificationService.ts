@@ -567,6 +567,12 @@ const MAX_BROADCAST_ATTEMPTS = 3;
  * re-broadcasts with a wider radius or, after MAX_BROADCAST_ATTEMPTS, flags
  * the order for manual admin assignment.
  */
+// Orders are only ever assigned to a delivery boy by explicit admin
+// dispatch (see performDeliveryAssignment in adminOrderController.ts) - a
+// delivery boy must never see a notification for an order admin hasn't
+// dispatched to them. This function therefore no longer pages/broadcasts
+// to delivery boys at all; it only flags stalled unassigned orders so
+// admin can dispatch them manually.
 export async function escalateStalledOrders(io: SocketIOServer): Promise<void> {
     try {
         const cutoff = new Date(Date.now() - STALL_TIMEOUT_MS);
@@ -575,34 +581,20 @@ export async function escalateStalledOrders(io: SocketIOServer): Promise<void> {
             deliveryBoy: { $exists: false },
             status: { $in: ['Received', 'Processed'] },
             needsManualAssignment: false,
-            // Orders that were broadcast but not accepted in time, OR orders
-            // that never got a single broadcast (e.g. zero delivery boys were
-            // available at creation time) - both need a retry.
-            $or: [
-                { lastBroadcastAt: { $lte: cutoff } },
-                { lastBroadcastAt: { $exists: false }, createdAt: { $lte: cutoff } },
-            ],
+            createdAt: { $lte: cutoff },
         });
 
         for (const order of stalledOrders) {
-            if (order.deliveryBroadcastAttempts >= MAX_BROADCAST_ATTEMPTS) {
-                order.needsManualAssignment = true;
-                await order.save();
+            order.needsManualAssignment = true;
+            await order.save();
 
-                io.to('admin-notifications').emit('order-needs-manual-assignment', {
-                    orderId: order._id.toString(),
-                    orderNumber: order.orderNumber,
-                    message: `No delivery partner accepted order ${order.orderNumber} after ${order.deliveryBroadcastAttempts} attempts. Manual assignment required.`,
-                });
+            io.to('admin-notifications').emit('order-needs-manual-assignment', {
+                orderId: order._id.toString(),
+                orderNumber: order.orderNumber,
+                message: `Order ${order.orderNumber} has not been dispatched to a delivery partner. Manual assignment required.`,
+            });
 
-                console.log(`⚠️ Order ${order.orderNumber} flagged for manual assignment after ${order.deliveryBroadcastAttempts} broadcast attempts`);
-                continue;
-            }
-
-            // Widen the search radius by 1.5x per retry attempt
-            const radiusMultiplier = 1.5 * (order.deliveryBroadcastAttempts + 1);
-            await notifyDeliveryBoysOfNewOrder(io, order, radiusMultiplier);
-            console.log(`🔁 Re-broadcast order ${order.orderNumber} with radius multiplier ${radiusMultiplier}`);
+            console.log(`⚠️ Order ${order.orderNumber} flagged for manual assignment (not dispatched within ${STALL_TIMEOUT_MS / 60000} min)`);
         }
     } catch (error) {
         console.error('Error escalating stalled orders:', error);

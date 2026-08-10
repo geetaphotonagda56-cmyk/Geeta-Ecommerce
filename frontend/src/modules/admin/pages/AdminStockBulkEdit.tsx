@@ -110,6 +110,7 @@ interface EditableProduct {
   blockNumber: string;
   rackNumber: string;
   description: string;
+  tags: string; // Comma separated SEO/search tags
   barcode: string[];
   hsnCode: string;
   pack: string; // Unit
@@ -376,6 +377,7 @@ export default function AdminStockBulkEdit({
             blockNumber: p.variations?.[0]?.blockNumber || (p as any).blockNumber || "",
             rackNumber: p.variations?.[0]?.rackNumber || (p as any).rackNumber || "",
             description: p.smallDescription || p.description || "",
+            tags: (p.tags || []).join(", "),
             barcode: p.variations?.[0]?.barcode || (Array.isArray((p as any).barcode)
               ? (p as any).barcode
               : (p as any).barcode
@@ -445,6 +447,7 @@ export default function AdminStockBulkEdit({
     blockNumber: "",
     rackNumber: "",
     description: "",
+    tags: "",
     barcode: [],
     hsnCode: "",
     pack: "",
@@ -572,6 +575,7 @@ export default function AdminStockBulkEdit({
         blockNumber: p.variations?.[0]?.blockNumber || (p as any).blockNumber || "",
         rackNumber: p.variations?.[0]?.rackNumber || (p as any).rackNumber || "",
         description: p.smallDescription || p.description || "",
+        tags: (p.tags || []).join(", "),
         barcode: p.variations?.[0]?.barcode || (Array.isArray((p as any).barcode) ? (p as any).barcode : (p as any).barcode ? [(p as any).barcode] : []),
         hsnCode: (p as any).hsnCode || "",
         pack: (p as any).pack || "",
@@ -1011,6 +1015,7 @@ export default function AdminStockBulkEdit({
           rackNumber: p.rackNumber,
           smallDescription: p.description,
           description: p.description,
+          tags: p.tags ? p.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
           barcode: p.barcode,
           hsnCode: p.hsnCode,
           pack: p.pack,
@@ -1115,6 +1120,7 @@ export default function AdminStockBulkEdit({
           rackNumber: p.rackNumber || undefined,
           smallDescription: p.description || undefined,
           description: p.description || undefined,
+          tags: p.tags ? p.tags.split(",").map((t) => t.trim()).filter(Boolean) : undefined,
           barcode: p.barcode,
           hsnCode: p.hsnCode || undefined,
           pack: p.pack || undefined,
@@ -1279,6 +1285,7 @@ export default function AdminStockBulkEdit({
     "blockNumber",
     "rackNumber",
     "description",
+    "tags",
     "barcode",
     "hsnCode",
     "pack",
@@ -1361,6 +1368,7 @@ export default function AdminStockBulkEdit({
     blockNumber: "6. Block/Room No.",
     rackNumber: "7. Rack",
     description: "8. Desc",
+    tags: "SEO Tags",
     barcode: "9. Barcode",
     hsnCode: "10. HSN",
     pack: "11. Unit",
@@ -1660,6 +1668,7 @@ export default function AdminStockBulkEdit({
     blockNumber: 110,
     rackNumber: 110,
     description: 130,
+    tags: 220,
     barcode: 130,
     hsnCode: 100,
     pack: 100,
@@ -1891,6 +1900,8 @@ export default function AdminStockBulkEdit({
       }
       case "description":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.description} onChange={(e) => handleFieldChange(originalIndex, 'description', e.target.value)} /></td>;
+      case "tags":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" placeholder="e.g. gift for wife, cutter, ghadi" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.tags} onChange={(e) => handleFieldChange(originalIndex, 'tags', e.target.value)} /></td>;
       case "barcode":
         return (
           <td key={key} className="p-1 border-r border-neutral-200 align-top overflow-hidden">
@@ -2439,6 +2450,8 @@ export default function AdminStockBulkEdit({
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.hsnCode} onChange={(e) => handleFieldChange(originalIndex, 'hsnCode', e.target.value)} /></td>;
       case "description":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.description} onChange={(e) => handleFieldChange(originalIndex, 'description', e.target.value)} /></td>;
+      case "tags":
+        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" placeholder="e.g. gift for wife, cutter, ghadi" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.tags} onChange={(e) => handleFieldChange(originalIndex, 'tags', e.target.value)} /></td>;
       case "deliveryTime":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.deliveryTime} onChange={(e) => handleFieldChange(originalIndex, 'deliveryTime', e.target.value)} /></td>;
       case "lowStockQuantity":

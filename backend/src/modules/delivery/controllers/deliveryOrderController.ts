@@ -9,6 +9,71 @@ import { generateDeliveryOtp, verifyDeliveryOtp } from "../../../services/delive
 import { processOrderStatusTransition } from "../../../services/orderService";
 import DeliveryAssignment from "../../../models/DeliveryAssignment";
 import Return from "../../../models/Return";
+import Customer from "../../../models/Customer";
+import Notification from "../../../models/Notification";
+import { sendPushNotification } from "../../../services/firebaseAdmin";
+import { calculateDeliveryCommission } from "../../../services/deliveryCommissionService";
+
+/**
+ * Notify the customer (push + in-app record) and admin (socket) that an
+ * order was just marked Delivered. Shared by both completion paths
+ * (QR scan and OTP verify) so they behave identically.
+ */
+const notifyDeliveredOrder = async (io: any, order: any) => {
+    try {
+        const customerDoc = await Customer.findById(order.customer)
+            .select("fcmToken fcmTokenMobile")
+            .lean();
+        const tokens = [
+            (customerDoc as any)?.fcmTokenMobile,
+            (customerDoc as any)?.fcmToken,
+        ].filter(Boolean) as string[];
+
+        const title = "Order delivered";
+        const body = `Your order #${order.orderNumber} has been delivered. Enjoy!`;
+
+        if (tokens.length) {
+            await sendPushNotification(tokens, {
+                title,
+                body,
+                data: { orderId: String(order._id), type: "OrderStatus" },
+            });
+        }
+
+        await Notification.create({
+            recipientType: "Customer",
+            recipientId: order.customer,
+            type: "Order",
+            title,
+            message: body,
+            link: `/orders/${order._id}`,
+            priority: "High",
+        });
+    } catch (err) {
+        console.error("Failed to notify customer of order delivery:", err);
+    }
+
+    if (io) {
+        io.to("admin-notifications").emit("order-delivered", {
+            orderId: String(order._id),
+            orderNumber: order.orderNumber,
+            message: `Order ${order.orderNumber} has been delivered`,
+        });
+    }
+
+    try {
+        await Notification.create({
+            recipientType: "Admin",
+            type: "Order",
+            title: "Order delivered",
+            message: `Order #${order.orderNumber} has been delivered`,
+            link: `/admin/orders/${order._id}`,
+            priority: "Medium",
+        });
+    } catch (err) {
+        console.error("Failed to record admin delivery notification:", err);
+    }
+};
 
 /**
  * Helper to map order items for response
@@ -115,10 +180,14 @@ export const getTodayOrders = asyncHandler(async (req: Request, res: Response) =
 export const getPendingOrders = asyncHandler(async (req: Request, res: Response) => {
     const deliveryId = req.user?.userId;
 
-    // Pending statuses: Ready for pickup, Out for delivery, Picked Up, Assigned, In Transit
+    // Pending: assigned to this delivery boy and not yet in a terminal state.
+    // "Ready for pickup"/"Assigned" are deliveryBoyStatus/DeliveryAssignment.status
+    // values, not Order.status values, so filtering on them here never matched
+    // real orders - a just-dispatched order (Order.status stays "Processed")
+    // never showed up as pending.
     const orders = await Order.find({
         deliveryBoy: deliveryId,
-        status: { $in: ["Ready for pickup", "Out for Delivery", "Picked Up", "Assigned", "In Transit"] }
+        status: { $nin: ["Delivered", "Cancelled", "Rejected", "Returned"] }
     })
         .populate("items")
         .sort({ createdAt: -1 });
@@ -300,22 +369,42 @@ export const completeDeliveryByScan = asyncHandler(async (req: Request, res: Res
     order.paymentStatus = 'Paid';
     await order.save();
 
+    const deliveryPartner = await Delivery.findById(deliveryId).select('commissionType commission');
+    const commission = calculateDeliveryCommission({
+        commissionType: deliveryPartner?.commissionType,
+        commission: deliveryPartner?.commission,
+        deliveryCharge: order.shipping,
+    });
+
     await DeliveryAssignment.findOneAndUpdate(
         { order: id },
-        { status: 'Delivered', deliveredAt: new Date() }
+        {
+            status: 'Delivered',
+            deliveredAt: new Date(),
+            commissionAmount: commission.commissionAmount,
+            commissionType: commission.commissionType,
+            commissionRate: commission.commissionRate,
+            commissionBasisAmount: commission.commissionBasisAmount,
+        }
     );
 
-    // CASH COLLECTION LOGIC
-    if (order.paymentMethod === 'COD') {
-        await Delivery.findByIdAndUpdate(deliveryId, {
-            $inc: { cashCollected: order.total }
-        });
+    // Process seller commissions/wallet transactions for this transition -
+    // the OTP completion path already does this; the QR path was silently
+    // skipping it, so sellers never got credited for QR-completed orders.
+    if (previousStatus !== 'Delivered') {
+        try {
+            await processOrderStatusTransition(id, 'Delivered', previousStatus);
+        } catch (transitionError: any) {
+            console.error('Error processing order status transition:', transitionError);
+        }
     }
 
-    // COMMISSION LOGIC (Fixed mock amount for now, should be dynamic in future)
-    const COMMISSION = 40;
+    // CASH COLLECTION + COMMISSION
     await Delivery.findByIdAndUpdate(deliveryId, {
-        $inc: { balance: COMMISSION }
+        $inc: {
+            balance: commission.commissionAmount,
+            ...(order.paymentMethod === 'COD' ? { cashCollected: order.total } : {}),
+        },
     });
 
     const io = (req.app as any).get("io");
@@ -331,6 +420,10 @@ export const completeDeliveryByScan = asyncHandler(async (req: Request, res: Res
             message: 'Order delivered successfully',
         });
         notifySellersOfOrderUpdate(io, order, 'STATUS_UPDATE');
+    }
+
+    if (previousStatus !== 'Delivered') {
+        await notifyDeliveredOrder(io, order);
     }
 
     return res.status(200).json({
@@ -506,18 +599,48 @@ export const verifyDeliveryOtpController = asyncHandler(async (req: Request, res
         }
 
         // Update delivery boy balance and cash collected (if COD)
-        if (updatedOrder && updatedOrder.status === 'Delivered') {
-            if (updatedOrder.paymentMethod === 'COD') {
-                await Delivery.findByIdAndUpdate(deliveryId, {
-                    $inc: { cashCollected: updatedOrder.total }
-                });
-            }
-
-            // Update delivery boy commission
-            const COMMISSION = 40; // Fixed amount for now, should be dynamic in future
-            await Delivery.findByIdAndUpdate(deliveryId, {
-                $inc: { balance: COMMISSION }
+        if (updatedOrder && updatedOrder.status === 'Delivered' && previousStatus !== 'Delivered') {
+            const deliveryPartner = await Delivery.findById(deliveryId).select('commissionType commission');
+            const commission = calculateDeliveryCommission({
+                commissionType: deliveryPartner?.commissionType,
+                commission: deliveryPartner?.commission,
+                deliveryCharge: updatedOrder.shipping,
             });
+
+            await DeliveryAssignment.findOneAndUpdate(
+                { order: id },
+                {
+                    status: 'Delivered',
+                    deliveredAt: new Date(),
+                    commissionAmount: commission.commissionAmount,
+                    commissionType: commission.commissionType,
+                    commissionRate: commission.commissionRate,
+                    commissionBasisAmount: commission.commissionBasisAmount,
+                }
+            );
+
+            await Delivery.findByIdAndUpdate(deliveryId, {
+                $inc: {
+                    balance: commission.commissionAmount,
+                    ...(updatedOrder.paymentMethod === 'COD' ? { cashCollected: updatedOrder.total } : {}),
+                },
+            });
+
+            const io = (req.app as any).get("io");
+            if (io) {
+                io.to(`order-${id}`).emit('order-delivered', {
+                    orderId: id,
+                    orderNumber: updatedOrder.orderNumber,
+                    message: 'Order has been delivered successfully',
+                });
+                io.to(`delivery-${deliveryId}`).emit('order-delivered', {
+                    orderId: id,
+                    orderNumber: updatedOrder.orderNumber,
+                    message: 'Order delivered successfully',
+                });
+                notifySellersOfOrderUpdate(io, updatedOrder, 'STATUS_UPDATE');
+            }
+            await notifyDeliveredOrder(io, updatedOrder);
         }
 
         return res.status(200).json({

@@ -26,6 +26,8 @@ export const createDeliveryBoy = asyncHandler(
       accountNumber,
       ifscCode,
       bonusType,
+      commissionType,
+      commission,
     } = req.body;
 
     if (!name || !mobile || !email || !password || !address || !city) {
@@ -52,6 +54,8 @@ export const createDeliveryBoy = asyncHandler(
       accountNumber,
       ifscCode,
       bonusType,
+      commissionType,
+      commission,
       status: "Inactive", // New delivery boys start as inactive
     });
 
@@ -689,6 +693,114 @@ export const getDeliveryPerformanceReport = asyncHandler(
           onTimePercent: overallOnTimePercent,
           avgDurationMs: overallAvgDurationMs,
         },
+        assignments,
+      },
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
+    });
+  }
+);
+
+/**
+ * Delivery payout report: per-delivery-boy commission summary (deliveries
+ * completed, total payout, average per delivery) plus a paginated
+ * drill-down of individual completed deliveries with the commission
+ * snapshot recorded at delivery-completion time.
+ */
+export const getDeliveryPayoutReport = asyncHandler(
+  async (req: Request, res: Response) => {
+    const {
+      dateFrom,
+      dateTo,
+      deliveryBoyId,
+      page = 1,
+      limit = 20,
+    } = req.query;
+
+    const matchStage: any = {
+      status: "Delivered",
+      assignmentType: "Order",
+    };
+    if (dateFrom || dateTo) {
+      matchStage.deliveredAt = {};
+      if (dateFrom) matchStage.deliveredAt.$gte = new Date(dateFrom as string);
+      if (dateTo) matchStage.deliveredAt.$lte = new Date(dateTo as string);
+    }
+    if (deliveryBoyId) {
+      matchStage.deliveryBoy = new mongoose.Types.ObjectId(
+        deliveryBoyId as string
+      );
+    }
+
+    const perDeliveryBoyAgg = await DeliveryAssignment.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: "$deliveryBoy",
+          deliveredCount: { $sum: 1 },
+          totalPayout: { $sum: { $ifNull: ["$commissionAmount", 0] } },
+          avgPerDelivery: { $avg: { $ifNull: ["$commissionAmount", 0] } },
+        },
+      },
+      {
+        $lookup: {
+          from: "deliveries",
+          localField: "_id",
+          foreignField: "_id",
+          as: "deliveryBoyInfo",
+        },
+      },
+      { $unwind: { path: "$deliveryBoyInfo", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          deliveryBoyId: "$_id",
+          name: "$deliveryBoyInfo.name",
+          mobile: "$deliveryBoyInfo.mobile",
+          commissionType: "$deliveryBoyInfo.commissionType",
+          commission: "$deliveryBoyInfo.commission",
+          deliveredCount: 1,
+          totalPayout: 1,
+          avgPerDelivery: 1,
+        },
+      },
+      { $sort: { totalPayout: -1 } },
+    ]);
+
+    const summary = perDeliveryBoyAgg.reduce(
+      (acc, row) => {
+        acc.deliveredCount += row.deliveredCount;
+        acc.totalPayout += row.totalPayout;
+        return acc;
+      },
+      { deliveredCount: 0, totalPayout: 0 }
+    );
+
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [assignments, total] = await Promise.all([
+      DeliveryAssignment.find(matchStage)
+        .populate("deliveryBoy", "name mobile")
+        .populate("order", "orderNumber shipping total")
+        .select("deliveredAt commissionAmount commissionType commissionRate commissionBasisAmount deliveryBoy order")
+        .sort({ deliveredAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      DeliveryAssignment.countDocuments(matchStage),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: "Delivery payout report fetched successfully",
+      data: {
+        perDeliveryBoy: perDeliveryBoyAgg,
+        summary,
         assignments,
       },
       pagination: {

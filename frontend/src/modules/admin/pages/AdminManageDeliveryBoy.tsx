@@ -3,6 +3,7 @@ import {
     getDeliveryBoys,
     updateDeliveryBoyStatus,
     updateDeliveryBoyAvailability,
+    updateDeliveryBoy,
     deleteDeliveryBoy,
     type DeliveryBoy,
 } from '../../../services/api/admin/adminDeliveryService';
@@ -24,6 +25,9 @@ export default function AdminManageDeliveryBoy() {
     const [totalPages, setTotalPages] = useState(1);
     const [totalDeliveryBoys, setTotalDeliveryBoys] = useState(0);
     const [successMessage, setSuccessMessage] = useState('');
+    const [editingBoy, setEditingBoy] = useState<DeliveryBoy | null>(null);
+    const [commissionForm, setCommissionForm] = useState<{ commissionType: 'Percentage' | 'Fixed'; commission: string }>({ commissionType: 'Fixed', commission: '' });
+    const [savingCommission, setSavingCommission] = useState(false);
 
     // Debounce search term and fetch delivery boys
     useEffect(() => {
@@ -232,6 +236,46 @@ export default function AdminManageDeliveryBoy() {
             setSuccessMessage('');
         } finally {
             setProcessing(null);
+        }
+    };
+
+    const openEditCommission = (deliveryBoy: DeliveryBoy) => {
+        setEditingBoy(deliveryBoy);
+        setCommissionForm({
+            commissionType: deliveryBoy.commissionType || 'Fixed',
+            commission: deliveryBoy.commission !== undefined && deliveryBoy.commission !== null ? String(deliveryBoy.commission) : '',
+        });
+    };
+
+    const handleSaveCommission = async () => {
+        if (!editingBoy) return;
+
+        try {
+            setSavingCommission(true);
+            const response = await updateDeliveryBoy(editingBoy._id, {
+                commissionType: commissionForm.commissionType,
+                commission: commissionForm.commission === '' ? undefined : Number(commissionForm.commission),
+            });
+
+            if (response.success) {
+                setDeliveryBoys(deliveryBoys.map(deliveryBoy =>
+                    deliveryBoy._id === editingBoy._id
+                        ? { ...deliveryBoy, commissionType: commissionForm.commissionType, commission: Number(commissionForm.commission) || 0 }
+                        : deliveryBoy
+                ));
+                setSuccessMessage('Commission updated successfully!');
+                setError('');
+                setEditingBoy(null);
+            } else {
+                setError('Failed to update commission: ' + (response.message || 'Unknown error'));
+                setSuccessMessage('');
+            }
+        } catch (err: any) {
+            console.error('Error updating commission:', err);
+            setError('Failed to update commission: ' + (err.response?.data?.message || 'Please try again.'));
+            setSuccessMessage('');
+        } finally {
+            setSavingCommission(false);
         }
     };
 
@@ -530,15 +574,12 @@ export default function AdminManageDeliveryBoy() {
                                                 {deliveryBoy.commissionType === 'Percentage' ? (
                                                     <div className="text-xs">
                                                         <div className="font-medium">Commission {deliveryBoy.commission}%</div>
-                                                        <div className="text-neutral-500 mt-1">
-                                                            Min Amt: {deliveryBoy.minAmount}
-                                                        </div>
                                                         <div className="text-neutral-500">
                                                             Max Amt: {deliveryBoy.maxAmount}
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs">Fixed</span>
+                                                    <div className="text-xs font-medium">Fixed ₹{deliveryBoy.commission ?? 0}</div>
                                                 )}
                                             </td>
                                             <td className="p-4 align-middle">₹{deliveryBoy.balance.toFixed(2)}</td>
@@ -593,6 +634,16 @@ export default function AdminManageDeliveryBoy() {
                                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                             <circle cx="12" cy="12" r="10"></circle>
                                                             <path d="M9 12l2 2 4-4"></path>
+                                                        </svg>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => openEditCommission(deliveryBoy)}
+                                                        className="p-1.5 text-neutral-600 hover:bg-neutral-100 rounded transition-colors"
+                                                        title="Edit Commission"
+                                                    >
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                                         </svg>
                                                     </button>
                                                     <button
@@ -702,6 +753,70 @@ export default function AdminManageDeliveryBoy() {
                     </div>
                 </div>
             </div>
+
+            {/* Edit Commission Modal */}
+            {editingBoy && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm overflow-hidden">
+                        <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between" style={{ backgroundColor: 'var(--primary-color)' }}>
+                            <h3 className="font-bold text-white">Edit Commission - {editingBoy.name}</h3>
+                            <button onClick={() => setEditingBoy(null)} className="text-white hover:bg-white/20 rounded-full p-1 transition-colors">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-neutral-800 mb-2">Commission Type</label>
+                                <select
+                                    value={commissionForm.commissionType}
+                                    onChange={(e) => setCommissionForm({ ...commissionForm, commissionType: e.target.value as 'Percentage' | 'Fixed' })}
+                                    className="w-full px-4 py-2.5 bg-white border border-neutral-300 rounded outline-none text-sm"
+                                >
+                                    <option value="Percentage">Percentage</option>
+                                    <option value="Fixed">Fixed</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-neutral-800 mb-2">
+                                    Commission Value {commissionForm.commissionType === 'Percentage' ? '(%)' : '(₹)'}
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={commissionForm.commission}
+                                    onChange={(e) => setCommissionForm({ ...commissionForm, commission: e.target.value })}
+                                    className="w-full px-4 py-2.5 bg-white border border-neutral-300 rounded outline-none text-sm"
+                                    placeholder="Enter Value"
+                                />
+                                {commissionForm.commissionType === 'Percentage' && (
+                                    <p className="text-xs text-neutral-500 mt-1">Paid as this % of the order's delivery charge, per delivery.</p>
+                                )}
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingBoy(null)}
+                                    className="px-4 py-2 text-sm font-medium text-neutral-600 bg-neutral-100 hover:bg-neutral-200 rounded transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleSaveCommission}
+                                    disabled={savingCommission}
+                                    className="px-4 py-2 text-sm font-bold text-white rounded shadow-md transition-colors disabled:opacity-60"
+                                    style={{ backgroundColor: 'var(--primary-color)' }}
+                                >
+                                    {savingCommission ? 'Saving...' : 'Save'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Footer */}
             <footer className="text-center py-4 text-sm text-neutral-600 border-t border-neutral-200 bg-white">

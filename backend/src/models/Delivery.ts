@@ -30,6 +30,8 @@ export interface IDelivery extends Document {
 
   // Commission & Payment
   bonusType?: string; // 'Fixed' | 'Salaried' | 'Commission Based'
+  commissionType: 'Percentage' | 'Fixed';
+  commission: number;
   status: 'Active' | 'Inactive';
   isOnline: boolean; // Availability status
   location?: {
@@ -156,6 +158,16 @@ const DeliverySchema = new Schema<IDelivery>(
     bonusType: {
       type: String,
       trim: true,
+    },
+    commissionType: {
+      type: String,
+      enum: ['Percentage', 'Fixed'],
+      default: 'Fixed',
+    },
+    commission: {
+      type: Number,
+      default: 40,
+      min: [0, 'Commission cannot be negative'],
     },
     status: {
       type: String,

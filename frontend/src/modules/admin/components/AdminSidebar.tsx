@@ -328,6 +328,13 @@ const menuSections: MenuSection[] = [
             )
           },
           {
+            label: "Delivery Payout Report",
+            path: "/admin/reports/delivery-payout",
+            icon: (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg>
+            )
+          },
+          {
             label: "Sales Reports",
             path: "/admin/reports/sales",
             hasSubmenu: true,

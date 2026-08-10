@@ -329,3 +329,57 @@ export const getDeliveryPerformanceReport = async (
   );
   return response.data;
 };
+
+/**
+ * Delivery Payout Report
+ */
+export interface DeliveryPayoutRow {
+  deliveryBoyId: string;
+  name?: string;
+  mobile?: string;
+  commissionType?: "Percentage" | "Fixed";
+  commission?: number;
+  deliveredCount: number;
+  totalPayout: number;
+  avgPerDelivery: number;
+}
+
+export interface DeliveryPayoutAssignment {
+  _id: string;
+  order?: { _id: string; orderNumber?: string; shipping?: number; total?: number };
+  deliveryBoy?: { _id: string; name?: string; mobile?: string };
+  deliveredAt?: string;
+  commissionAmount?: number;
+  commissionType?: "Percentage" | "Fixed";
+  commissionRate?: number;
+  commissionBasisAmount?: number;
+}
+
+export interface DeliveryPayoutSummary {
+  deliveredCount: number;
+  totalPayout: number;
+}
+
+export interface DeliveryPayoutReportData {
+  perDeliveryBoy: DeliveryPayoutRow[];
+  summary: DeliveryPayoutSummary;
+  assignments: DeliveryPayoutAssignment[];
+}
+
+export interface GetDeliveryPayoutParams {
+  page?: number;
+  limit?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  deliveryBoyId?: string;
+}
+
+export const getDeliveryPayoutReport = async (
+  params?: GetDeliveryPayoutParams
+): Promise<ApiResponse<DeliveryPayoutReportData>> => {
+  const response = await api.get<ApiResponse<DeliveryPayoutReportData>>(
+    "/admin/reports/delivery-payout",
+    { params }
+  );
+  return response.data;
+};

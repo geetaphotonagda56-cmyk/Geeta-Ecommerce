@@ -146,13 +146,16 @@ export default function AdminOrderDelivery() {
         }
     };
 
-    const handleDispatch = async (deliveryBoyId: string) => {
+    const handleDispatch = async (deliveryBoyId: string, deliveryCharge: number) => {
         if (!dispatchTarget) return;
         try {
             setSubmitting(true);
-            const response = await dispatchOrder(dispatchTarget._id, { deliveryBoyId });
+            const response = await dispatchOrder(dispatchTarget._id, { deliveryBoyId, deliveryCharge });
             if (response.success) {
                 showToast('Order dispatched', 'success');
+                if ((response as any).warning) {
+                    showToast((response as any).warning, 'error');
+                }
                 setDispatchTarget(null);
                 fetchOrders();
             } else {
@@ -427,6 +430,7 @@ export default function AdminOrderDelivery() {
                 onClose={() => setDispatchTarget(null)}
                 onDispatch={handleDispatch}
                 submitting={submitting}
+                initialDeliveryCharge={dispatchTarget?.shipping}
             />
         </div>
     );

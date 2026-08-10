@@ -733,8 +733,9 @@ export default function DeliveryOrderDetail() {
 
             </div>
 
-            {/* Delivery-completion actions (when order is Picked Up): scanning the
-                printed bill QR is the primary path; OTP remains as a fallback
+            {/* Delivery-completion actions (when order is In Transit): a single,
+                unambiguous "Complete Delivery" CTA opens the QR scanner - scanning
+                the printed bill finishes the order. OTP remains as a fallback
                 for orders that never had a bill printed (e.g. customer-app
                 orders placed outside POS). */}
             {order.status === 'In Transit' && !showOtpInput && (
@@ -743,7 +744,14 @@ export default function DeliveryOrderDetail() {
                         onClick={() => openBarcodeScanner(() => setShowScanner(true))}
                         className="w-full py-4 rounded-2xl bg-[var(--primary-dark)] backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
                     >
-                        <span className="relative z-10">Scan Bill to Complete Delivery</span>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="relative z-10">
+                            <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+                            <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+                            <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+                            <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+                            <rect x="7" y="7" width="10" height="10" rx="1"></rect>
+                        </svg>
+                        <span className="relative z-10">Complete Delivery</span>
                         <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
                     </button>
                     <button
@@ -789,11 +797,14 @@ export default function DeliveryOrderDetail() {
                 </div>
             )}
 
-            {/* Floating Glassmorphic Action Button Dock - Order Taken / Mark In Transit button */}
+            {/* Floating Glassmorphic Action Button Dock - Order Taken / Mark In Transit button.
+                nextStatus is never 'Delivered' here since 'In Transit' (whose next
+                status is 'Delivered') is handled by the Complete Delivery dock above. */}
             {nextStatus && order.status !== 'In Transit' && !showOtpInput && (
                 <div className="fixed bottom-24 left-6 right-6 z-30 flex gap-3">
-                    {/* Scan Button (Visible when In Transit or Ready for Pickup) */}
-                   {(order.status === 'In Transit' || order.status === 'Ready for pickup') && (
+                    {/* Legacy pre-pickup scan: confirms pickup by matching the
+                        order number, distinct from the delivery-completion scan. */}
+                   {order.status === 'Ready for pickup' && (
                         <button
                             onClick={() => openBarcodeScanner(() => setShowScanner(true))}
                             className="w-16 h-full rounded-2xl bg-neutral-900 text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform"
@@ -809,25 +820,19 @@ export default function DeliveryOrderDetail() {
                         </button>
                    )}
 
-                    {nextStatus === 'Delivered' ? (
-                        <div className="flex-1 py-4 rounded-2xl bg-black/60 backdrop-blur-md border border-white/20 text-white/90 text-sm font-semibold flex items-center justify-center text-center px-4">
-                            Scan the bill QR code to complete delivery
-                        </div>
-                    ) : (
-                        <button
-                            onClick={() => handleStatusChange(nextStatus)}
-                            className="flex-1 py-4 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
-                            disabled={loading}
-                        >
-                            <span className="relative z-10">
-                                {loading ? 'Updating...' : nextStatus === 'Picked Up' ? 'Order Taken' : `Mark as ${nextStatus}`}
-                            </span>
-                            {!loading && <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center relative z-10 group-hover:bg-white/30 transition-colors">
-                                <Icons.ChevronLeft className="rotate-180" size={18} />
-                            </div>}
-                            <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
-                        </button>
-                    )}
+                    <button
+                        onClick={() => handleStatusChange(nextStatus)}
+                        className="flex-1 py-4 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
+                        disabled={loading}
+                    >
+                        <span className="relative z-10">
+                            {loading ? 'Updating...' : nextStatus === 'Picked Up' ? 'Order Taken' : `Mark as ${nextStatus}`}
+                        </span>
+                        {!loading && <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center relative z-10 group-hover:bg-white/30 transition-colors">
+                            <Icons.ChevronLeft className="rotate-180" size={18} />
+                        </div>}
+                        <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
+                    </button>
                 </div>
             )}
 

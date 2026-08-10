@@ -2,24 +2,37 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import DeliveryHeader from '../components/DeliveryHeader';
 import DeliveryBottomNav from '../components/DeliveryBottomNav';
-import { getDashboardStats, getEarningsHistory } from '../../../services/api/delivery/deliveryService';
+import { getDashboardStats, getEarningsHistory, getEarningsDetail, type EarningsDetailRow } from '../../../services/api/delivery/deliveryService';
+
+const formatCommissionBasis = (row: EarningsDetailRow) => {
+  if (row.commissionType === 'Percentage') {
+    return `${row.commissionRate ?? 0}% of ₹${(row.commissionBasisAmount ?? 0).toFixed(2)}`;
+  }
+  if (row.commissionType === 'Fixed') {
+    return `Fixed ₹${row.commissionRate ?? 0}`;
+  }
+  return '';
+};
 
 export default function DeliveryEarnings() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<any>(null);
   const [earningsHistory, setEarningsHistory] = useState<any[]>([]);
+  const [earningsDetail, setEarningsDetail] = useState<EarningsDetailRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsData, historyData] = await Promise.all([
+        const [statsData, historyData, detailData] = await Promise.all([
           getDashboardStats(),
-          getEarningsHistory()
+          getEarningsHistory(),
+          getEarningsDetail({ page: 1, limit: 20 })
         ]);
         setStats(statsData);
         setEarningsHistory(historyData);
+        setEarningsDetail(detailData.data);
       } catch (err: any) {
         setError(err.message || 'Failed to load earnings data');
       } finally {
@@ -111,6 +124,31 @@ export default function DeliveryEarnings() {
               ))
             ) : (
               <div className="p-4 text-center text-neutral-500 text-sm">No recent earnings</div>
+            )}
+          </div>
+        </div>
+
+        {/* Per-Delivery Breakdown */}
+        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mt-4">
+          <div className="p-4 border-b border-neutral-200">
+            <h3 className="text-neutral-900 font-semibold">Delivery Breakdown</h3>
+          </div>
+          <div className="divide-y divide-neutral-200">
+            {earningsDetail.length > 0 ? (
+              earningsDetail.map((row) => (
+                <div key={row.id} className="p-4 flex justify-between items-center">
+                  <div>
+                    <p className="text-neutral-900 text-sm font-medium">#{row.orderNumber || row.orderId}</p>
+                    <p className="text-neutral-500 text-xs mt-1">
+                      {row.deliveredAt ? new Date(row.deliveredAt).toLocaleString() : ''}
+                    </p>
+                    <p className="text-neutral-500 text-xs">{formatCommissionBasis(row)}</p>
+                  </div>
+                  <p className="text-neutral-900 text-lg font-bold">₹ {row.commissionAmount.toFixed(2)}</p>
+                </div>
+              ))
+            ) : (
+              <div className="p-4 text-center text-neutral-500 text-sm">No deliveries yet</div>
             )}
           </div>
         </div>

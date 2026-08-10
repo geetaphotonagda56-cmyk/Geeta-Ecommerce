@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
-import Order from "../../../models/Order";
+import DeliveryAssignment from "../../../models/DeliveryAssignment";
 import mongoose from "mongoose";
 
 /**
@@ -10,13 +10,15 @@ export const getEarningsHistory = asyncHandler(async (req: Request, res: Respons
     const deliveryId = req.user?.userId;
     const objectId = new mongoose.Types.ObjectId(deliveryId);
 
-    // Aggregation to group earnings by day
-    // Filtering for delivered orders assigned to this user
-    const earnings = await Order.aggregate([
+    // Aggregation to group earnings by day, sourced from DeliveryAssignment
+    // (which snapshots the real commission paid per delivery) rather than
+    // Order, so this reflects each delivery boy's actual commission config.
+    const earnings = await DeliveryAssignment.aggregate([
         {
             $match: {
                 deliveryBoy: objectId,
                 status: "Delivered",
+                assignmentType: "Order",
                 deliveredAt: { $exists: true } // Ensure delivered date exists
             }
         },
@@ -25,7 +27,7 @@ export const getEarningsHistory = asyncHandler(async (req: Request, res: Respons
                 _id: {
                     $dateToString: { format: "%Y-%m-%d", date: "$deliveredAt" }
                 },
-                amount: { $sum: 40 }, // Using mock commission of 40 per order. Replace with field if exists.
+                amount: { $sum: { $ifNull: ["$commissionAmount", 0] } },
                 deliveries: { $sum: 1 }
             }
         },
@@ -61,5 +63,54 @@ export const getEarningsHistory = asyncHandler(async (req: Request, res: Respons
     return res.status(200).json({
         success: true,
         data: formattedEarnings
+    });
+});
+
+/**
+ * Get per-delivery earnings breakdown for the logged-in delivery boy
+ */
+export const getEarningsDetail = asyncHandler(async (req: Request, res: Response) => {
+    const deliveryId = req.user?.userId;
+    const objectId = new mongoose.Types.ObjectId(deliveryId);
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+
+    const match: any = {
+        deliveryBoy: objectId,
+        status: "Delivered",
+        assignmentType: "Order",
+    };
+
+    const [assignments, total] = await Promise.all([
+        DeliveryAssignment.find(match)
+            .populate("order", "orderNumber total shipping")
+            .select("order deliveredAt commissionAmount commissionType commissionRate commissionBasisAmount")
+            .sort({ deliveredAt: -1 })
+            .skip(skip)
+            .limit(limit),
+        DeliveryAssignment.countDocuments(match),
+    ]);
+
+    const data = assignments.map((assignment: any) => ({
+        id: assignment._id,
+        orderId: assignment.order?._id,
+        orderNumber: assignment.order?.orderNumber,
+        deliveredAt: assignment.deliveredAt,
+        commissionType: assignment.commissionType,
+        commissionRate: assignment.commissionRate,
+        commissionBasisAmount: assignment.commissionBasisAmount,
+        commissionAmount: assignment.commissionAmount ?? 0,
+    }));
+
+    return res.status(200).json({
+        success: true,
+        data,
+        pagination: {
+            page,
+            limit,
+            total,
+            pages: Math.ceil(total / limit),
+        },
     });
 });

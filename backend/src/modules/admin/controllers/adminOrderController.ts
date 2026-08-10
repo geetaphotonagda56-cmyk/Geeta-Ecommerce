@@ -1582,7 +1582,7 @@ export const getOrderWorkflowDetail = asyncHandler(
         populate: [
           {
             path: "product",
-            select: "productName mainImage price compareAtPrice wholesalePrice purchasePrice variations",
+            select: "productName mainImage price compareAtPrice wholesalePrice purchasePrice variations hsnCode gst",
           },
           {
             path: "seller",
@@ -1636,7 +1636,14 @@ export const getOrderWorkflowDetail = asyncHandler(
         billTotalSP += lineSP;
       }
 
-      return { ...item, purchasePrice, mrp, lineProfit };
+      return {
+        ...item,
+        purchasePrice,
+        mrp,
+        lineProfit,
+        hsnCode: item.hsnCode || product?.hsnCode,
+        gst: item.gst ?? product?.gst,
+      };
     });
 
     orderObj.billSummary = {
@@ -1753,12 +1760,19 @@ const performDeliveryAssignment = async (
 export const dispatchOrder = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { deliveryBoyId } = req.body;
+    const { deliveryBoyId, deliveryCharge } = req.body;
 
     if (!deliveryBoyId) {
       return res.status(400).json({
         success: false,
         message: "Delivery boy ID is required",
+      });
+    }
+
+    if (deliveryCharge !== undefined && (typeof deliveryCharge !== "number" || deliveryCharge < 0)) {
+      return res.status(400).json({
+        success: false,
+        message: "Delivery charge must be a non-negative number",
       });
     }
 
@@ -1786,9 +1800,70 @@ export const dispatchOrder = asyncHandler(
       });
     }
 
+    // The delivery charge is only known/finalized at dispatch time (e.g.
+    // set by distance/instructions), so it's set here rather than at
+    // checkout. Recompute the total the same way checkout does, so what
+    // the customer sees and what COD collects stay consistent.
+    const paidOrderTotalWillChange =
+      deliveryCharge !== undefined &&
+      deliveryCharge !== order.shipping &&
+      order.paymentStatus === "Paid";
+
+    const deliveryChargeChanged = deliveryCharge !== undefined && deliveryCharge !== order.shipping;
+    if (deliveryChargeChanged) {
+      order.shipping = deliveryCharge;
+      order.total = Number(
+        Math.max(
+          0,
+          (order.subtotal || 0) + (order.platformFee || 0) + deliveryCharge - (order.discount || 0)
+        ).toFixed(2)
+      );
+    }
+
     order.deliveryWorkflowStage = "Shipment Ready";
     order.dispatchedAt = new Date();
     await order.save();
+
+    // Tell the customer their delivery charge/total changed - they last saw
+    // the default charge at checkout, and this was previously only
+    // surfaced to admin via the `warning` field in this endpoint's own
+    // response.
+    if (deliveryChargeChanged) {
+      try {
+        const customerDoc = await Customer.findById(order.customer)
+          .select("fcmToken fcmTokenMobile")
+          .lean();
+        const tokens = [
+          (customerDoc as any)?.fcmTokenMobile,
+          (customerDoc as any)?.fcmToken,
+        ].filter(Boolean) as string[];
+
+        const title = paidOrderTotalWillChange ? "Order total updated" : "Delivery charge updated";
+        const body = paidOrderTotalWillChange
+          ? `Your order #${order.orderNumber}'s delivery charge changed to ₹${deliveryCharge} after payment. New total: ₹${order.total}. Our team will reach out to reconcile the difference.`
+          : `Your delivery charge for order #${order.orderNumber} was updated to ₹${deliveryCharge}. New order total: ₹${order.total}.`;
+
+        if (tokens.length) {
+          await sendPushNotification(tokens, {
+            title,
+            body,
+            data: { orderId: String(order._id), type: "OrderStatus" },
+          });
+        }
+
+        await Notification.create({
+          recipientType: "Customer",
+          recipientId: order.customer,
+          type: "Order",
+          title,
+          message: body,
+          link: `/orders/${order._id}`,
+          priority: "High",
+        });
+      } catch (err) {
+        console.error("Failed to notify customer of delivery charge change:", err);
+      }
+    }
 
     const io: SocketIOServer = req.app.get("io");
     if (io) {
@@ -1823,6 +1898,9 @@ export const dispatchOrder = asyncHandler(
       success: true,
       message: "Order dispatched successfully",
       data: updatedOrder,
+      ...(paidOrderTotalWillChange
+        ? { warning: "This order was already paid online - the new total differs from what was collected. Reconcile the difference with the customer manually." }
+        : {}),
     });
   }
 );

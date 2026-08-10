@@ -5,8 +5,10 @@ import { getDeliveryBoys, quickCreateDeliveryBoy, DeliveryBoy } from '../../../s
 interface DispatchOrderSheetProps {
     isOpen: boolean;
     onClose: () => void;
-    onDispatch: (deliveryBoyId: string) => void;
+    onDispatch: (deliveryBoyId: string, deliveryCharge: number) => void;
     submitting?: boolean;
+    /** Order's current delivery charge (order.shipping), used to prefill the input. */
+    initialDeliveryCharge?: number;
 }
 
 export default function DispatchOrderSheet({
@@ -14,6 +16,7 @@ export default function DispatchOrderSheet({
     onClose,
     onDispatch,
     submitting,
+    initialDeliveryCharge,
 }: DispatchOrderSheetProps) {
     const [search, setSearch] = useState('');
     const [results, setResults] = useState<DeliveryBoy[]>([]);
@@ -24,6 +27,7 @@ export default function DispatchOrderSheet({
     const [newName, setNewName] = useState('');
     const [newMobile, setNewMobile] = useState('');
     const [creating, setCreating] = useState(false);
+    const [deliveryCharge, setDeliveryCharge] = useState('0');
 
     useEffect(() => {
         if (!isOpen) return;
@@ -32,7 +36,9 @@ export default function DispatchOrderSheet({
         setShowAddNew(false);
         setNewName('');
         setNewMobile('');
+        setDeliveryCharge(String(initialDeliveryCharge ?? 0));
         fetchDeliveryBoys('');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
     useEffect(() => {
@@ -83,7 +89,8 @@ export default function DispatchOrderSheet({
 
     const handleDispatch = () => {
         if (!selectedId) return;
-        onDispatch(selectedId);
+        const charge = Math.max(0, Number(deliveryCharge) || 0);
+        onDispatch(selectedId, charge);
     };
 
     return (
@@ -173,6 +180,24 @@ export default function DispatchOrderSheet({
                     </div>
                 </div>
             )}
+
+            <div className="mb-4">
+                <label className="block text-xs font-medium text-neutral-600 mb-1">
+                    Delivery charge (₹)
+                </label>
+                <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={deliveryCharge}
+                    onChange={(e) => setDeliveryCharge(e.target.value)}
+                    placeholder="0"
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
+                />
+                <p className="text-[11px] text-neutral-400 mt-1">
+                    Shown to the customer on their order and used for COD collection.
+                </p>
+            </div>
 
             <button
                 onClick={handleDispatch}

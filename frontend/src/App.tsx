@@ -236,6 +236,7 @@ const AdminGSTSalesReport = lazy(() => import("./modules/admin/pages/AdminGSTSal
 const AdminGSTReport = lazy(() => import("./modules/admin/pages/AdminGSTReport"));
 const AdminPaymentReport = lazy(() => import("./modules/admin/pages/AdminPaymentReport"));
 const AdminDeliveryPerformanceReport = lazy(() => import("./modules/admin/pages/AdminDeliveryPerformanceReport"));
+const AdminDeliveryPayoutReport = lazy(() => import("./modules/admin/pages/AdminDeliveryPayoutReport"));
 const AdminOnlineOrderReport = lazy(() => import("./modules/admin/pages/AdminOnlineOrderReport"));
 const AdminPOSInvoiceReport = lazy(() => import("./modules/admin/pages/AdminPOSInvoiceReport"));
 const AdminAbandonedCarts = lazy(() => import("./modules/admin/pages/AdminAbandonedCarts"));
@@ -634,6 +635,7 @@ function App() {
                             <Route path="reports/gst-register" element={<AdminGSTReport />} />
                             <Route path="reports/payment" element={<AdminPaymentReport />} />
                             <Route path="reports/delivery-performance" element={<AdminDeliveryPerformanceReport />} />
+                            <Route path="reports/delivery-payout" element={<AdminDeliveryPayoutReport />} />
                             <Route path="reports/order" element={<AdminOnlineOrderReport />} />
                             <Route path="reports/invoice" element={<AdminPOSInvoiceReport />} />
 

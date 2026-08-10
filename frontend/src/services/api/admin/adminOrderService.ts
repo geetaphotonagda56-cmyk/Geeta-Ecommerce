@@ -48,6 +48,7 @@ export interface Order {
   subtotal: number;
   tax: number;
   shipping: number;
+  platformFee?: number;
   discount: number;
   couponCode?: string;
   total: number;
@@ -176,6 +177,8 @@ export interface UpdateOrderStatusData {
 
 export interface AssignDeliveryBoyData {
   deliveryBoyId: string;
+  /** Delivery charge to apply at dispatch time (updates order.shipping/total). */
+  deliveryCharge?: number;
 }
 
 export interface ReturnRequest {

@@ -21,6 +21,14 @@ export interface IDeliveryAssignment extends Document {
   returnRequest?: mongoose.Types.ObjectId;
   assignmentType: "Order" | "Return" | "Replacement";
 
+  // Commission snapshot - the actual computation inputs/output used at the
+  // moment this delivery was completed, so it stays accurate for reporting
+  // even if the delivery boy's commission config changes afterward.
+  commissionAmount?: number;
+  commissionType?: "Percentage" | "Fixed";
+  commissionRate?: number;
+  commissionBasisAmount?: number;
+
   // Timeline
   acceptedAt?: Date;
   pickedUpAt?: Date;
@@ -81,6 +89,21 @@ const DeliveryAssignmentSchema = new Schema<IDeliveryAssignment>(
         "Cancelled",
       ],
       default: "Assigned",
+    },
+
+    // Commission snapshot
+    commissionAmount: {
+      type: Number,
+    },
+    commissionType: {
+      type: String,
+      enum: ["Percentage", "Fixed"],
+    },
+    commissionRate: {
+      type: Number,
+    },
+    commissionBasisAmount: {
+      type: Number,
     },
 
     // Timeline

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../../../context/ToastContext';
 import {
@@ -12,6 +13,11 @@ import {
 import { generateBillQrDataUrl } from '../../../utils/generateBillQrCode';
 import ChooseDeliveryTimeSheet from '../components/ChooseDeliveryTimeSheet';
 import DispatchOrderSheet from '../components/DispatchOrderSheet';
+import { readAdminPosBillSettings } from '../../../utils/adminPosBillSettings';
+import { InvoiceBillDetails } from '../../../utils/invoiceFormats';
+import { resolveGstFromProduct } from '../../../utils/gstUtils';
+import { SimpleInvoice } from '../components/SimpleInvoice';
+import { GSTInvoice } from '../components/GSTInvoice';
 
 export default function AdminOrderDeliveryDetail() {
     const { id } = useParams<{ id: string }>();
@@ -23,6 +29,17 @@ export default function AdminOrderDeliveryDetail() {
     const [showConfirmSheet, setShowConfirmSheet] = useState(false);
     const [showDispatchSheet, setShowDispatchSheet] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [billSettings, setBillSettings] = useState<any>(null);
+    const [printFormat, setPrintFormat] = useState<'simple' | 'gst'>('simple');
+    const [isPrinting, setIsPrinting] = useState(false);
+
+    useEffect(() => {
+        const settings = readAdminPosBillSettings();
+        setBillSettings(settings);
+        if (settings?.invoiceFormat === 'gst' || settings?.invoiceFormat === 'simple') {
+            setPrintFormat(settings.invoiceFormat as 'simple' | 'gst');
+        }
+    }, []);
 
     const fetchOrder = async () => {
         if (!id) return;
@@ -68,13 +85,16 @@ export default function AdminOrderDeliveryDetail() {
         }
     };
 
-    const handleDispatch = async (deliveryBoyId: string) => {
+    const handleDispatch = async (deliveryBoyId: string, deliveryCharge: number) => {
         if (!order) return;
         try {
             setSubmitting(true);
-            const response = await dispatchOrder(order._id, { deliveryBoyId });
+            const response = await dispatchOrder(order._id, { deliveryBoyId, deliveryCharge });
             if (response.success) {
                 showToast('Order dispatched', 'success');
+                if ((response as any).warning) {
+                    showToast((response as any).warning, 'error');
+                }
                 setShowDispatchSheet(false);
                 fetchOrder();
             } else {
@@ -85,6 +105,38 @@ export default function AdminOrderDeliveryDetail() {
         } finally {
             setSubmitting(false);
         }
+    };
+
+    // Maps this order into the shape SimpleInvoice/GSTInvoice expect.
+    const toInvoiceBillDetails = (o: Order): InvoiceBillDetails => ({
+        invoiceNum: o.orderNumber,
+        date: new Date(o.orderDate).toLocaleDateString('en-IN'),
+        time: new Date(o.orderDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+        customerName: o.customerName,
+        customerPhone: o.customerPhone,
+        paymentMethod: o.paymentMethod,
+        total: Number(o.total || 0),
+        cart: (Array.isArray(o.items) ? (o.items as any[]) : []).map((item: any) => ({
+            productName: item.productName || 'Unknown Item',
+            qty: Number(item.quantity || 0),
+            price: Number(item.unitPrice || 0),
+            compareAtPrice: Number(item.mrp || item.compareAtPrice || 0),
+            hsnCode: item.hsnCode,
+            gst: resolveGstFromProduct(item.gst),
+        })),
+    });
+
+    const handlePrintBill = () => {
+        if (!order) return;
+        setIsPrinting(true);
+        document.body.classList.add('is-printing-delivery-bill');
+        setTimeout(() => {
+            window.print();
+            setTimeout(() => {
+                document.body.classList.remove('is-printing-delivery-bill');
+                setIsPrinting(false);
+            }, 3000);
+        }, 500);
     };
 
     const handleCancel = async () => {
@@ -181,9 +233,31 @@ export default function AdminOrderDeliveryDetail() {
                         </div>
                     ))}
                 </div>
-                <div className="border-t border-neutral-200 mt-3 pt-3 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-neutral-900">Total</p>
-                    <p className="text-sm font-semibold text-neutral-900">₹{order.total?.toFixed(0)}</p>
+                <div className="border-t border-neutral-200 mt-3 pt-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-sm text-neutral-600">
+                        <p>Subtotal</p>
+                        <p>₹{order.subtotal?.toFixed(0)}</p>
+                    </div>
+                    {!!order.platformFee && (
+                        <div className="flex items-center justify-between text-sm text-neutral-600">
+                            <p>Platform Fee</p>
+                            <p>₹{order.platformFee.toFixed(0)}</p>
+                        </div>
+                    )}
+                    <div className="flex items-center justify-between text-sm text-neutral-600">
+                        <p>Delivery Charge</p>
+                        <p>₹{(order.shipping || 0).toFixed(0)}</p>
+                    </div>
+                    {!!order.discount && (
+                        <div className="flex items-center justify-between text-sm text-green-700">
+                            <p>Discount</p>
+                            <p>- ₹{order.discount.toFixed(0)}</p>
+                        </div>
+                    )}
+                    <div className="flex items-center justify-between pt-1.5 border-t border-neutral-200">
+                        <p className="text-sm font-semibold text-neutral-900">Total</p>
+                        <p className="text-sm font-semibold text-neutral-900">₹{order.total?.toFixed(0)}</p>
+                    </div>
                 </div>
             </div>
 
@@ -223,6 +297,40 @@ export default function AdminOrderDeliveryDetail() {
                     <img src={qrDataUrl} alt="Bill QR code" className="w-32 h-32" loading="lazy" decoding="async" />
                 </div>
             )}
+
+            <div className="bg-white rounded-xl border border-neutral-200 p-5 mb-4">
+                <h2 className="text-sm font-semibold text-neutral-900 mb-3">Print Bill</h2>
+                <div className="flex items-center gap-2 mb-3">
+                    <button
+                        onClick={() => setPrintFormat('simple')}
+                        className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border ${printFormat === 'simple'
+                            ? 'border-[var(--primary-color)] bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]'
+                            : 'border-neutral-200 text-neutral-600'
+                            }`}
+                    >
+                        Simple Format
+                    </button>
+                    <button
+                        onClick={() => setPrintFormat('gst')}
+                        className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border ${printFormat === 'gst'
+                            ? 'border-[var(--primary-color)] bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]'
+                            : 'border-neutral-200 text-neutral-600'
+                            }`}
+                    >
+                        GST Format
+                    </button>
+                </div>
+                <button
+                    onClick={handlePrintBill}
+                    disabled={isPrinting}
+                    className="w-full px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg disabled:opacity-60"
+                >
+                    {isPrinting ? 'Preparing...' : 'Print Bill'}
+                </button>
+                <p className="text-[11px] text-neutral-400 mt-2">
+                    Prints using the header/footer from Bill Settings, with the delivery QR attached so the delivery partner can scan it to complete this order.
+                </p>
+            </div>
 
             {order.orderChannel === 'WalkIn' ? (
                 <p className="text-xs text-neutral-500 text-center pb-4">
@@ -268,7 +376,60 @@ export default function AdminOrderDeliveryDetail() {
                 onClose={() => setShowDispatchSheet(false)}
                 onDispatch={handleDispatch}
                 submitting={submitting}
+                initialDeliveryCharge={order.shipping}
             />
+
+            <style dangerouslySetInnerHTML={{ __html: `
+                @media print {
+                  @page { margin: 0; size: auto; }
+                  html, body {
+                    height: auto !important;
+                    overflow: visible !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background: white !important;
+                  }
+                  body.is-printing-delivery-bill > *:not(.delivery-bill-print-wrapper) {
+                    display: none !important;
+                    visibility: hidden !important;
+                    height: 0 !important;
+                    overflow: hidden !important;
+                  }
+                  body.is-printing-delivery-bill .delivery-bill-print-wrapper {
+                    display: block !important;
+                    visibility: visible !important;
+                    position: absolute !important;
+                    top: 0 !important;
+                    left: 0 !important;
+                    width: 100% !important;
+                    background: white !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    z-index: 999999 !important;
+                  }
+                  body.is-printing-delivery-bill .delivery-bill-print-wrapper * {
+                    visibility: visible !important;
+                  }
+                  body.is-printing-delivery-bill .delivery-bill-print-wrapper table { width: 100%; }
+                }
+            ` }} />
+
+            {isPrinting && order && createPortal(
+                <div className="hidden delivery-bill-print-wrapper bg-white p-0 m-0">
+                    {printFormat === 'simple' ? (
+                        <SimpleInvoice billDetails={toInvoiceBillDetails(order)} shopSettings={billSettings} />
+                    ) : (
+                        <GSTInvoice billDetails={toInvoiceBillDetails(order)} shopSettings={billSettings} />
+                    )}
+                    {qrDataUrl && (
+                        <div className="flex flex-col items-center py-4">
+                            <img src={qrDataUrl} alt="Delivery QR" className="w-24 h-24 object-contain" />
+                            <p className="text-[10px] mt-1 text-black">Scan at delivery to confirm receipt</p>
+                        </div>
+                    )}
+                </div>,
+                document.body
+            )}
         </div>
     );
 }

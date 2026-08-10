@@ -747,6 +747,23 @@ const AdminPOSOrders = () => {
   const [returnConfirmCandidates, setReturnConfirmCandidates] = useState<Array<{ orderItemId: string; productName: string; reducedQty: number }> | null>(null);
   const [showModalBreakdown, setShowModalBreakdown] = useState(false);
   const [lastBillDetails, setLastBillDetails] = useState<{total: number, invoiceNum: string, date: string, time: string, cart: CartItem[], isPaid: boolean, isQuotation?: boolean, quotationEntry?: PurchaseEntryRecord, paymentMethod?: string, isEdit?: boolean, orderId?: string, deliveryQrToken?: string, customerName?: string, customerPhone?: string, subtotal?: number, discountAmount?: number, deliveryCharge?: number, salesPersonName?: string, isPartialPayment?: boolean, amountPaid?: number} | null>(null);
+  const [deliveryQrImage, setDeliveryQrImage] = useState<string | null>(null);
+
+  // Render the delivery-completion QR on the printed bill so the delivery
+  // boy has something to scan at drop-off (see completeDeliveryByScan).
+  useEffect(() => {
+    const orderId = lastBillDetails?.orderId;
+    const token = lastBillDetails?.deliveryQrToken;
+    if (!orderId || !token) {
+      setDeliveryQrImage(null);
+      return;
+    }
+    let cancelled = false;
+    generateBillQrDataUrl(orderId, token).then((dataUrl) => {
+      if (!cancelled) setDeliveryQrImage(dataUrl);
+    });
+    return () => { cancelled = true; };
+  }, [lastBillDetails?.orderId, lastBillDetails?.deliveryQrToken]);
 
   const captureBillCustomerFields = () => ({
     customerName: selectedCustomer?.name || customerSearch?.trim() || 'Walk-in Customer',
@@ -6786,6 +6803,13 @@ const AdminPOSOrders = () => {
                   {posBillSettings?.qrCode && (
                       <div className="mt-4 flex justify-center">
                           <img src={posBillSettings.qrCode} alt="QR" className="w-24 h-24 object-contain" style={{ WebkitPrintColorAdjust: 'exact' }} loading="lazy" decoding="async" />
+                      </div>
+                  )}
+
+                  {deliveryQrImage && (
+                      <div className="mt-4 flex flex-col items-center">
+                          <img src={deliveryQrImage} alt="Delivery QR" className="w-24 h-24 object-contain" style={{ WebkitPrintColorAdjust: 'exact' }} loading="lazy" decoding="async" />
+                          <p className="text-[9px] mt-1">Scan at delivery to confirm receipt</p>
                       </div>
                   )}
               </div>

@@ -155,6 +155,26 @@ export const getEarningsHistory = async () => {
     }
 };
 
+export interface EarningsDetailRow {
+    id: string;
+    orderId?: string;
+    orderNumber?: string;
+    deliveredAt?: string;
+    commissionType?: 'Percentage' | 'Fixed';
+    commissionRate?: number;
+    commissionBasisAmount?: number;
+    commissionAmount: number;
+}
+
+export const getEarningsDetail = async (params?: { page?: number; limit?: number }) => {
+    try {
+        const response = await api.get(`${BASE_URL}/earnings/detail`, { params });
+        return response.data as { data: EarningsDetailRow[]; pagination: { page: number; limit: number; total: number; pages: number } };
+    } catch (error) {
+        throw handleApiError(error);
+    }
+};
+
 // --- Profile ---
 export const getDeliveryProfile = async () => {
     try {

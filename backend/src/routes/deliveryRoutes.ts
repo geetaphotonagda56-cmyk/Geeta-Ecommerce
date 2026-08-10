@@ -43,5 +43,6 @@ router.put("/return-tasks/:id/status", deliveryOrderController.updateReturnTaskS
 
 // Earnings
 router.get("/earnings", deliveryEarningController.getEarningsHistory);
+router.get("/earnings/detail", deliveryEarningController.getEarningsDetail);
 
 export default router;

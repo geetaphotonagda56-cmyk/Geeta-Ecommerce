@@ -1212,6 +1212,49 @@ export default function OrderDetail() {
           />
         </motion.div>
 
+        {/* Bill Details - full transparency on what the customer is charged for */}
+        <motion.div
+          className="bg-white rounded-xl shadow-sm overflow-hidden p-4"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.75 }}>
+          <div className="flex items-center gap-3 mb-3">
+            <ReceiptIcon className="w-5 h-5 text-gray-500" />
+            <p className="font-medium text-gray-900">Bill Details</p>
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center justify-between text-gray-600">
+              <span>Item Total</span>
+              <span>₹{Number(order.subtotal || 0).toFixed(2)}</span>
+            </div>
+            {!!order.fees?.platformFee && (
+              <div className="flex items-center justify-between text-gray-600">
+                <span>Platform Fee</span>
+                <span>₹{Number(order.fees.platformFee).toFixed(2)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between text-gray-600">
+              <span>Delivery Charge</span>
+              <span>
+                {order.fees?.deliveryFee ? `₹${Number(order.fees.deliveryFee).toFixed(2)}` : "Free"}
+              </span>
+            </div>
+            {!!order.discount && (
+              <div className="flex items-center justify-between text-[var(--customer-primary-dark)]">
+                <span>Discount {order.couponCode ? `(${order.couponCode})` : ""}</span>
+                <span>- ₹{Number(order.discount).toFixed(2)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between pt-2 mt-1 border-t border-dashed border-gray-200 font-semibold text-gray-900">
+              <span>Total Paid</span>
+              <span>₹{Number(order.totalAmount || 0).toFixed(2)}</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mt-3">
+            Payment method: {order.paymentMethod || "-"}
+          </p>
+        </motion.div>
+
         {/* Help Section */}
         <motion.div
           className="bg-white rounded-xl shadow-sm overflow-hidden"

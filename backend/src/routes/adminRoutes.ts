@@ -266,6 +266,10 @@ router.get(
   "/reports/delivery-performance",
   deliveryController.getDeliveryPerformanceReport
 );
+router.get(
+  "/reports/delivery-payout",
+  deliveryController.getDeliveryPayoutReport
+);
 
 // ==================== Return Request Routes ====================
 router.get("/return-requests", orderController.getReturnRequests);
