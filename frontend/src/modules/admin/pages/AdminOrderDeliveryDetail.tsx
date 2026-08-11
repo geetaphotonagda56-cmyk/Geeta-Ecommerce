@@ -18,6 +18,7 @@ import { InvoiceBillDetails } from '../../../utils/invoiceFormats';
 import { resolveGstFromProduct } from '../../../utils/gstUtils';
 import { SimpleInvoice } from '../components/SimpleInvoice';
 import { GSTInvoice } from '../components/GSTInvoice';
+import { ThermalInvoice } from '../components/ThermalInvoice';
 
 export default function AdminOrderDeliveryDetail() {
     const { id } = useParams<{ id: string }>();
@@ -30,15 +31,11 @@ export default function AdminOrderDeliveryDetail() {
     const [showDispatchSheet, setShowDispatchSheet] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [billSettings, setBillSettings] = useState<any>(null);
-    const [printFormat, setPrintFormat] = useState<'simple' | 'gst'>('simple');
     const [isPrinting, setIsPrinting] = useState(false);
 
     useEffect(() => {
         const settings = readAdminPosBillSettings();
         setBillSettings(settings);
-        if (settings?.invoiceFormat === 'gst' || settings?.invoiceFormat === 'simple') {
-            setPrintFormat(settings.invoiceFormat as 'simple' | 'gst');
-        }
     }, []);
 
     const fetchOrder = async () => {
@@ -107,7 +104,7 @@ export default function AdminOrderDeliveryDetail() {
         }
     };
 
-    // Maps this order into the shape SimpleInvoice/GSTInvoice expect.
+    // Maps this order into the shape ThermalInvoice/SimpleInvoice/GSTInvoice expect.
     const toInvoiceBillDetails = (o: Order): InvoiceBillDetails => ({
         invoiceNum: o.orderNumber,
         date: new Date(o.orderDate).toLocaleDateString('en-IN'),
@@ -116,6 +113,9 @@ export default function AdminOrderDeliveryDetail() {
         customerPhone: o.customerPhone,
         paymentMethod: o.paymentMethod,
         total: Number(o.total || 0),
+        subtotal: Number(o.subtotal || 0),
+        discountAmount: Number(o.discount || 0),
+        deliveryCharge: Number(o.shipping || 0),
         cart: (Array.isArray(o.items) ? (o.items as any[]) : []).map((item: any) => ({
             productName: item.productName || 'Unknown Item',
             qty: Number(item.quantity || 0),
@@ -300,26 +300,6 @@ export default function AdminOrderDeliveryDetail() {
 
             <div className="bg-white rounded-xl border border-neutral-200 p-5 mb-4">
                 <h2 className="text-sm font-semibold text-neutral-900 mb-3">Print Bill</h2>
-                <div className="flex items-center gap-2 mb-3">
-                    <button
-                        onClick={() => setPrintFormat('simple')}
-                        className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border ${printFormat === 'simple'
-                            ? 'border-[var(--primary-color)] bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]'
-                            : 'border-neutral-200 text-neutral-600'
-                            }`}
-                    >
-                        Simple Format
-                    </button>
-                    <button
-                        onClick={() => setPrintFormat('gst')}
-                        className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border ${printFormat === 'gst'
-                            ? 'border-[var(--primary-color)] bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]'
-                            : 'border-neutral-200 text-neutral-600'
-                            }`}
-                    >
-                        GST Format
-                    </button>
-                </div>
                 <button
                     onClick={handlePrintBill}
                     disabled={isPrinting}
@@ -328,7 +308,7 @@ export default function AdminOrderDeliveryDetail() {
                     {isPrinting ? 'Preparing...' : 'Print Bill'}
                 </button>
                 <p className="text-[11px] text-neutral-400 mt-2">
-                    Prints using the header/footer from Bill Settings, with the delivery QR attached so the delivery partner can scan it to complete this order.
+                    Prints in the same format as the POS bill (per Bill Settings), with the delivery QR attached so the delivery partner can scan it to complete this order.
                 </p>
             </div>
 
@@ -379,6 +359,9 @@ export default function AdminOrderDeliveryDetail() {
                 initialDeliveryCharge={order.shipping}
             />
 
+            {/* Print CSS mirrors AdminPOSOrders.tsx exactly, scoped to this
+                page's own wrapper class, so the printed layout is pixel-for-
+                pixel consistent with the POS bill. */}
             <style dangerouslySetInnerHTML={{ __html: `
                 @media print {
                   @page { margin: 0; size: auto; }
@@ -387,6 +370,7 @@ export default function AdminOrderDeliveryDetail() {
                     overflow: visible !important;
                     margin: 0 !important;
                     padding: 0 !important;
+                    font-family: 'Times New Roman', Times, serif !important;
                     background: white !important;
                   }
                   body.is-printing-delivery-bill > *:not(.delivery-bill-print-wrapper) {
@@ -409,17 +393,48 @@ export default function AdminOrderDeliveryDetail() {
                   }
                   body.is-printing-delivery-bill .delivery-bill-print-wrapper * {
                     visibility: visible !important;
+                    display: block;
                   }
-                  body.is-printing-delivery-bill .delivery-bill-print-wrapper table { width: 100%; }
+                  body.is-printing-delivery-bill .delivery-bill-print-wrapper .grid { display: grid !important; }
+                  body.is-printing-delivery-bill .delivery-bill-print-wrapper .flex { display: flex !important; }
+                  body.is-printing-delivery-bill .delivery-bill-print-wrapper table { display: table !important; width: 100%; }
+                  body.is-printing-delivery-bill .delivery-bill-print-wrapper thead { display: table-header-group !important; }
+                  body.is-printing-delivery-bill .delivery-bill-print-wrapper tbody { display: table-row-group !important; }
+                  body.is-printing-delivery-bill .delivery-bill-print-wrapper tr { display: table-row !important; }
+                  body.is-printing-delivery-bill .delivery-bill-print-wrapper th,
+                  body.is-printing-delivery-bill .delivery-bill-print-wrapper td { display: table-cell !important; }
+                  .thermal-invoice-container {
+                    width: 100% !important;
+                    margin: 0 !important;
+                    padding: 10px !important;
+                    box-sizing: border-box;
+                    background: white !important;
+                  }
+                  .thermal-invoice-container b,
+                  .thermal-invoice-container strong,
+                  .thermal-invoice-container .font-bold,
+                  .thermal-invoice-container .font-semibold,
+                  .thermal-invoice-container .font-black {
+                    font-weight: 900 !important;
+                    -webkit-text-stroke: 0.2px black;
+                  }
+                  .thermal-invoice-line-thick {
+                    border-bottom: 4px solid black !important;
+                    margin: 10px 0 !important;
+                  }
                 }
             ` }} />
 
             {isPrinting && order && createPortal(
                 <div className="hidden delivery-bill-print-wrapper bg-white p-0 m-0">
-                    {printFormat === 'simple' ? (
+                    {billSettings?.invoiceFormat === 'simple' ? (
                         <SimpleInvoice billDetails={toInvoiceBillDetails(order)} shopSettings={billSettings} />
-                    ) : (
+                    ) : billSettings?.invoiceFormat === 'gst' ? (
                         <GSTInvoice billDetails={toInvoiceBillDetails(order)} shopSettings={billSettings} />
+                    ) : (
+                        // "thermal" (the primary/default format) - also the fallback
+                        // for devices that never saved Bill Settings at all.
+                        <ThermalInvoice billDetails={toInvoiceBillDetails(order)} shopSettings={billSettings} />
                     )}
                     {qrDataUrl && (
                         <div className="flex flex-col items-center py-4">

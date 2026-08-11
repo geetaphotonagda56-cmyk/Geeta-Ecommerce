@@ -6,6 +6,7 @@ import { uploadImage } from "../../../services/api/uploadService";
 import { ADMIN_POS_BILL_SETTINGS_KEY, ADMIN_POS_BILL_SETTINGS_UPDATED_EVENT } from "../../../utils/adminPosBillSettings";
 import { SimpleInvoice } from "../components/SimpleInvoice";
 import { GSTInvoice } from "../components/GSTInvoice";
+import { ThermalInvoice } from "../components/ThermalInvoice";
 import ImageCropperModal from "../../../components/ImageCropperModal";
 
 const SAMPLE_INVOICE_BILL = {
@@ -15,7 +16,10 @@ const SAMPLE_INVOICE_BILL = {
   customerName: "Walk-in Customer",
   customerPhone: "9876543210",
   paymentMethod: "Cash",
-  total: 342.5,
+  total: 379,
+  subtotal: 359,
+  discountAmount: 0,
+  deliveryCharge: 20,
   cart: [
     { productName: "Aashirvaad Atta 5kg", qty: 1, price: 249, compareAtPrice: 275, hsnCode: "1101", gst: 5 },
     { productName: "Amul Butter 100g", qty: 2, price: 55, compareAtPrice: 62, hsnCode: "0405", gst: 12 },
@@ -26,7 +30,7 @@ interface BillSettings {
   shopName: string;
   address: string;
   phone: string;
-  invoiceFormat?: "simple" | "gst";
+  invoiceFormat?: "thermal" | "simple" | "gst";
   notes?: {
       text: string;
       enabled: boolean;
@@ -58,7 +62,7 @@ const AdminPOSBillSettings = () => {
     shopName: "",
     address: "",
     phone: "",
-    invoiceFormat: "simple",
+    invoiceFormat: "thermal",
     notes: {
         text: "Thank you for your business",
         enabled: true
@@ -301,7 +305,19 @@ const AdminPOSBillSettings = () => {
           </h2>
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">Select the invoice format for your POS bills</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <button
+                onClick={() => setSettings(prev => ({...prev, invoiceFormat: "thermal"}))}
+                className={`p-4 rounded-2xl border-2 transition-all relative ${
+                  settings.invoiceFormat === "thermal" || !settings.invoiceFormat
+                    ? 'border-[var(--primary-color)] bg-[var(--primary-color)]/5'
+                    : 'border-neutral-200 bg-neutral-50/30 hover:border-neutral-300'
+                }`}
+              >
+                <span className="absolute -top-2 right-3 text-[9px] font-bold uppercase tracking-wider bg-[var(--primary-color)] text-white px-2 py-0.5 rounded-full">Primary</span>
+                <div className="text-sm font-bold text-neutral-800">Thermal / Estimated Bill</div>
+                <div className="text-xs text-neutral-500 mt-1">Full breakdown: Qty/MRP savings banner, Subtotal, Discount & Delivery Charge</div>
+              </button>
               <button
                 onClick={() => setSettings(prev => ({...prev, invoiceFormat: "simple"}))}
                 className={`p-4 rounded-2xl border-2 transition-all ${
@@ -329,15 +345,17 @@ const AdminPOSBillSettings = () => {
             {/* Live Preview */}
             <div className="pt-2">
               <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">
-                Preview {settings.invoiceFormat === "gst" ? "— GST Format" : "— Simple Format"}
+                Preview {settings.invoiceFormat === "gst" ? "— GST Format" : settings.invoiceFormat === "simple" ? "— Simple Format" : "— Thermal / Estimated Bill"}
               </p>
               <div className="rounded-2xl border border-neutral-200 bg-neutral-50/50 p-4 overflow-hidden">
                 <div className="mx-auto max-w-full overflow-auto rounded-xl bg-white shadow-sm border border-neutral-100" style={{ maxHeight: 420 }}>
                   <div style={{ transform: "scale(0.62)", transformOrigin: "top center", width: "161.3%", marginLeft: "-30.65%" }}>
                     {settings.invoiceFormat === "gst" ? (
                       <GSTInvoice billDetails={SAMPLE_INVOICE_BILL} shopSettings={settings} />
-                    ) : (
+                    ) : settings.invoiceFormat === "simple" ? (
                       <SimpleInvoice billDetails={SAMPLE_INVOICE_BILL} shopSettings={settings} />
+                    ) : (
+                      <ThermalInvoice billDetails={SAMPLE_INVOICE_BILL} shopSettings={settings} />
                     )}
                   </div>
                 </div>

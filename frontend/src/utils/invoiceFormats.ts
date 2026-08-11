@@ -1,4 +1,4 @@
-export type InvoiceFormat = "simple" | "gst";
+export type InvoiceFormat = "thermal" | "simple" | "gst";
 
 export interface InvoiceCartLine {
   productName: string;
@@ -7,6 +7,8 @@ export interface InvoiceCartLine {
   compareAtPrice?: number; // MRP
   hsnCode?: string;
   gst?: number; // GST percent, e.g. 5
+  warrantyType?: string; // Thermal-format-only, e.g. "Extended Warranty"
+  warrantyDuration?: string;
 }
 
 export interface InvoiceBillDetails {
@@ -18,6 +20,14 @@ export interface InvoiceBillDetails {
   paymentMethod?: string;
   cart: InvoiceCartLine[];
   total: number;
+  // Thermal-format-only charges breakdown - optional so Simple/GST formats,
+  // which don't render these, can keep passing a plain InvoiceBillDetails.
+  subtotal?: number;
+  discountAmount?: number;
+  deliveryCharge?: number;
+  salesPersonName?: string;
+  isPartialPayment?: boolean;
+  amountPaid?: number;
 }
 
 export interface InvoiceShopSettings {

@@ -45,6 +45,7 @@ import {
 } from '../../../utils/gstUtils';
 import { SimpleInvoice } from '../components/SimpleInvoice';
 import { GSTInvoice } from '../components/GSTInvoice';
+import { ThermalInvoice } from '../components/ThermalInvoice';
 import POSProductCard from '../components/POSProductCard';
 import DiscountChargesModal, { PosCharges, DEFAULT_POS_CHARGES, hasActiveCharges, computeFinalTotal, computeDiscountAmount, isPartialPaymentActive } from '../components/DiscountChargesModal';
 
@@ -6549,237 +6550,89 @@ const AdminPOSOrders = () => {
               .admin-order-print-wrapper th,
               .admin-order-print-wrapper td { display: table-cell !important; }
 
-              .receipt-container {
-                width: 100% !important; 
-                margin: 0 !important; 
+              .thermal-invoice-container {
+                width: 100% !important;
+                margin: 0 !important;
                 padding: 10px !important;
                 box-sizing: border-box;
                 background: white !important;
               }
-              
-              .receipt-container b, 
-              .receipt-container strong, 
-              .receipt-container .font-bold, 
-              .receipt-container .font-semibold, 
-              .receipt-container .font-black {
+
+              .thermal-invoice-container b,
+              .thermal-invoice-container strong,
+              .thermal-invoice-container .font-bold,
+              .thermal-invoice-container .font-semibold,
+              .thermal-invoice-container .font-black {
                 font-weight: 900 !important;
                 -webkit-text-stroke: 0.2px black;
               }
 
-              .receipt-line {
-                border-bottom: 2.5px solid black !important;
-                margin: 8px 0 !important;
-              }
-              .receipt-line-thick {
+              .thermal-invoice-line-thick {
                 border-bottom: 4px solid black !important;
                 margin: 10px 0 !important;
               }
             }
           ` }} />
-          {(posBillSettings?.invoiceFormat === 'simple' || posBillSettings?.invoiceFormat === 'gst') ? (
-            <div className="hidden admin-order-print-wrapper bg-white p-0 m-0">
-              {posBillSettings?.invoiceFormat === 'simple' ? (
-                <SimpleInvoice
-                  billDetails={{
-                    invoiceNum: lastBillDetails.invoiceNum,
-                    date: lastBillDetails.date,
-                    time: lastBillDetails.time,
-                    customerName: getBillCustomerDisplay(lastBillDetails).name,
-                    customerPhone: getBillCustomerDisplay(lastBillDetails).phone,
-                    paymentMethod: lastBillDetails.paymentMethod,
-                    total: lastBillDetails.total,
-                    cart: (lastBillDetails.cart || cart).map((item) => ({
-                      productName: item.productName,
-                      qty: item.qty,
-                      price: getEffectivePrice(item),
-                      compareAtPrice: item.compareAtPrice,
-                      hsnCode: (item as any).hsnCode,
-                      gst: (item as any).gst,
-                    })),
-                  }}
-                  shopSettings={posBillSettings}
-                />
-              ) : (
-                <GSTInvoice
-                  billDetails={{
-                    invoiceNum: lastBillDetails.invoiceNum,
-                    date: lastBillDetails.date,
-                    time: lastBillDetails.time,
-                    customerName: getBillCustomerDisplay(lastBillDetails).name,
-                    customerPhone: getBillCustomerDisplay(lastBillDetails).phone,
-                    paymentMethod: lastBillDetails.paymentMethod,
-                    total: lastBillDetails.total,
-                    cart: (lastBillDetails.cart || cart).map((item) => ({
-                      productName: item.productName,
-                      qty: item.qty,
-                      price: getEffectivePrice(item),
-                      compareAtPrice: item.compareAtPrice,
-                      hsnCode: (item as any).hsnCode,
-                      gst: (item as any).gst,
-                    })),
-                  }}
-                  shopSettings={posBillSettings}
-                />
-              )}
-            </div>
-          ) : (
-          <div className="hidden admin-order-print-wrapper bg-white p-0 m-0">
-          <div className="receipt-container text-black font-medium" style={{ fontFamily: "'Times New Roman', serif" }}>
-              {/* Header */}
-              <div className="text-left">
-                  <h1 className="text-3xl font-black uppercase">{posBillSettings?.shopName || 'GEETA'}</h1>
-                  <p className="text-base leading-tight whitespace-pre-wrap font-bold">{posBillSettings?.address || 'Q7WM+92M, Q7WM+92M, , Indore Division,\nNagda, Madhya Pradesh, India - 454001'}</p>
-                  <p className="text-base font-black">{posBillSettings?.phone || '7898111456'}</p>
-              </div>
+          {(() => {
+            const sharedBillDetails = {
+              invoiceNum: lastBillDetails.invoiceNum,
+              date: lastBillDetails.date,
+              time: lastBillDetails.time,
+              customerName: getBillCustomerDisplay(lastBillDetails).name,
+              customerPhone: getBillCustomerDisplay(lastBillDetails).phone,
+              paymentMethod: lastBillDetails.paymentMethod,
+              total: lastBillDetails.total,
+              cart: (lastBillDetails.cart || cart).map((item) => ({
+                productName: item.productName,
+                qty: item.qty,
+                price: getEffectivePrice(item),
+                compareAtPrice: item.compareAtPrice,
+                hsnCode: (item as any).hsnCode,
+                gst: (item as any).gst,
+                warrantyType: (item as any).warrantyType,
+                warrantyDuration: (item as any).warrantyDuration,
+              })),
+            };
 
-              <div className="receipt-line-thick"></div>
-
-              {/* Invoice Metadata */}
-              <div className="space-y-1 text-base">
-                  <div className="flex justify-between">
-                      <span className="font-bold">Invoice Number:</span>
-                      <span className="font-bold">{lastBillDetails?.invoiceNum}</span>
-                  </div>
-                  <div className="flex justify-between">
-                      <span className="font-bold">Invoice Date:</span>
-                      <span className="font-bold">{lastBillDetails?.date} {lastBillDetails?.time}</span>
-                  </div>
-                  <div className="flex justify-between">
-                      <span className="font-bold">Payment Status:</span>
-                      <span className="font-bold">{lastBillDetails?.paymentMethod || 'Cash'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                      <span className="font-bold">Customer Name:</span>
-                      <span className="font-bold">{getBillCustomerDisplay(lastBillDetails).name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                      <span className="font-bold">Mobile:</span>
-                      <span className="font-bold">{getBillCustomerDisplay(lastBillDetails).phone}</span>
-                  </div>
-              </div>
-
-              <div className="receipt-line-thick"></div>
-
-              <div className="text-center font-black text-base mb-1">Estimated Bill</div>
-
-              {/* Items Table Headers */}
-              <div className="grid grid-cols-12 gap-1 font-black text-base border-b-2 border-black pb-1">
-                  <div className="col-span-5">Item-name</div>
-                  <div className="col-span-2 text-center">Qty</div>
-                  <div className="col-span-2 text-right">MRP</div>
-                  <div className="col-span-1 text-right">Sp</div>
-                  <div className="col-span-2 text-right">Total</div>
-              </div>
-
-              {/* Items List */}
-              <div className="py-2 space-y-2">
-                  {(lastBillDetails?.cart || cart).map((item, idx) => {
-                      const sp = getEffectivePrice(item);
-                      const mrp = item.compareAtPrice || sp;
-                      const total = sp * item.qty;
-                      return (
-                       <div key={idx} className="grid grid-cols-12 gap-1 text-[15px] leading-tight font-bold">
-                           <div className="col-span-5 font-bold">({idx + 1}) {item.productName}</div>
-                           <div className="col-span-2 text-center">{item.qty}</div>
-                           <div className="col-span-2 text-right">{mrp > 0 ? formatAmount(mrp) : '-'}</div>
-                           <div className="col-span-1 text-right">{formatAmount(sp)}</div>
-                           <div className="col-span-2 text-right font-black">{formatAmount(total)}</div>
-
-                           
-                           {/* Warranty / Extra info if exists */}
-                           {(item as any).warrantyType && (item as any).warrantyType !== 'None' && (
-                               <div className="col-span-12 text-[10px] md:text-sm text-gray-600 pl-4">
-                                   {(item as any).warrantyType}: {(item as any).warrantyDuration}
-                               </div>
-                           )}
-                       </div>
-                   )})}
-              </div>
-
-              <div className="receipt-line-thick"></div>
-
-              {/* Summary Stats */}
-              {(() => {
-                  const items = lastBillDetails?.cart || cart;
-                  let tQty = 0;
-                  let tMRP = 0;
-                  items.forEach(item => {
-                      tQty += item.qty;
-                      const sp = getEffectivePrice(item);
-                      const itemMrp = item.compareAtPrice && item.compareAtPrice > sp ? item.compareAtPrice : sp;
-                      tMRP += itemMrp * item.qty;
-                  });
-                  const tBill = lastBillDetails?.total || calculateTotal();
-                  const tSavings = tMRP - tBill;
-                  const sPercent = tMRP > 0 ? ((tSavings / tMRP) * 100).toFixed(0) : "0";
-
-                  return (
-                      <div className="text-base">
-                          <div className="flex justify-between mb-1">
-                              <span className="font-bold">Total Qty.: {tQty}</span>
-                              <span className="font-black">Total MRP: Rs {formatAmount(tMRP)}</span>
-                          </div>
-
-                          
-                          {tSavings > 0 && (
-                               <div className="flex justify-between bg-gray-200 px-1 py-2 my-2 border-2 border-black" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                                   <span className="font-black text-[18px] uppercase tracking-tighter">YOU SAVED {sPercent}%</span>
-                                   <span className="font-black text-[18px]">{formatAmount(tSavings)}</span>
-                               </div>
-
-                           )}
-                      </div>
-                  );
-              })()}
-
-              <div className="receipt-line-thick"></div>
-
-              {lastBillDetails?.subtotal !== undefined && (
-                <div className="text-sm space-y-0.5 py-1">
-                  <div className="flex justify-between"><span>Subtotal</span><span>{formatAmount(lastBillDetails.subtotal)}</span></div>
-                  {!!lastBillDetails.discountAmount && (
-                    <div className="flex justify-between"><span>Discount</span><span>- {formatAmount(lastBillDetails.discountAmount)}</span></div>
-                  )}
-                  {!!lastBillDetails.deliveryCharge && (
-                    <div className="flex justify-between"><span>Delivery Charge</span><span>+ {formatAmount(lastBillDetails.deliveryCharge)}</span></div>
-                  )}
-                  {lastBillDetails.salesPersonName && (
-                    <div className="flex justify-between"><span>Salesman</span><span>{lastBillDetails.salesPersonName}</span></div>
-                  )}
+            if (posBillSettings?.invoiceFormat === 'simple') {
+              return (
+                <div className="hidden admin-order-print-wrapper bg-white p-0 m-0">
+                  <SimpleInvoice billDetails={sharedBillDetails} shopSettings={posBillSettings} />
                 </div>
-              )}
-
-              {/* Grand Total */}
-              <div className="flex justify-between font-black text-xl py-1 border-y border-black mt-1">
-                  <span>Total bill amount:</span>
-                  <span>{formatAmount(lastBillDetails?.total || 0)}</span>
-              </div>
-
-              {lastBillDetails?.isPartialPayment && (
-                <div className="flex justify-between font-bold text-sm py-1">
-                  <span>Paid {formatAmount(lastBillDetails.amountPaid || 0)} · Due</span>
-                  <span>{formatAmount(Math.max(0, lastBillDetails.total - (lastBillDetails.amountPaid || 0)))}</span>
+              );
+            }
+            if (posBillSettings?.invoiceFormat === 'gst') {
+              return (
+                <div className="hidden admin-order-print-wrapper bg-white p-0 m-0">
+                  <GSTInvoice billDetails={sharedBillDetails} shopSettings={posBillSettings} />
                 </div>
-              )}
-
-
-              {/* Footer / Notes */}
-              <div className="text-center mt-6 space-y-2">
-                  <p className="text-sm font-bold">।। आपका विश्वास हमारी ताकत ।।</p>
-                  
-                  {((posBillSettings?.notes?.enabled && posBillSettings?.notes?.text) || (config?.invoiceSettings?.notes?.enabled && config?.invoiceSettings?.notes?.text)) && (
-                      <p className="text-[10px] md:text-sm whitespace-pre-wrap">{posBillSettings?.notes?.enabled ? posBillSettings?.notes?.text : config?.invoiceSettings?.notes?.text}</p>
-                  )}
-
-                  {posBillSettings?.qrCode && (
-                      <div className="mt-4 flex justify-center">
-                          <img src={posBillSettings.qrCode} alt="QR" className="w-24 h-24 object-contain" style={{ WebkitPrintColorAdjust: 'exact' }} loading="lazy" decoding="async" />
-                      </div>
-                  )}
+              );
+            }
+            // "thermal" (the primary/default format) - also the fallback for
+            // devices that never saved Bill Settings at all.
+            return (
+              <div className="hidden admin-order-print-wrapper bg-white p-0 m-0">
+                <ThermalInvoice
+                  billDetails={{
+                    ...sharedBillDetails,
+                    subtotal: lastBillDetails.subtotal,
+                    discountAmount: lastBillDetails.discountAmount,
+                    deliveryCharge: lastBillDetails.deliveryCharge,
+                    salesPersonName: lastBillDetails.salesPersonName,
+                    isPartialPayment: lastBillDetails.isPartialPayment,
+                    amountPaid: lastBillDetails.amountPaid,
+                  }}
+                  shopSettings={{
+                    ...posBillSettings,
+                    notes: {
+                      enabled: !!((posBillSettings?.notes?.enabled && posBillSettings?.notes?.text) || (config?.invoiceSettings?.notes?.enabled && config?.invoiceSettings?.notes?.text)),
+                      text: posBillSettings?.notes?.enabled ? posBillSettings?.notes?.text : config?.invoiceSettings?.notes?.text,
+                    },
+                  }}
+                />
               </div>
-          </div>
-      </div>
-          )}
+            );
+          })()}
       </>,
       document.body
   )}
