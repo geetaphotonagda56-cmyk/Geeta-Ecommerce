@@ -6,11 +6,11 @@ import autoTable from 'jspdf-autotable';
 import { useToast } from '../../../context/ToastContext';
 import { readSellerPosBillSettings, SELLER_BILL_SETTINGS_KEY, SELLER_BILL_SETTINGS_UPDATED_EVENT } from "../../../utils/sellerPosBillSettings";
 import { useAppContext } from '../../../context/AppContext';
-import { formatAmount } from '../../../utils/priceUtils';
 import { resolveGstFromProduct } from '../../../utils/gstUtils';
 import { InvoiceBillDetails } from '../../../utils/invoiceFormats';
 import { SimpleInvoice } from '../../admin/components/SimpleInvoice';
 import { GSTInvoice } from '../../admin/components/GSTInvoice';
+import { ThermalInvoice } from '../../admin/components/ThermalInvoice';
 
 
 const FiTrendingUp = ({ className }: { className?: string }) => (
@@ -282,8 +282,7 @@ const SellerPOSReport = () => {
 
 
 
-    // Maps a raw POS order into the shape SimpleInvoice/GSTInvoice expect,
-    // for the "Simple Format" / "GST Format" print options chosen in Bill Settings.
+    // Maps a raw POS order into the shape SimpleInvoice/GSTInvoice/ThermalInvoice expect.
     const toInvoiceBillDetails = (order: any): InvoiceBillDetails => ({
         invoiceNum: order.orderNumber || order._id.slice(-6).toUpperCase(),
         date: new Date(order.orderDate || order.createdAt).toLocaleDateString('en-IN'),
@@ -292,6 +291,12 @@ const SellerPOSReport = () => {
         customerPhone: order.customerPhone,
         paymentMethod: order.paymentMethod,
         total: Number(order.total || 0),
+        subtotal: Number(order.subtotal || 0),
+        discountAmount: Number(order.discount || 0),
+        deliveryCharge: Number(order.shipping || 0),
+        salesPersonName: order.salesPerson?.name,
+        isPartialPayment: !!order.isPartialPayment,
+        amountPaid: Number(order.amountPaid || 0),
         cart: (order.items || []).map((item: any) => ({
             productName: item.productName || item.product?.productName || item.name || "Unknown Item",
             qty: Number(item.quantity || item.qty || 0),
@@ -299,6 +304,8 @@ const SellerPOSReport = () => {
             compareAtPrice: Number(item.mrp || item.compareAtPrice || 0),
             hsnCode: item.hsnCode,
             gst: resolveGstFromProduct(item.gst),
+            warrantyType: item.warrantyType,
+            warrantyDuration: item.warrantyDuration,
         })),
     });
 
@@ -1173,27 +1180,23 @@ const SellerPOSReport = () => {
                   body.is-printing-seller-report .seller-report-print-wrapper th,
                   body.is-printing-seller-report .seller-report-print-wrapper td { display: table-cell !important; }
 
-                  body.is-printing-seller-report .receipt-container {
-                    width: 100% !important; 
-                    margin: 0 !important; 
+                  body.is-printing-seller-report .thermal-invoice-container {
+                    width: 100% !important;
+                    margin: 0 !important;
                     padding: 15px !important;
                     box-sizing: border-box;
                     font-weight: 600 !important;
                   }
-                  body.is-printing-seller-report .receipt-container b, 
-                  body.is-printing-seller-report .receipt-container strong, 
-                  body.is-printing-seller-report .receipt-container .font-bold, 
-                  body.is-printing-seller-report .receipt-container .font-semibold, 
-                  body.is-printing-seller-report .receipt-container .font-black {
+                  body.is-printing-seller-report .thermal-invoice-container b,
+                  body.is-printing-seller-report .thermal-invoice-container strong,
+                  body.is-printing-seller-report .thermal-invoice-container .font-bold,
+                  body.is-printing-seller-report .thermal-invoice-container .font-semibold,
+                  body.is-printing-seller-report .thermal-invoice-container .font-black {
                     font-weight: 900 !important;
                     -webkit-text-stroke: 0.2px black;
                   }
 
-                  body.is-printing-seller-report .receipt-line {
-                    border-bottom: 2.5px solid black !important;
-                    margin: 8px 0 !important;
-                  }
-                  body.is-printing-seller-report .receipt-line-thick {
+                  body.is-printing-seller-report .thermal-invoice-line-thick {
                     border-bottom: 4px solid black !important;
                     margin: 10px 0 !important;
                   }
@@ -1202,148 +1205,29 @@ const SellerPOSReport = () => {
 
             {/* --- HIDDEN THERMAL RECEIPT (MOVED TO PORTAL FOR ISOLATION) --- */}
             {printOrder && createPortal(
-                (posBillSettings?.invoiceFormat === 'simple' || posBillSettings?.invoiceFormat === 'gst') ? (
-                <div className="hidden seller-report-print-wrapper bg-white p-0 m-0">
-                    {posBillSettings?.invoiceFormat === 'simple' ? (
+                posBillSettings?.invoiceFormat === 'simple' ? (
+                    <div className="hidden seller-report-print-wrapper bg-white p-0 m-0">
                         <SimpleInvoice billDetails={toInvoiceBillDetails(printOrder)} shopSettings={posBillSettings} />
-                    ) : (
-                        <GSTInvoice billDetails={toInvoiceBillDetails(printOrder)} shopSettings={posBillSettings} />
-                    )}
-                </div>
-                ) : (
-                <div className="hidden seller-report-print-wrapper bg-white p-0 m-0">
-                    <div className="receipt-container text-black font-medium" style={{ fontFamily: "'Times New Roman', serif" }}>
-                        {/* Header */}
-                        <div className="text-left">
-                            <h1 className="text-3xl font-black uppercase">{posBillSettings?.shopName || 'GEETA'}</h1>
-                            <p className="text-base leading-tight whitespace-pre-wrap font-bold">{posBillSettings?.address || 'Q7WM+92M, Q7WM+92M, , Indore Division,\nNagda, Madhya Pradesh, India - 454001'}</p>
-                            <p className="text-base font-black">{posBillSettings?.phone || '7898111456'}</p>
-                        </div>
-
-                        <div className="receipt-line-thick"></div>
-
-                        {/* Invoice Metadata */}
-                        <div className="space-y-1 text-base">
-                            <div className="flex justify-between">
-                                <span className="font-bold">Invoice Number:</span>
-                                <span className="font-bold">{printOrder.orderNumber || printOrder._id.slice(-6).toUpperCase()}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="font-bold">Invoice Date:</span>
-                                <span className="font-bold">
-                                    {new Date(printOrder.orderDate || printOrder.createdAt).toLocaleDateString('en-IN')} {new Date(printOrder.orderDate || printOrder.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="font-bold">Payment Status:</span>
-                                <span className="font-bold">{printOrder.paymentMethod || 'Cash'}</span>
-                            </div>
-                        </div>
-
-                        <div className="receipt-line-thick"></div>
-
-                        <div className="text-center font-black text-base mb-1">Estimated Bill</div>
-
-                        {/* Items Table Headers */}
-                        <div className="grid grid-cols-12 gap-1 font-black text-base border-b-2 border-black pb-1">
-                            <div className="col-span-5">Item-name</div>
-                            <div className="col-span-2 text-center">Qty</div>
-                            <div className="col-span-2 text-right">MRP</div>
-                            <div className="col-span-1 text-right">Sp</div>
-                            <div className="col-span-2 text-right">Total</div>
-                        </div>
-
-                        {/* Items List */}
-                        <div className="py-2 space-y-2">
-                            {(printOrder.items || []).map((item: any, idx: number) => {
-                                const sp = Number(item.unitPrice || item.price || 0);
-                                const mrp = Number(item.mrp || item.compareAtPrice || sp);
-                                const qty = Number(item.quantity || item.qty || 0);
-                                const total = sp * qty;
-                                const itemName = item.productName || item.product?.productName || item.name || "Unknown Item";
-                                
-                                return (
-                                    <div key={idx} className="grid grid-cols-12 gap-1 text-[15px] leading-tight font-bold">
-                                        <div className="col-span-5 font-bold">
-                                            <div>({idx + 1}) {itemName}</div>
-                                            {item.warrantyType && item.warrantyType !== 'None' && (
-                                                <div className="text-[12px] text-gray-700 italic">
-                                                    {item.warrantyType}: {item.warrantyDuration}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="col-span-2 text-center font-bold">{qty}</div>
-                                        <div className="col-span-2 text-right font-bold">{mrp > 0 ? formatAmount(mrp) : '-'}</div>
-                                        <div className="col-span-1 text-right font-bold">{formatAmount(sp)}</div>
-                                        <div className="col-span-2 text-right font-black">{formatAmount(total)}</div>
-                                    </div>
-
-                                )
-                            })}
-                        </div>
-
-                        <div className="receipt-line-thick"></div>
-
-                        {/* Summary Stats */}
-                        {(() => {
-                            const items = printOrder.items || [];
-                            let tQty = 0;
-                            let tMRP = 0;
-                            items.forEach((item: any) => {
-                                const qty = Number(item.quantity || item.qty || 0);
-                                const sp = Number(item.unitPrice || item.price || 0);
-                                const itemMrp = Number(item.mrp || item.compareAtPrice || sp);
-                                tQty += qty;
-                                tMRP += itemMrp * qty;
-                            });
-                            const tBill = Number(printOrder.total || 0);
-                            const tSavings = tMRP - tBill;
-                            const sPercent = tMRP > 0 ? ((tSavings / tMRP) * 100).toFixed(0) : "0";
-
-                            return (
-                                <div className="text-base">
-                                    <div className="flex justify-between mb-1">
-                                        <span className="font-bold">Total Qty.: {tQty}</span>
-                                        <span className="font-black">Total MRP: Rs {formatAmount(tMRP)}</span>
-                                    </div>
-
-                                    
-                                    {tSavings > 0 && (
-                                         <div className="flex justify-between bg-gray-200 px-1 py-2 my-2 border-2 border-black" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                                             <span className="font-black text-[18px] uppercase tracking-tighter">YOU SAVED {sPercent}%</span>
-                                             <span className="font-black text-[18px]">{formatAmount(tSavings)}</span>
-                                         </div>
-
-                                     )}
-                                </div>
-                            );
-                        })()}
-
-                        <div className="receipt-line-thick"></div>
-
-                        {/* Grand Total */}
-                        <div className="flex justify-between font-black text-xl py-1 border-y border-black mt-1">
-                            <span>Total bill amount:</span>
-                            <span>{formatAmount(printOrder.total || 0)}</span>
-                        </div>
-
-
-                        {/* Footer / Notes */}
-                        <div className="text-center mt-6 space-y-2">
-                            <p className="text-sm font-bold">।। आपका विश्वास हमारी ताकत ।।</p>
-                            
-                            {((posBillSettings?.notes?.enabled && posBillSettings?.notes?.text) || (config?.invoiceSettings?.notes?.enabled && config?.invoiceSettings?.notes?.text)) && (
-                                <p className="text-[10px] whitespace-pre-wrap">{posBillSettings?.notes?.enabled ? posBillSettings?.notes?.text : config?.invoiceSettings?.notes?.text}</p>
-                            )}
-
-                            {posBillSettings?.qrCode && (
-                                <div className="mt-4 flex justify-center">
-                                    <img src={posBillSettings.qrCode} alt="QR" className="w-24 h-24 object-contain" style={{ WebkitPrintColorAdjust: 'exact' }} loading="lazy" decoding="async" />
-                                </div>
-                            )}
-                        </div>
                     </div>
-                </div>
+                ) : posBillSettings?.invoiceFormat === 'gst' ? (
+                    <div className="hidden seller-report-print-wrapper bg-white p-0 m-0">
+                        <GSTInvoice billDetails={toInvoiceBillDetails(printOrder)} shopSettings={posBillSettings} />
+                    </div>
+                ) : (
+                    // "thermal" (the primary/default format) - also the fallback for
+                    // devices that never saved Bill Settings at all.
+                    <div className="hidden seller-report-print-wrapper bg-white p-0 m-0">
+                        <ThermalInvoice
+                            billDetails={toInvoiceBillDetails(printOrder)}
+                            shopSettings={{
+                                ...posBillSettings,
+                                notes: {
+                                    enabled: !!((posBillSettings?.notes?.enabled && posBillSettings?.notes?.text) || (config?.invoiceSettings?.notes?.enabled && config?.invoiceSettings?.notes?.text)),
+                                    text: posBillSettings?.notes?.enabled ? posBillSettings?.notes?.text : config?.invoiceSettings?.notes?.text,
+                                },
+                            }}
+                        />
+                    </div>
                 ),
                 document.body
             )}

@@ -188,10 +188,17 @@ video {
    context/LanguageContext.tsx) - hide all of its default chrome so the app
    keeps its own UI instead of Google's banner/frame/highlighting. */
 #google_translate_element,
+body > .skiptranslate,
 .goog-te-banner-frame,
+iframe.goog-te-banner-frame,
+.goog-te-balloon-frame,
+iframe.goog-te-balloon-frame,
+.goog-te-ftab,
+.goog-te-menu-frame,
 .goog-tooltip,
 .goog-tooltip:hover {
   display: none !important;
+  visibility: hidden !important;
 }
 body {
   top: 0 !important;
