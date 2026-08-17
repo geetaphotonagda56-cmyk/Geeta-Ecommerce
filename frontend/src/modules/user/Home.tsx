@@ -17,7 +17,6 @@ import { getCachedHomeContent, getHomeContent } from "../../services/api/custome
 import { getHeaderCategoriesPublic } from "../../services/api/headerCategoryService";
 import { getCachedProducts, getProducts as getCustomerProducts } from "../../services/api/customerProductService";
 import { useLocation } from "../../hooks/useLocation";
-import PageLoader from "../../components/PageLoader";
 import { useThemeContext } from "../../context/ThemeContext";
 
 interface LazyProductGridProps {
@@ -100,7 +99,7 @@ export default function Home() {
   const contentRef = useRef<HTMLDivElement>(null);
   const limit = 30;
   const [currentPage, setCurrentPage] = useState(1);
-  const cachedHomeResponse = getCachedHomeContent(undefined, undefined, undefined);
+  const cachedHomeResponse = getCachedHomeContent();
   const cachedTabProductsResponse =
     activeTab && activeTab !== "all"
       ? getCachedProducts({
@@ -232,34 +231,55 @@ export default function Home() {
       }
     };
 
-    fetchData();
+    // Warm the per-tab caches so switching header categories is instant.
+    //
+    // This must never compete with the request the user is actually waiting
+    // on: firing preloads eagerly and in parallel is what made the API fall
+    // over under load. So wait for the main fetch to resolve, wait for the
+    // browser to go idle, then go one request at a time.
+    let cancelled = false;
 
-    // Preload PromoStrip data
     const preloadHeaderCategories = async () => {
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
         const headerCategories = await getHeaderCategoriesPublic(true);
-        const slugsToPreload = ['all', ...headerCategories.map(cat => cat.slug)];
-        const batchSize = 2;
-        for (let i = 0; i < slugsToPreload.length; i += batchSize) {
-          const batch = slugsToPreload.slice(i, i + batchSize);
-          await Promise.all(
-            batch.map(slug =>
-              getHomeContent(slug, location?.latitude, location?.longitude, true, 5 * 60 * 1000, true).catch(err => {
-                console.debug(`Failed to preload data for ${slug}:`, err);
-              })
-            )
+        if (cancelled) return;
+
+        for (const cat of headerCategories) {
+          if (cancelled) return;
+          // Skip anything already cached — nothing to warm.
+          if (getCachedHomeContent(cat.slug)) continue;
+          await getHomeContent(cat.slug, location?.latitude, location?.longitude, true, 5 * 60 * 1000, true).catch(
+            (err) => console.debug(`Failed to preload data for ${cat.slug}:`, err)
           );
-          if (i + batchSize < slugsToPreload.length) {
-            await new Promise(resolve => setTimeout(resolve, 200));
-          }
+          // Breathe between requests so the backend never handles two of
+          // these at once on our behalf.
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
       } catch (error) {
         console.debug("Failed to preload header categories:", error);
       }
     };
 
-    preloadHeaderCategories();
+    const idle = (cb: () => void) =>
+      'requestIdleCallback' in window
+        ? (window as any).requestIdleCallback(cb, { timeout: 5000 })
+        : setTimeout(cb, 3000);
+
+    let idleHandle: any;
+    fetchData().then(() => {
+      if (cancelled) return;
+      idleHandle = idle(() => {
+        if (!cancelled) preloadHeaderCategories();
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      if (idleHandle !== undefined) {
+        if ('cancelIdleCallback' in window) (window as any).cancelIdleCallback(idleHandle);
+        else clearTimeout(idleHandle);
+      }
+    };
     // Re-run once geolocation resolves (it's async and often unavailable on
     // first mount) so home sections get real nearbySellerIds instead of
     // permanently marking every product "Out of Range".
@@ -531,10 +551,6 @@ export default function Home() {
     [activeTab, products, tabProducts]
   );
 
-  if (loading && !products.length) {
-    return <PageLoader />;
-  }
-
   if (error && !loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
@@ -573,7 +589,22 @@ export default function Home() {
       <ExploreOurRange />
 
       {/* LOWEST PRICES EVER Section */}
-      <LowestPricesEver activeTab={activeTab} products={homeData.lowestPrices} />
+      {loading && (!homeData.lowestPrices || homeData.lowestPrices.length === 0) ? (
+        <div className="px-4 py-4">
+          <div className="h-6 w-56 mx-auto rounded bg-neutral-100 animate-pulse mb-3" />
+          <div className="flex gap-2 overflow-x-hidden">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={`lpe-skel-${i}`} className="flex-shrink-0 w-[140px] rounded-xl border border-neutral-200 bg-white p-2 animate-pulse">
+                <div className="aspect-square w-full rounded-lg bg-neutral-100" />
+                <div className="mt-2 h-3 w-4/5 rounded bg-neutral-100" />
+                <div className="mt-1.5 h-3 w-2/3 rounded bg-neutral-100" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <LowestPricesEver activeTab={activeTab} products={homeData.lowestPrices} />
+      )}
 
       {/* FLASH DEAL Section - New addition */}
       {/* Moved inside main content wrapper to respect layout flow and negative margins */}
@@ -614,6 +645,19 @@ export default function Home() {
                 viewAllLink="/bestsellers"
               />
             </div>
+        )}
+        {activeTab === "all" && loading && (!homeData.bestsellers || homeData.bestsellers.length === 0) && (
+          <div className="mt-2 md:mt-4 px-4 md:px-6 lg:px-8">
+            <div className="h-5 w-32 rounded bg-neutral-100 animate-pulse mb-3" />
+            <div className="grid grid-cols-3 gap-2 md:gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={`bestseller-skel-${i}`} className="rounded-xl border border-neutral-200 bg-white p-2 animate-pulse">
+                  <div className="aspect-square w-full rounded-lg bg-neutral-100" />
+                  <div className="mt-2 h-3 w-3/4 rounded bg-neutral-100" />
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Deal of the Day Section */}
@@ -678,6 +722,19 @@ export default function Home() {
         {activeTab === "all" && (
           <>
             {/* Dynamic Home Sections - Render sections created by admin */}
+            {loading && (!homeData.homeSections || homeData.homeSections.length === 0) && (
+              <div className="mt-6 mb-6 md:mt-8 md:mb-8 px-4 md:px-6 lg:px-8">
+                <div className="h-5 w-40 rounded bg-neutral-100 animate-pulse mb-3" />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={`section-skel-${i}`} className="rounded-xl border border-neutral-200 bg-white p-2 animate-pulse">
+                      <div className="aspect-square w-full rounded-lg bg-neutral-100" />
+                      <div className="mt-2 h-3 w-3/4 rounded bg-neutral-100" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {homeData.homeSections && homeData.homeSections.length > 0 && (
               <>
                 {homeData.homeSections.map((section: any) => {
@@ -755,7 +812,14 @@ export default function Home() {
               </div>
               <div className="px-4 md:px-6 lg:px-8">
                 <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 md:gap-4">
-                  {(homeData.shops || []).map((tile: any) => {
+                  {loading && (!homeData.shops || homeData.shops.length === 0)
+                    ? Array.from({ length: 8 }).map((_, i) => (
+                        <div key={`shop-skel-${i}`} className="flex flex-col">
+                          <div className="w-full h-20 rounded-2xl bg-neutral-100 animate-pulse" />
+                          <div className="mt-1.5 h-2.5 w-3/4 mx-auto rounded bg-neutral-100 animate-pulse" />
+                        </div>
+                      ))
+                    : (homeData.shops || []).map((tile: any) => {
                     const hasImages =
                       tile.image ||
                       (tile.productImages &&

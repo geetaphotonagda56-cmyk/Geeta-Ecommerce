@@ -22,6 +22,7 @@ const BRAND = {
 export default function DealOfTheDay() {
   const navigate = useNavigate();
   const [dealProducts, setDealProducts] = useState<Product[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,6 +65,8 @@ export default function DealOfTheDay() {
 
       } catch (err) {
         console.error("Failed to fetch deal of the day", err);
+      } finally {
+        setIsLoaded(true);
       }
     };
     fetchDealProducts();
@@ -89,6 +92,33 @@ export default function DealOfTheDay() {
 
     return () => clearInterval(interval);
   }, [dealProducts]);
+
+  if (!isLoaded) {
+    return (
+      <div className="px-4 md:px-6 lg:px-8 mb-6">
+        <div className="mb-4">
+          <BannerSlider position="Deal of the Day" />
+        </div>
+        <div
+          className="rounded-xl p-6 md:p-8 shadow-lg relative overflow-hidden flex flex-col gap-6"
+          style={{ background: `linear-gradient(to bottom, white, ${BRAND.tint})`, border: `1px solid ${BRAND.border}` }}
+        >
+          <div className="flex justify-between items-center z-10 border-b pb-4" style={{ borderColor: BRAND.border }}>
+            <div className="h-6 w-40 rounded bg-neutral-100 animate-pulse" />
+          </div>
+          <div className="flex overflow-x-hidden gap-6 py-2">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={`dotd-skel-${i}`} className="flex-none w-full md:w-[48%] lg:w-[40%] xl:w-[30%] bg-white rounded-xl p-6 shadow-md border flex flex-col items-center gap-4" style={{ borderColor: BRAND.border }}>
+                <div className="w-48 h-48 rounded-lg bg-neutral-100 animate-pulse" />
+                <div className="h-4 w-3/4 rounded bg-neutral-100 animate-pulse" />
+                <div className="h-4 w-1/2 rounded bg-neutral-100 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (dealProducts.length === 0) {
     return (

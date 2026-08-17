@@ -46,12 +46,18 @@ export default defineConfig({
     // Code splitting optimization
     rollupOptions: {
       output: {
+        // Only libraries the customer app actually needs on first paint are
+        // hand-partitioned. Charts (apexcharts/recharts) and maps
+        // (leaflet/google-maps) are admin- and seller-only, so they are left
+        // to Rollup's automatic per-route splitting.
+        //
+        // They used to be forced into named 'chart-vendor'/'map-vendor'
+        // chunks. That also swept up shared transitive helpers those
+        // libraries depend on, so a single helper import from eager code
+        // pulled both whole chunks (184 KB gz) into the critical path.
         manualChunks: {
-          // Vendor chunks
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'ui-vendor': ['framer-motion', 'gsap'],
-          'chart-vendor': ['apexcharts', 'react-apexcharts', 'recharts'],
-          'map-vendor': ['@react-google-maps/api', 'leaflet', 'react-leaflet'],
         },
       },
     },

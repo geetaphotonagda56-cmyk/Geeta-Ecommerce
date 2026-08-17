@@ -28,9 +28,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     };
 
     useEffect(() => {
-        if (!getCachedHeaderCategoriesPublic()) {
-            fetchHeaderCategories();
-        }
+        // Always revalidate on mount (see HomeHero.tsx for why: this guard
+        // used to be harmless when the cache was in-memory only, but now
+        // that header categories persist to sessionStorage, skipping the
+        // fetch here would permanently lock onto whatever was cached first).
+        fetchHeaderCategories();
 
         // Refresh when tab gets focus (Real-time update from Admin changes)
         window.addEventListener('focus', fetchHeaderCategories);

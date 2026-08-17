@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import FloatingCartPill from './FloatingCartPill';
@@ -103,7 +103,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const scrollContainer = mainRef.current;
     if (!scrollContainer) {
       return;
@@ -192,10 +192,25 @@ export default function AppLayout({ children }: AppLayoutProps) {
       restoreAttemptsRef.current = null;
     }
 
-    if (navigationType === 'POP' && historyRestore?.pageKey === pageKey) {
-      restoreScrollPosition();
-    } else {
-      resetToTop();
+    const isPop = navigationType === 'POP' && historyRestore?.pageKey === pageKey;
+    // When a page-card click (e.g. ProductCard) stashed a targeted restore,
+    // the destination page owns scrolling back to that exact item (see
+    // Home.tsx / Category.tsx). Doing our own coordinate-based restore at the
+    // same time fights it and produces a visible double-scroll "shuffle".
+    const isProductCardRestore = isPop && historyRestore?.source === 'product-card';
+
+    // AnimatePresence runs in "popLayout" mode: the outgoing page is popped
+    // out of document flow immediately (it keeps animating out visually, but
+    // no longer occupies space in `main`), so as soon as this effect runs,
+    // `main`'s layout already reflects the incoming page. That means it's
+    // safe to apply the scroll position synchronously, before paint, instead
+    // of waiting for any transition to finish.
+    if (!isProductCardRestore) {
+      if (isPop) {
+        restoreScrollPosition();
+      } else {
+        resetToTop();
+      }
     }
 
     scrollContainer.addEventListener('scroll', saveScrollPosition, { passive: true });
@@ -717,16 +732,25 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <main
             ref={mainRef}
             className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide pb-24 md:pb-8"
-            style={{ overflowAnchor: 'none' }}
+            style={{ overflowAnchor: 'none', position: 'relative' }}
           >
-            <AnimatePresence mode="wait" initial={false}>
+            {/*
+              popLayout: the incoming page mounts and starts animating in
+              immediately instead of waiting ~200ms for the outgoing page's
+              exit to finish first (mode="wait"). The outgoing page is popped
+              out of document flow right away (still fading out visually via
+              absolute positioning), so it can't affect the incoming page's
+              layout or scroll restoration. Requires `main` to be a
+              positioning context, hence position: relative above.
+            */}
+            <AnimatePresence mode="popLayout" initial={false}>
               <motion.div
                 key={location.pathname}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{
-                  duration: 0.2,
+                  duration: 0.05,
                   ease: "easeInOut"
                 }}
                 className="w-full max-w-full"

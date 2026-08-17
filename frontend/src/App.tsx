@@ -20,7 +20,6 @@ import LoadingSpinner from "./components/LoadingSpinner";
 import ErrorBoundary from "./components/ErrorBoundary";
 import RouteTransition from "./components/RouteTransition";
 import { useEffect } from "react";
-import { requestNotificationPermission, onMessageListener } from "./services/pushNotificationService";
 import { toast } from "react-hot-toast";
 
 // Critical routes - load immediately (Home, Cart, Checkout)
@@ -259,53 +258,56 @@ function NotificationHandler() {
   const { user, token: authToken } = useAuth();
 
   useEffect(() => {
-    // Request/Refresh permission on app load if user is logged in
-    const initNotifications = async () => {
-       if (user && authToken) {
-         // Map userType from AuthContext to expected type for fcm service
-         const type = user.userType?.toLowerCase() as 'customer' | 'seller' | 'delivery' | 'admin';
-         if (['customer', 'seller', 'delivery', 'admin'].includes(type)) {
-           console.log(`[FCM-DEBUG] App load: Refreshing token for ${type}`);
-           await requestNotificationPermission(type, authToken);
-         }
-       }
-    };
-    initNotifications();
+    if (!user || !authToken) return;
 
-    // Listen for foreground messages
-    const unsubscribe = onMessageListener((payload: any) => {
-      console.log('ðŸ”” [FCM-REALTIME] Foreground Notification:', {
-        title: payload?.notification?.title,
-        body: payload?.notification?.body,
-        data: payload?.data
-      });
+    const type = user.userType?.toLowerCase() as 'customer' | 'seller' | 'delivery' | 'admin';
+    if (!['customer', 'seller', 'delivery', 'admin'].includes(type)) return;
 
-      // 1. Show Toast for UI feedback
-      toast.success((payload?.notification?.title || 'Notification') + ": " + (payload?.notification?.body || ''), {
-        duration: 6000,
-        position: 'top-right',
-        icon: 'ðŸ””'
-      });
+    let unsubscribe: unknown;
+    let cancelled = false;
 
-      // 2. Show native browser notification as well for better visibility
-      if (Notification.permission === 'granted') {
-        try {
-          new Notification(payload.notification.title, {
-            body: payload.notification.body,
-            icon: '/notification-icon.png',
-            tag: 'geeta-notification' // Must match SW and Backend
-          });
-        } catch (err) {
-          console.error('[FCM-DEBUG] Error showing native notification:', err);
+    // Firebase is ~80 KB gz. Load it only after the browser is idle so it
+    // never competes with the first render or the home content request.
+    const idle = (cb: () => void) =>
+      'requestIdleCallback' in window
+        ? (window as any).requestIdleCallback(cb, { timeout: 3000 })
+        : setTimeout(cb, 2000);
+
+    const handle = idle(async () => {
+      const { requestNotificationPermission, onMessageListener } = await import(
+        './services/pushNotificationService'
+      );
+      if (cancelled) return;
+
+      await requestNotificationPermission(type, authToken);
+      if (cancelled) return;
+
+      unsubscribe = onMessageListener((payload: any) => {
+        toast.success((payload?.notification?.title || 'Notification') + ": " + (payload?.notification?.body || ''), {
+          duration: 6000,
+          position: 'top-right',
+          icon: 'ðŸ””'
+        });
+
+        if (Notification.permission === 'granted') {
+          try {
+            new Notification(payload.notification.title, {
+              body: payload.notification.body,
+              icon: '/notification-icon.png',
+              tag: 'geeta-notification' // Must match SW and Backend
+            });
+          } catch (err) {
+            console.error('[FCM-DEBUG] Error showing native notification:', err);
+          }
         }
-      }
+      });
     });
 
     return () => {
-      // Cleanup if the onMessage returns an unsubscribe function (standard Firebase practice)
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
+      cancelled = true;
+      if ('cancelIdleCallback' in window) (window as any).cancelIdleCallback(handle);
+      else clearTimeout(handle as number);
+      if (typeof unsubscribe === 'function') (unsubscribe as () => void)();
     };
   }, [user, authToken]);
 

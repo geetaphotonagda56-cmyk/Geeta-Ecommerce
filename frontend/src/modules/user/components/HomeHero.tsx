@@ -222,9 +222,14 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
         console.error('Failed to fetch header categories', error);
       }
     };
-    if (!cachedHeaderCategories.length) {
-      fetchHeaderCategories();
-    }
+    // Always revalidate on mount — getOrFetch resolves instantly when the
+    // cache is still fresh, so this costs nothing when there's nothing new.
+    // Skipping the fetch whenever any cached value existed used to be
+    // harmless (the cache was in-memory only, so it was always empty on a
+    // fresh load) but now that header categories persist to sessionStorage,
+    // that guard would permanently lock the tabs to whatever was cached
+    // first — including a stale or incomplete list — and never correct it.
+    fetchHeaderCategories();
   }, []);
 
   const { themeKey: currentThemeKey } = useThemeContext();

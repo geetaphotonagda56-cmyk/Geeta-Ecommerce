@@ -228,7 +228,20 @@ export default function FlashDealSection() {
 
         {/* RIGHT SIDE (Products) */}
         <div className="p-5 pt-0 md:p-6 md:flex-1 bg-white md:bg-neutral-50/30">
-            {products.length > 0 ? (
+            {!isLoaded ? (
+                <div className="flex overflow-x-hidden gap-4 pb-2 md:pb-0 md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 md:gap-4 h-full content-start">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={`flash-skel-${i}`} className="flex-none w-[260px] md:w-auto bg-white rounded-xl p-3 shadow-md border border-neutral-100 flex md:flex-col items-center gap-3 h-full">
+                            <div className="w-20 h-20 md:w-full md:h-40 flex-shrink-0 rounded-lg bg-neutral-100 animate-pulse" />
+                            <div className="flex-1 min-w-0 md:w-full space-y-2">
+                                <div className="h-3 w-full rounded bg-neutral-100 animate-pulse" />
+                                <div className="h-3 w-2/3 rounded bg-neutral-100 animate-pulse" />
+                                <div className="h-4 w-1/2 rounded bg-neutral-100 animate-pulse" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : products.length > 0 ? (
                 <div
                     ref={scrollContainerRef}
                     className="flex overflow-x-auto gap-4 scrollbar-hide pb-2 md:pb-0 md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 md:gap-4 md:overflow-visible h-full content-start"

@@ -20,6 +20,7 @@ const BRAND = {
 export default function FeaturedDeal() {
   const navigate = useNavigate();
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,6 +55,8 @@ export default function FeaturedDeal() {
 
       } catch (err) {
         console.error("Failed to fetch featured deals", err);
+      } finally {
+        setIsLoaded(true);
       }
     };
     fetchFeaturedProducts();
@@ -79,6 +82,33 @@ export default function FeaturedDeal() {
 
     return () => clearInterval(interval);
   }, [featuredProducts]);
+
+  if (!isLoaded) {
+    return (
+      <div className="px-4 md:px-6 lg:px-8 mb-6">
+        <div
+          className="rounded-xl p-4 md:p-6 shadow-sm relative overflow-hidden flex flex-col gap-4"
+          style={{ background: BRAND.tint, border: `1px solid ${BRAND.border}` }}
+        >
+          <div className="flex justify-between items-center z-10 border-b pb-3" style={{ borderColor: BRAND.border }}>
+            <div className="h-5 w-32 rounded bg-white/70 animate-pulse" />
+          </div>
+          <div className="flex overflow-x-hidden gap-4 py-2">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={`featured-skel-${i}`} className="flex-none w-[280px] md:w-[320px] bg-white rounded-xl p-3 shadow-sm border border-slate-100 flex items-center gap-4">
+                <div className="w-24 h-24 flex-shrink-0 rounded-lg bg-neutral-100 animate-pulse" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-full rounded bg-neutral-100 animate-pulse" />
+                  <div className="h-3 w-2/3 rounded bg-neutral-100 animate-pulse" />
+                  <div className="h-4 w-1/2 rounded bg-neutral-100 animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (featuredProducts.length === 0) return null;
 

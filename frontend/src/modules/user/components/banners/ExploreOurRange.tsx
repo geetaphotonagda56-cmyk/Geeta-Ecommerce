@@ -37,7 +37,23 @@ export default function ExploreOurRange() {
     };
   }, []);
 
-  if (loading || cards.length === 0) return null;
+  if (loading) {
+    return (
+      <div className="px-4 md:px-6 lg:px-8 pt-4 md:pt-6 pb-6 md:pb-8">
+        <div className="h-7 w-48 mx-auto rounded bg-neutral-100 animate-pulse mb-7 md:mb-9" />
+        <div className="grid grid-cols-3 gap-4 md:gap-7">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={`explore-skel-${i}`} className="flex flex-col items-center gap-3">
+              <div className="w-full aspect-square rounded-xl bg-neutral-100 animate-pulse" />
+              <div className="h-7 w-full rounded-lg bg-neutral-100 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (cards.length === 0) return null;
 
   // Builds a price-range slug like "under-200", "above-500", or
   // "range-100-500" - Search.tsx recognizes this format in the `q` param

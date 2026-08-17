@@ -13,6 +13,42 @@ class Cache {
   private cache: Map<string, CacheEntry<any>> = new Map();
   private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes default
 
+  // Requests that are currently computing a value, keyed the same as the
+  // cache. Without this, N concurrent misses all run the producer — that's
+  // how four simultaneous /customer/home requests took the API down.
+  private inFlight: Map<string, Promise<any>> = new Map();
+
+  /**
+   * Return the cached value, or compute it exactly once for all concurrent
+   * callers and cache the result.
+   */
+  async getOrSet<T>(
+    key: string,
+    producer: () => Promise<T>,
+    ttl: number = this.DEFAULT_TTL
+  ): Promise<T> {
+    const hit = this.get<T>(key);
+    if (hit !== null) return hit;
+
+    const existing = this.inFlight.get(key);
+    if (existing) return existing as Promise<T>;
+
+    const promise = producer()
+      .then((value) => {
+        this.set(key, value, ttl);
+        this.inFlight.delete(key);
+        return value;
+      })
+      .catch((err) => {
+        // Never cache failures, and never leave a poisoned in-flight entry.
+        this.inFlight.delete(key);
+        throw err;
+      });
+
+    this.inFlight.set(key, promise);
+    return promise;
+  }
+
   /**
    * Get cached data
    */

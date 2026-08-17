@@ -433,22 +433,27 @@ export const getProductById = async (req: Request, res: Response) => {
       });
     }
 
-    const product = await Product.findOne({
-      _id: id,
-      status: "Active",
-      publish: true,
-    })
-      .populate({
-        path: "category",
-        match: { status: "Active" }, // Ensure category is active
-        select: "name parentId status"
+    // Neither of these depends on the other's result, so fetch them together
+    // instead of paying for both round trips back to back.
+    const [product, settings] = await Promise.all([
+      Product.findOne({
+        _id: id,
+        status: "Active",
+        publish: true,
       })
-      .populate("subcategory", "name parentId")
-      .populate("brand", "name image")
-      .populate(
-        "seller",
-        "storeName city fssaiLicNo address location serviceRadiusKm email isEnabled category"
-      );
+        .populate({
+          path: "category",
+          match: { status: "Active" }, // Ensure category is active
+          select: "name parentId status"
+        })
+        .populate("subcategory", "name parentId")
+        .populate("brand", "name image")
+        .populate(
+          "seller",
+          "storeName city fssaiLicNo address location serviceRadiusKm email isEnabled category"
+        ),
+      AppSettings.findOne().lean(),
+    ]);
 
     if (!product || !product.category) { // If category is null due to match filter, hide product
       return res.status(404).json({
@@ -458,7 +463,6 @@ export const getProductById = async (req: Request, res: Response) => {
     }
 
     // Check Negative Stock Setting
-    const settings = await AppSettings.findOne().lean();
     const inventorySection = settings?.productDisplaySettings?.find(s => s.id === 'inventory');
     const negativeStockSoldOut = inventorySection?.fields?.find(f => f.id === 'negative_stock_sold_out')?.isEnabled;
 
@@ -483,6 +487,30 @@ export const getProductById = async (req: Request, res: Response) => {
     const userLat = latitude ? parseFloat(latitude as string) : null;
     const userLng = longitude ? parseFloat(longitude as string) : null;
     const seller = product.seller as any;
+    const hasValidLocation = !!(
+      userLat && userLng && !isNaN(userLat) && !isNaN(userLng)
+    );
+
+    // Nearby sellers and the admin-seller list are both used for the
+    // availability check below AND the similar-products filter further down.
+    // They don't depend on each other, so fetch them once, together, instead
+    // of scanning sellers twice per request (this endpoint used to call
+    // findSellersWithinRange a second time just for similar products).
+    // `.catch` keeps a failed admin lookup from taking down the whole
+    // request — it degrades to "no admin sellers" the same way the old
+    // try/catch fallback did.
+    const [nearbySellerIds, adminSellers] = hasValidLocation
+      ? await Promise.all([
+          findSellersWithinRange(userLat as number, userLng as number),
+          Seller.find({
+            $or: [
+              { email: "admin-store@geetastores.com" },
+              { category: "Admin" },
+              { storeName: { $regex: /Admin/i } }
+            ]
+          }).select("_id").catch(() => [] as any[]),
+        ])
+      : [[] as mongoose.Types.ObjectId[], [] as any[]];
 
     // Initialize availability flag
     let isAvailableAtLocation = false;
@@ -511,19 +539,11 @@ export const getProductById = async (req: Request, res: Response) => {
        isAvailableAtLocation = true;
     }
     // Otherwise check location availability if coordinates are provided
-    else if (
-      userLat &&
-      userLng &&
-      !isNaN(userLat) &&
-      !isNaN(userLng) &&
-      sellerId &&
-      seller?.location
-    ) {
-      const nearbySellerIds = await findSellersWithinRange(userLat, userLng);
+    else if (hasValidLocation && sellerId && seller?.location) {
       isAvailableAtLocation = nearbySellerIds.some(
         (id) => id.toString() === sellerId!.toString()
       );
-    } else if (!userLat || !userLng) {
+    } else if (!hasValidLocation) {
        // If user has no location set, assume available (browsing mode)
        // Or depends on business logic; here we default to false if location is mandatory,
        // but typically we allowed it above in getProducts warning.
@@ -533,11 +553,6 @@ export const getProductById = async (req: Request, res: Response) => {
        // However, to match the "WARNING: Location missing, showing all products" logic:
        isAvailableAtLocation = true;
     }
-
-    // Find similar products (by category)
-    // Filter by location
-
-
 
     // Find similar products (by category)
     // 2. Build the final query
@@ -570,7 +585,7 @@ export const getProductById = async (req: Request, res: Response) => {
       similarProductsQuery.subcategory = subId;
       similarProductsQuery.subSubCategory = { $in: [null, ""] };
       if (catId) similarProductsQuery.category = catId;
-    } 
+    }
     // Case 3: If no subcategory, show products from the same main category
     else if (catId) {
       similarProductsQuery.category = catId;
@@ -578,37 +593,12 @@ export const getProductById = async (req: Request, res: Response) => {
       similarProductsQuery.subSubCategory = { $in: [null, ""] };
     }
 
-    // Filter similar products by location
-    if (userLat && userLng && !isNaN(userLat) && !isNaN(userLng)) {
-      const nearbySellerIds = await findSellersWithinRange(userLat, userLng);
-
-      // Allow Admin seller IDs
-      try {
-        const adminSellers = await Seller.find({
-          $or: [
-            { email: "admin-store@geetastores.com" },
-            { category: "Admin" },
-            { storeName: { $regex: /Admin/i } }
-          ]
-        }).select("_id");
-        const adminSellerIds = adminSellers.map(s => s._id);
-
-        // Combine
-        const allowedIds = [...nearbySellerIds, ...adminSellerIds];
-
-         if (allowedIds.length > 0) {
-            similarProductsQuery.seller = { $in: allowedIds };
-         } else {
-             // No sellers nearby
-            similarProductsQuery.seller = { $in: [] };
-         }
-      } catch (e) {
-         // fallback
-         if (nearbySellerIds.length > 0) {
-            similarProductsQuery.seller = { $in: nearbySellerIds };
-         }
-      }
-
+    // Filter similar products by location (reusing the lookups fetched above)
+    if (hasValidLocation) {
+      const adminSellerIds = adminSellers.map((s: any) => s._id);
+      const allowedIds = [...nearbySellerIds, ...adminSellerIds];
+      similarProductsQuery.seller =
+        allowedIds.length > 0 ? { $in: allowedIds } : { $in: [] };
     }
     const similarProducts = await Product.find(similarProductsQuery)
       .limit(6)

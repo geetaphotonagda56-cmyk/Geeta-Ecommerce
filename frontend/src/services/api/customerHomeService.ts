@@ -17,19 +17,21 @@ export interface HomeContentResponse {
   };
 }
 
-export const buildHomeContentCacheKey = (
-  headerCategorySlug?: string,
-  latitude?: number,
-  longitude?: number
-) => `home-content-${headerCategorySlug || 'all'}-${latitude || 0}-${longitude || 0}`;
+// The request below deliberately does not send latitude/longitude (see the
+// commented-out params in getHomeContent), so the response depends only on
+// the header category. Including lat/lng here would mint a fresh key every
+// time geolocation resolves and fire a second, byte-identical 2.4s request.
+export const buildHomeContentCacheKey = (headerCategorySlug?: string) =>
+  `home-content-${headerCategorySlug || 'all'}`;
 
 export const getCachedHomeContent = (
-  headerCategorySlug?: string,
-  latitude?: number,
-  longitude?: number
+  headerCategorySlug?: string
 ): HomeContentResponse | null => {
-  return apiCache.getSync<HomeContentResponse>(
-    buildHomeContentCacheKey(headerCategorySlug, latitude, longitude)
+  // getStale, not getSync: a refresh after the TTL should still paint the
+  // last known home content instantly while getOrFetch revalidates in the
+  // background.
+  return apiCache.getStale<HomeContentResponse>(
+    buildHomeContentCacheKey(headerCategorySlug)
   );
 };
 
@@ -47,11 +49,7 @@ export const getHomeContent = async (
   cacheTTL: number = 5 * 60 * 1000, // 5 minutes
   skipLoader: boolean = false
 ): Promise<HomeContentResponse> => {
-  const cacheKey = buildHomeContentCacheKey(
-    headerCategorySlug,
-    latitude,
-    longitude
-  );
+  const cacheKey = buildHomeContentCacheKey(headerCategorySlug);
 
   const fetchFn = async () => {
     const params: any = headerCategorySlug ? { headerCategorySlug } : {};

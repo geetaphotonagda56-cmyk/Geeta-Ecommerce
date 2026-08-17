@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Seller from "../models/Seller";
+import { cache } from "./cache";
 
 /**
  * Helper function to calculate distance between two coordinates (Haversine formula)
@@ -47,6 +48,17 @@ export async function findSellersWithinRange(
     return [];
   }
 
+  // This does a full seller collection scan plus an in-memory Haversine loop
+  // over every approved seller, and gets called multiple times per request
+  // by some callers (e.g. the product detail page used to call it twice).
+  // Seller locations/radii change rarely, so bucket to ~1.1km and cache
+  // briefly — that turns N identical scans per minute into 1.
+  const cacheKey = `nearby-sellers-${userLat.toFixed(2)},${userLng.toFixed(2)}`;
+  const cached = cache.get<string[]>(cacheKey);
+  if (cached) {
+    return cached.map((id) => new mongoose.Types.ObjectId(id));
+  }
+
   try {
     // Fetch all approved sellers with location or Admin status
     const sellers = await Seller.find({
@@ -91,6 +103,7 @@ export async function findSellersWithinRange(
       }
     }
 
+    cache.set(cacheKey, nearbySellerIds.map((id) => id.toString()), 60 * 1000);
     return nearbySellerIds;
   } catch (error) {
     console.error("Error finding nearby sellers:", error);

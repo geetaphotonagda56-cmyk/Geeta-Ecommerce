@@ -21,6 +21,7 @@ import RatingInput from "../../components/ui/RatingInput";
 import { useAuth } from "../../context/AuthContext";
 import type { Review as ReviewType } from "../../services/api/customerReviewService";
 import ProductCard from "./components/ProductCard";
+import IconLoader from "../../components/loaders/IconLoader";
 // import DealOfTheDay from "./components/banners/DealOfTheDay";
 import ExploreOurRange from "./components/banners/ExploreOurRange";
 import FeaturedDeal from "./components/banners/FeaturedDeal";
@@ -478,7 +479,7 @@ export default function ProductDetail() {
   const inCartQty = cartItem?.quantity || 0;
 
   if (loading && !product) {
-    return null; // Let the global IconLoader handle this
+    return <IconLoader forceShow />;
   }
 
   if (error && !product) {

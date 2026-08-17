@@ -18,8 +18,11 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const routeLoadingStartTime = useRef<number | null>(Date.now()); // Start timing immediately
   const activeRequests = useRef(0);
   const activeRouteRequests = useRef(1); // Start with 1 to represent initial page load
-  const MINIMUM_LOADING_TIME = 1000; // 1 second
-  const MINIMUM_ROUTE_LOADING_TIME = 0; // Avoid long full-screen loader on quick route changes
+  // Both loaders resolve as soon as their work is done. There is deliberately
+  // no artificial minimum: a 1000ms floor used to be applied to the
+  // full-screen route loader, which added a flat second to every cold load.
+  const MINIMUM_LOADING_TIME = 0;
+  const MINIMUM_ROUTE_LOADING_TIME = 0;
 
   const safetyTimer = useRef<NodeJS.Timeout | null>(null);
   const routeSafetyTimer = useRef<NodeJS.Timeout | null>(null);

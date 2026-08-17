@@ -48,11 +48,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
   const { location } = useLocation();
   const { currentTheme: theme } = useThemeContext();
   const navigate = useNavigate();
-  const cachedHomeResponse = getCachedHomeContent(
-    activeTab,
-    location?.latitude,
-    location?.longitude
-  );
+  const cachedHomeResponse = getCachedHomeContent(activeTab);
   const [categoryCards, setCategoryCards] = useState<PromoCard[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
   const [headingText, setHeadingText] = useState(theme.bannerText);
