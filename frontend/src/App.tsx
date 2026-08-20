@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Suspense, lazy, startTransition } from "react";
 import { CartProvider } from "./context/CartContext";
+import { WishlistProvider } from "./context/WishlistContext";
 import { OrdersProvider } from "./context/OrdersContext";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -330,6 +331,7 @@ function App() {
                 <ToastProvider>
                   <ConfirmationProvider>
                   <CartProvider>
+                    <WishlistProvider>
                     <OrdersProvider>
                     <BrowserRouter
                       future={{
@@ -714,6 +716,7 @@ function App() {
                   </Routes>
                 </BrowserRouter>
                   </OrdersProvider>
+                    </WishlistProvider>
                 </CartProvider>
                   </ConfirmationProvider>
                 </ToastProvider>

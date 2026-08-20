@@ -74,7 +74,8 @@ export default function AdminFeaturedDeal() {
   const handleSave = () => {
     setLoading(true);
     bannerService.updateDealsConfig({
-        featuredDealProductIds: config.featuredDealProductIds
+        featuredDealProductIds: config.featuredDealProductIds,
+        featuredDealActive: config.featuredDealActive ?? true
     });
 
     setTimeout(() => {
@@ -90,6 +91,16 @@ export default function AdminFeaturedDeal() {
            <h1 className="text-2xl font-bold text-gray-800">Featured Deals</h1>
            <div className="text-sm text-gray-500">Promotion / Featured Deal</div>
       </div>
+
+      <label className="flex items-center gap-3 mb-6 p-4 bg-white border border-neutral-200 rounded-xl cursor-pointer hover:bg-[var(--primary-color)]/5 transition-colors w-fit">
+          <input
+              type="checkbox"
+              className="w-5 h-5 accent-[var(--primary-color)]"
+              checked={config.featuredDealActive ?? true}
+              onChange={(e) => setConfig({ ...config, featuredDealActive: e.target.checked })}
+          />
+          <span className="text-gray-700 font-bold uppercase tracking-wider text-xs">Show Featured Deals on Home</span>
+      </label>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Selection Panel */}

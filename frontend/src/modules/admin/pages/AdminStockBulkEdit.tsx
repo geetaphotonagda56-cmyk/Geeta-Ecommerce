@@ -235,26 +235,25 @@ export default function AdminStockBulkEdit({
       setIsSearchingImage(true);
       let uploaded: { url: string; variants: import("../../../services/api/uploadService").ImageVariants | null }[];
       try {
-        uploaded = (
-          await Promise.all(
-            urls.map(async (url) => {
-              try {
-                const result = await uploadImageFromUrl(url, "Geeta Stores/products");
-                return { url: result.secureUrl || result.url, variants: result.variants ?? null };
-              } catch (err) {
-                console.error("Failed to process search-picked image", url, err);
-                return null;
-              }
-            })
-          )
-        ).filter((r): r is { url: string; variants: any } => r !== null);
+        uploaded = await Promise.all(
+          urls.map(async (url) => {
+            try {
+              const result = await uploadImageFromUrl(url, "Geeta Stores/products");
+              return { url: result.secureUrl || result.url, variants: result.variants ?? null };
+            } catch (err) {
+              // Some source sites block server-side fetches outright (hotlink
+              // protection, bot detection) with no way for us to satisfy
+              // them. Fail open to the original URL rather than blocking the
+              // admin from using an image their own browser can render fine
+              // - same fail-open precedent as sharp/CloudFront elsewhere in
+              // this pipeline. That image just won't get compressed.
+              console.warn("Could not process search-picked image server-side, using it unprocessed", url, err);
+              return { url, variants: null };
+            }
+          })
+        );
       } finally {
         setIsSearchingImage(false);
-      }
-
-      if (uploaded.length === 0) {
-        alert("Failed to process the selected image(s). Please try again.");
-        return;
       }
 
       if (imageSourceModalVariationIndex !== null) {

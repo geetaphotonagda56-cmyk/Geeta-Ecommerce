@@ -283,14 +283,18 @@ export const getProducts = async (req: Request, res: Response) => {
 
     console.log("DEBUG: Final search query:", JSON.stringify(query));
 
-    let products = await Product.find(query)
-      .populate("category", "name icon image")
-      .populate("subcategory", "name")
-      .populate("brand", "name")
-      .populate("seller", "storeName")
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(Number(limit));
+    const [products, total] = await Promise.all([
+      Product.find(query)
+        .populate("category", "name icon image")
+        .populate("subcategory", "name")
+        .populate("brand", "name")
+        .populate("seller", "storeName")
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      Product.countDocuments(query),
+    ]);
 
     let mapped = toListItems(products, { allowNegativeStock: !negativeStockSoldOut });
 
@@ -309,8 +313,6 @@ export const getProducts = async (req: Request, res: Response) => {
     if (sort === "price_desc") {
       mapped.sort((a, b) => b.listing.minPrice - a.listing.minPrice);
     }
-
-    const total = await Product.countDocuments(query);
 
     return res.status(200).json({
       success: true,

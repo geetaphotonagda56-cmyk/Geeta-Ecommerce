@@ -21,12 +21,14 @@ export default function FeaturedDeal() {
   const navigate = useNavigate();
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isActive, setIsActive] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchFeaturedProducts = async () => {
       try {
         const config = await bannerService.getDealsConfig();
+        setIsActive(config.featuredDealActive ?? true);
 
         const products: Product[] = [];
 
@@ -109,6 +111,8 @@ export default function FeaturedDeal() {
       </div>
     );
   }
+
+  if (!isActive) return null;
 
   if (featuredProducts.length === 0) return null;
 

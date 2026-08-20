@@ -997,7 +997,11 @@ export const updateOrderItems = asyncHandler(
         if (foundVariation) {
           unitPrice =
             Number(itemData.unitPrice) ||
-            Number(foundVariation.discPrice ?? foundVariation.price) ||
+            // Fall back to the variant's actual selling price, never its
+            // promotional/offer price - discPrice is the customer-app
+            // storefront discount, not what POS should charge in-store
+            // when the client-sent unitPrice is missing for some reason.
+            Number(foundVariation.price) ||
             unitPrice;
           mrp =
             Number(itemData.mrp) ||

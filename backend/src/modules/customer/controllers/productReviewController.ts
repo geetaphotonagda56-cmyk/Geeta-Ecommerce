@@ -47,19 +47,19 @@ export const getProductReviews = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: 'Invalid product id' });
         }
 
-        const reviews = await Review.find({ product: productId, status: 'Approved' })
-            .populate('customer', 'name')
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit);
-
-        const total = await Review.countDocuments({ product: productId, status: 'Approved' });
-
-        // Calculate average rating (aggregate $match does not auto-cast
-        // strings to ObjectId, so it must be cast explicitly here).
-        const stats = await Review.aggregate([
-            { $match: { product: new mongoose.Types.ObjectId(productId), status: 'Approved' } },
-            { $group: { _id: null, avgRating: { $avg: '$rating' }, count: { $sum: 1 } } }
+        const [reviews, total, stats] = await Promise.all([
+            Review.find({ product: productId, status: 'Approved' })
+                .populate('customer', 'name')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            Review.countDocuments({ product: productId, status: 'Approved' }),
+            // Calculate average rating (aggregate $match does not auto-cast
+            // strings to ObjectId, so it must be cast explicitly here).
+            Review.aggregate([
+                { $match: { product: new mongoose.Types.ObjectId(productId), status: 'Approved' } },
+                { $group: { _id: null, avgRating: { $avg: '$rating' }, count: { $sum: 1 } } }
+            ])
         ]);
 
         const avgRating = stats.length > 0 ? stats[0].avgRating : 0;

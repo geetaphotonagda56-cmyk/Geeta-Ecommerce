@@ -126,8 +126,10 @@ export const getFlashDeals = asyncHandler(async (req: Request, res: Response) =>
     flashDealProductIds: settings.flashDeal?.productIds || [],
     // Deal of the Day
     dealOfTheDayProductIds: settings.dealOfTheDay?.productIds || [],
+    dealOfTheDayActive: settings.dealOfTheDay?.active ?? true,
     // Featured Deal
     featuredDealProductIds: settings.featuredDeal?.productIds || [],
+    featuredDealActive: settings.featuredDeal?.active ?? true,
   };
 
   res.status(200).json({
@@ -142,7 +144,7 @@ export const getFlashDeals = asyncHandler(async (req: Request, res: Response) =>
  * @access  Private/Admin
  */
 export const updateFlashDeals = asyncHandler(async (req: Request, res: Response) => {
-  const { flashDealTargetDate, flashDealImage, flashDealImageVariants, isActive, flashDealProductIds, dealOfTheDayProductIds, featuredDealProductIds } = req.body;
+  const { flashDealTargetDate, flashDealImage, flashDealImageVariants, isActive, flashDealProductIds, dealOfTheDayProductIds, dealOfTheDayActive, featuredDealProductIds, featuredDealActive } = req.body;
 
   let settings: any = await AppSettings.findOne();
   if (!settings) {
@@ -165,18 +167,18 @@ export const updateFlashDeals = asyncHandler(async (req: Request, res: Response)
   }
 
   // Update Deal of the Day if provided
-  if (dealOfTheDayProductIds !== undefined) {
+  if (dealOfTheDayProductIds !== undefined || dealOfTheDayActive !== undefined) {
       settings.dealOfTheDay = {
-          productIds: dealOfTheDayProductIds,
-          active: settings.dealOfTheDay?.active ?? true
+          productIds: dealOfTheDayProductIds !== undefined ? dealOfTheDayProductIds : settings.dealOfTheDay?.productIds,
+          active: dealOfTheDayActive !== undefined ? dealOfTheDayActive : (settings.dealOfTheDay?.active ?? true)
       };
   }
 
   // Update Featured Deal if provided
-  if (featuredDealProductIds !== undefined) {
+  if (featuredDealProductIds !== undefined || featuredDealActive !== undefined) {
       settings.featuredDeal = {
-          productIds: featuredDealProductIds,
-          active: settings.featuredDeal?.active ?? true
+          productIds: featuredDealProductIds !== undefined ? featuredDealProductIds : settings.featuredDeal?.productIds,
+          active: featuredDealActive !== undefined ? featuredDealActive : (settings.featuredDeal?.active ?? true)
       };
   }
 
@@ -189,7 +191,9 @@ export const updateFlashDeals = asyncHandler(async (req: Request, res: Response)
     isActive: settings.flashDeal?.active,
     flashDealProductIds: settings.flashDeal?.productIds,
     dealOfTheDayProductIds: settings.dealOfTheDay?.productIds,
-    featuredDealProductIds: settings.featuredDeal?.productIds
+    dealOfTheDayActive: settings.dealOfTheDay?.active,
+    featuredDealProductIds: settings.featuredDeal?.productIds,
+    featuredDealActive: settings.featuredDeal?.active
   };
 
   res.status(200).json({

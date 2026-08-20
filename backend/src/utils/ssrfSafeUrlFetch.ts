@@ -63,7 +63,16 @@ export async function fetchUrlSafely(
     timeout: timeoutMs,
     maxContentLength: maxBytes,
     maxBodyLength: maxBytes,
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; GeetaStoresBot/1.0)" },
+    headers: {
+      // A real browser UA, not a self-identifying bot string: this endpoint
+      // fetches publicly-served images the admin already saw rendered in
+      // their own browser (search results) — plenty of CDNs/hotlink
+      // protection block anything that announces itself as a bot, which
+      // was rejecting otherwise-normal image URLs with a 403.
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    },
   });
 
   const contentType = String(response.headers["content-type"] || "");

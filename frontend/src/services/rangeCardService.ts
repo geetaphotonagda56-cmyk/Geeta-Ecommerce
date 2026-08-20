@@ -1,4 +1,5 @@
 import api from './api/config';
+import { apiCache } from '../utils/apiCache';
 
 export interface RangeCard {
   id: string;
@@ -25,11 +26,17 @@ const mapCard = (c: any): RangeCard => ({
 export const rangeCardService = {
   getActiveRangeCards: async (): Promise<RangeCard[]> => {
     try {
-      const res = await api.get<RangeCardResponse>('/range-cards');
-      if (res.data.success && Array.isArray(res.data.data)) {
-        return res.data.data.map(mapCard);
-      }
-      return [];
+      return await apiCache.getOrFetch(
+        'range-cards-active',
+        async () => {
+          const res = await api.get<RangeCardResponse>('/range-cards');
+          if (res.data.success && Array.isArray(res.data.data)) {
+            return res.data.data.map(mapCard);
+          }
+          return [];
+        },
+        2 * 60 * 1000
+      );
     } catch (e) {
       console.error('Failed to fetch range cards', e);
       return [];
@@ -51,20 +58,24 @@ export const rangeCardService = {
 
   addRangeCard: async (card: Omit<RangeCard, 'id'>) => {
     const res = await api.post('/range-cards', card);
+    apiCache.invalidate('range-cards-active');
     return res.data.data;
   },
 
   updateRangeCard: async (id: string, updates: Partial<RangeCard>) => {
     const res = await api.put(`/range-cards/${id}`, updates);
+    apiCache.invalidate('range-cards-active');
     return res.data.data;
   },
 
   deleteRangeCard: async (id: string) => {
     await api.delete(`/range-cards/${id}`);
+    apiCache.invalidate('range-cards-active');
   },
 
   reorderRangeCards: async (items: { id: string; order: number }[]) => {
     const res = await api.put('/range-cards/reorder', { items });
+    apiCache.invalidate('range-cards-active');
     return res.data.data;
   },
 };

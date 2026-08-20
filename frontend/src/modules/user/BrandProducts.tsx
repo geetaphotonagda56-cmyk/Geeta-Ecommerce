@@ -30,20 +30,21 @@ export default function BrandProducts() {
         setLoadingMore(true);
       }
       try {
-        // Fetch Brand Details only on the first page
-        if (currentPage === 1) {
-          const brandResponse = await getBrandById(id);
-          if (brandResponse.success) {
-            setBrand(brandResponse.data);
-          }
+        // Fetch brand details (page 1 only) and products in parallel —
+        // they're independent requests and were previously awaited sequentially.
+        const [brandResponse, productsResponse] = await Promise.all([
+          currentPage === 1 ? getBrandById(id) : Promise.resolve(null),
+          getProducts({
+            brand: id,
+            page: currentPage,
+            limit: limit
+          })
+        ]);
+
+        if (brandResponse?.success) {
+          setBrand(brandResponse.data);
         }
 
-        // Fetch Products for this brand
-        const productsResponse = await getProducts({
-          brand: id,
-          page: currentPage,
-          limit: limit
-        });
         if (productsResponse.success) {
            // Ensure products have proper structure
            const safeProducts = Array.isArray(productsResponse.data) ? productsResponse.data.map((p: any) => ({

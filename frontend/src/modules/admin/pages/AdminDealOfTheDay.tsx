@@ -80,7 +80,8 @@ export default function AdminDealOfTheDay() {
     setLoading(true);
     bannerService.updateDealsConfig({
         dealOfTheDayProductIds: config.dealOfTheDayProductIds,
-        dealOfTheDayProductId: undefined // Clear legacy single ID to avoid confusion
+        dealOfTheDayProductId: undefined, // Clear legacy single ID to avoid confusion
+        dealOfTheDayActive: config.dealOfTheDayActive ?? true
     });
 
     setTimeout(() => {
@@ -96,6 +97,16 @@ export default function AdminDealOfTheDay() {
            <h1 className="text-2xl font-bold text-gray-800">Deal of the Day</h1>
            <div className="text-sm text-gray-500">Promotion / Deal of the Day</div>
       </div>
+
+      <label className="flex items-center gap-3 mb-6 p-4 bg-white border border-neutral-200 rounded-xl cursor-pointer hover:bg-[var(--primary-color)]/5 transition-colors w-fit">
+          <input
+              type="checkbox"
+              className="w-5 h-5 accent-[var(--primary-color)]"
+              checked={config.dealOfTheDayActive ?? true}
+              onChange={(e) => setConfig({ ...config, dealOfTheDayActive: e.target.checked })}
+          />
+          <span className="text-gray-700 font-bold uppercase tracking-wider text-xs">Show Deal of the Day on Home</span>
+      </label>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Selection Panel */}

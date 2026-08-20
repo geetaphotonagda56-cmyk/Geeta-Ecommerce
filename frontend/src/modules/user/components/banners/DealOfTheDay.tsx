@@ -23,12 +23,14 @@ export default function DealOfTheDay() {
   const navigate = useNavigate();
   const [dealProducts, setDealProducts] = useState<Product[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isActive, setIsActive] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchDealProducts = async () => {
       try {
         const config = await bannerService.getDealsConfig();
+        setIsActive(config.dealOfTheDayActive ?? true);
 
         const products: Product[] = [];
 
@@ -119,6 +121,8 @@ export default function DealOfTheDay() {
       </div>
     );
   }
+
+  if (!isActive) return null;
 
   if (dealProducts.length === 0) {
     return (

@@ -1,5 +1,6 @@
 import api from './api/config';
 import { Banner, BannerPosition } from '../types/banner';
+import { apiCache } from '../utils/apiCache';
 
 export interface DealsConfig {
   flashDealTargetDate: string;
@@ -9,8 +10,10 @@ export interface DealsConfig {
   flashDealProductIds?: string[];
   featuredDealProductId?: string;
   featuredDealProductIds?: string[];
+  featuredDealActive?: boolean;
   dealOfTheDayProductId?: string;
   dealOfTheDayProductIds?: string[];
+  dealOfTheDayActive?: boolean;
 }
 
 export interface BannerResponse {
@@ -86,11 +89,20 @@ export const bannerService = {
   // but ensure no type errors.
   getDealsConfig: async (): Promise<DealsConfig> => {
     try {
-      const res = await api.get<{success: boolean, data: DealsConfig}>('/flash-deals');
-      if (res.data.success && res.data.data) {
-          return res.data.data;
-      }
-      return { flashDealTargetDate: new Date(Date.now() + 86400000).toISOString() };
+      // Cached + in-flight-deduped: multiple sections (FeaturedDeal,
+      // FlashDealSection) call this on the same page render and would
+      // otherwise each fire an independent GET /flash-deals request.
+      return await apiCache.getOrFetch(
+        'flash-deals-config',
+        async () => {
+          const res = await api.get<{success: boolean, data: DealsConfig}>('/flash-deals');
+          if (res.data.success && res.data.data) {
+              return res.data.data;
+          }
+          return { flashDealTargetDate: new Date(Date.now() + 86400000).toISOString() };
+        },
+        60 * 1000
+      );
     } catch (e) {
         console.error("Failed to fetch flash deals config", e);
         return { flashDealTargetDate: new Date(Date.now() + 86400000).toISOString() };
@@ -100,6 +112,7 @@ export const bannerService = {
   updateDealsConfig: async (updates: Partial<DealsConfig>) => {
     try {
         const res = await api.put<{success: boolean, data: DealsConfig}>('/flash-deals', updates);
+        apiCache.invalidate('flash-deals-config');
         return res.data.data;
     } catch (e) {
         console.error("Failed to update flash deals config", e);
