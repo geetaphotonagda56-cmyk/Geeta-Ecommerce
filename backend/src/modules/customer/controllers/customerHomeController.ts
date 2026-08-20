@@ -424,11 +424,13 @@ export const getHomeContent = async (req: Request, res: Response) => {
     };
 
     // 3. Categories for Tiles (Grocery, Snacks, etc)
-    const categories = await Category.find({
-      status: "Active",
-    })
-      .select("name image imageVariants icon color slug")
-      .sort({ order: 1 });
+    const loadCategories = async () => {
+      return Category.find({
+        status: "Active",
+      })
+        .select("name image imageVariants icon color slug")
+        .sort({ order: 1 });
+    };
 
     // 4. Shop By Store - Fetch from database
     const loadShops = async () => {
@@ -451,22 +453,25 @@ export const getHomeContent = async (req: Request, res: Response) => {
               .select("mainImage")
               .lean();
 
-            productImages = shopProducts.map((p: any) => p.mainImage).filter(Boolean);
+            productImages = shopProducts
+              .map((p: any) => p.mainImage)
+              .filter(Boolean);
           }
 
-        return {
-          id: shop.storeId || shop._id.toString(),
-          name: shop.name,
-          image: shop.image,
-          imageVariants: shop.imageVariants || null,
-          productImages, // Include preview images irrespective of location
-          slug: shop.storeId || shop._id.toString(),
-          category: shop.category,
-          productIds: shop.products?.map((p: any) => p.toString()) || [],
-          bgColor: shop.bgColor || "bg-neutral-50",
-        };
-      })
-    );
+          return {
+            id: shop.storeId || shop._id.toString(),
+            name: shop.name,
+            image: shop.image,
+            imageVariants: shop.imageVariants || null,
+            productImages, // Include preview images irrespective of location
+            slug: shop.storeId || shop._id.toString(),
+            category: shop.category,
+            productIds: shop.products?.map((p: any) => p.toString()) || [],
+            bgColor: shop.bgColor || "bg-neutral-50",
+          };
+        })
+      );
+    };
 
     // 5. Trending Items (Fetch some popular categories or products)
     const loadTrending = async () => {

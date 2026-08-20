@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(node -e \" const fs=require('fs'); const s=fs.readFileSync('src/modules/customer/controllers/customerHomeController.ts','utf8'); let depth=0; let line=1; let col=0; const stack=[]; for (let i=0;i<s.length;i++){ const c=s[i]; if(c==='\\n'){line++;col=0;continue;} col++; if(c==='{'||c==='('||c==='['){stack.push({c,line,col}); depth++;} if(c==='}'||c===')'||c===']'){ const open=stack.pop(); const map={'}':'{',')':'(',']':'['}; if(!open||open.c!==map[c]) console.log('Mismatch',c,'at',line+':'+col,'open',open); depth--; } } console.log('final depth',depth,'unclosed',stack.slice(-10)); \")",
+      "Shell(node -e  const fs=require('fs'); const s=fs.readFileSync('src/modules/customer/controllers/customerHomeController.ts','utf8'); const stack=[]; let line=1,col=0; for (let i=0;i<s.length;i++){ const c=s[i]; if(c==='\\n'){line++;col=0;continue;} col++; if(c==='{'||c==='('||c==='[') stack.push({c,line,col}); if(c==='}'||c===')'||c===']'){ const open=stack.pop(); const map={'}':'{',')':'(',']':'['}; if(!open||open.c!==map[c]) console.log('Mismatch',c,'at',line+':'+col,'open',open); } } console.log('unclosed', stack.length, stack.slice(-5)); )",
+      "Shell(npx tsc --noEmit -p tsconfig.json 2 >& 1)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}
