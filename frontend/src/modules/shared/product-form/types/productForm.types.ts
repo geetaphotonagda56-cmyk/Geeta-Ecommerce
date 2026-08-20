@@ -1,3 +1,5 @@
+import { ImageVariants } from "../../../../services/api/uploadService";
+
 export interface ProductVariantForm {
   _id?: string;
   variationType: string;
@@ -12,6 +14,7 @@ export interface ProductVariantForm {
   barcode: string[];
   rackNumber: string;
   mainImage: string;
+  mainImageVariants?: ImageVariants;
   galleryImages: string[];
   status: "Available" | "Sold out" | "In stock";
   attributes?: Record<string, string>;
@@ -184,6 +187,7 @@ export interface CreateProductPayload {
     barcode?: string[];
     rackNumber?: string;
     mainImage?: string;
+    mainImageVariants?: ImageVariants;
     galleryImages?: string[];
     status?: string;
     attributes?: Record<string, string>;

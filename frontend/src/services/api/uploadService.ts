@@ -1,5 +1,13 @@
 import api from "./config";
 
+export interface ImageVariants {
+  w320?: string;
+  w640?: string;
+  w1024?: string;
+  w1600?: string;
+  original?: string;
+}
+
 export interface UploadResult {
   url: string;
   publicId: string;
@@ -8,6 +16,7 @@ export interface UploadResult {
   height?: number;
   format?: string;
   bytes?: number;
+  variants?: ImageVariants | null;
 }
 
 export interface UploadResponse {
@@ -42,6 +51,28 @@ export async function uploadImage(
   }
 
   throw new Error(response.data.message || "Failed to upload image");
+}
+
+/**
+ * Downloads an external image URL server-side and runs it through the same
+ * compression pipeline a real upload uses. Used for search-picked images.
+ */
+export async function uploadImageFromUrl(
+  url: string,
+  folder?: string
+): Promise<UploadResult> {
+  const response = await api.post<UploadResponse>("/upload/image-from-url", {
+    url,
+    folder,
+  });
+
+  if (response.data.success && response.data.data) {
+    return Array.isArray(response.data.data)
+      ? response.data.data[0]
+      : response.data.data;
+  }
+
+  throw new Error(response.data.message || "Failed to process image URL");
 }
 
 /**

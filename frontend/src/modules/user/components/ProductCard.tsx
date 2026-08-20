@@ -15,12 +15,14 @@ import {
   findCartItemForPrimaryVariant,
   getPrimaryVariant,
   getProductCardImage,
+  getProductCardImageVariants,
   getVariantId,
   getVariantLabel,
   getVariants,
   hasRealVariants,
 } from '../../../utils/customerVariantUtils';
 import { useThemeContext } from '../../../context/ThemeContext';
+import OptimizedImage from '../../../components/OptimizedImage';
 
 interface ProductCardProps {
   product: Product;
@@ -135,6 +137,7 @@ export default function ProductCard({
   const primaryVariantLabel = getVariantLabel(primaryVariant) || product.pack;
   const variantCount = getVariants(product).length;
   const cardImageUrl = getProductCardImage(product);
+  const cardImageVariants = getProductCardImageVariants(product);
 
   const cartItem = findCartItemForPrimaryVariant(cart.items, product);
   const inCartQty = cartItem?.quantity || 0;
@@ -293,15 +296,14 @@ export default function ProductCard({
       >
         <div className={`w-full ${compact ? 'h-48 md:h-56' : categoryStyle ? 'h-56 md:h-64' : 'h-64 md:h-80'} bg-white flex items-center justify-center overflow-hidden relative`}>
           {cardImageUrl ? (
-            <img
+            <OptimizedImage
               ref={imageRef}
               src={cardImageUrl}
+              variants={cardImageVariants}
               alt={product.name || product.productName || 'Product'}
               className="w-full h-full object-contain"
-              referrerPolicy="no-referrer"
-              loading="lazy"
-              decoding="async"
-              onError={(e) => {
+              sizes="(max-width: 768px) 50vw, 25vw"
+              onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
                 // Hide broken image and show fallback
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';

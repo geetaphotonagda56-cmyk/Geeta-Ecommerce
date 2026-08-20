@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
+import OptimizedImage, { ImageVariants } from "../../../components/OptimizedImage";
 
 interface AutoScrollImagesProps {
   images: (string | undefined)[];
   alt: string;
   className?: string;
   intervalMs?: number;
+  /** Only applies to the single-image case — it corresponds 1:1 to `images[0]`.
+   *  The multi-image cycling case has no per-slot variants source. */
+  variants?: ImageVariants | null;
 }
 
 // Crossfades through `images` automatically. Renders a single static image
@@ -14,6 +18,7 @@ export default function AutoScrollImages({
   alt,
   className = "",
   intervalMs = 2200,
+  variants,
 }: AutoScrollImagesProps) {
   const validImages = images.filter((src): src is string => Boolean(src));
   const [index, setIndex] = useState(0);
@@ -34,12 +39,12 @@ export default function AutoScrollImages({
 
   if (validImages.length === 1) {
     return (
-      <img
+      <OptimizedImage
         src={validImages[0]}
+        variants={variants}
         alt={alt}
         className={`w-full h-full object-contain ${className}`}
-        loading="lazy"
-        decoding="async"
+        sizes="(max-width: 768px) 25vw, 12vw"
       />
     );
   }

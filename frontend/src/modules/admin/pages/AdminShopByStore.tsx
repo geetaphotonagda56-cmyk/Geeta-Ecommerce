@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { uploadImage } from "../../../services/api/uploadService";
+import { uploadImage, ImageVariants } from "../../../services/api/uploadService";
 import {
   validateImageFile,
   createImagePreview,
@@ -235,11 +235,13 @@ export default function AdminShopByStore() {
 
     try {
       let imageUrl = "";
+      let imageVariants: ImageVariants | null = null;
 
       // Upload store image if provided
       if (storeImageFile) {
         const imageResult = await uploadImage(storeImageFile, "Geeta Stores/stores");
         imageUrl = imageResult.secureUrl;
+        imageVariants = imageResult.variants ?? null;
       } else if (editingId && !storeImagePreview) {
         // If editing and no new image and no preview, we need at least one image
         setUploadError("Store image is required");
@@ -250,6 +252,7 @@ export default function AdminShopByStore() {
       const storeData = {
         name: storeName.trim(),
         image: imageUrl || (editingId ? stores.find(s => s._id === editingId)?.image || "" : ""),
+        imageVariants: imageVariants || undefined,
         description: "",
         products: selectedProductIds,
         order: stores.length,

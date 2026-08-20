@@ -204,7 +204,7 @@ async function fetchSectionData(
           _id: { $in: categoryIds },
           status: "Active",
         })
-          .select("name image slug")
+          .select("name image imageVariants slug")
           .sort({ order: 1 })
           .limit(limit || 8)
           .lean();
@@ -224,6 +224,7 @@ async function fetchSectionData(
               categoryId: c.slug || c._id.toString(), // Use slug for SEO-friendly URLs, fallback to _id
               name: c.name,
               image: c.image,
+              imageVariants: c.imageVariants || null,
               productImages,
               slug: c.slug,
               type: "category",
@@ -423,12 +424,11 @@ export const getHomeContent = async (req: Request, res: Response) => {
     };
 
     // 3. Categories for Tiles (Grocery, Snacks, etc)
-    const loadCategories = () =>
-      Category.find({
-        status: "Active",
-      })
-        .select("name image icon color slug")
-        .sort({ order: 1 });
+    const categories = await Category.find({
+      status: "Active",
+    })
+      .select("name image imageVariants icon color slug")
+      .sort({ order: 1 });
 
     // 4. Shop By Store - Fetch from database
     const loadShops = async () => {
@@ -454,19 +454,19 @@ export const getHomeContent = async (req: Request, res: Response) => {
             productImages = shopProducts.map((p: any) => p.mainImage).filter(Boolean);
           }
 
-          return {
-            id: shop.storeId || shop._id.toString(),
-            name: shop.name,
-            image: shop.image,
-            productImages, // Include preview images irrespective of location
-            slug: shop.storeId || shop._id.toString(),
-            category: shop.category,
-            productIds: shop.products?.map((p: any) => p.toString()) || [],
-            bgColor: shop.bgColor || "bg-neutral-50",
-          };
-        })
-      );
-    };
+        return {
+          id: shop.storeId || shop._id.toString(),
+          name: shop.name,
+          image: shop.image,
+          imageVariants: shop.imageVariants || null,
+          productImages, // Include preview images irrespective of location
+          slug: shop.storeId || shop._id.toString(),
+          category: shop.category,
+          productIds: shop.products?.map((p: any) => p.toString()) || [],
+          bgColor: shop.bgColor || "bg-neutral-50",
+        };
+      })
+    );
 
     // 5. Trending Items (Fetch some popular categories or products)
     const loadTrending = async () => {

@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema } from "mongoose";
 import { generateEmbedding } from "../utils/embedding";
+import { ImageVariants } from "../types/imageVariants";
 
 export interface IProduct extends Document {
   // Basic Info
@@ -49,6 +50,7 @@ export interface IProduct extends Document {
     mainImage?: string;
     galleryImages?: string[];
     image?: string;
+    mainImageVariants?: ImageVariants;
     tieredPrices?: { minQty: number; price: number }[];
     attributes?: Record<string, string>;
   }>;
@@ -232,6 +234,13 @@ export interface IProduct extends Document {
           mainImage: { type: String, trim: true },
           galleryImages: { type: [String], default: [] },
           image: { type: String, trim: true },
+          mainImageVariants: {
+            w320: { type: String },
+            w640: { type: String },
+            w1024: { type: String },
+            w1600: { type: String },
+            original: { type: String },
+          },
           tieredPrices: {
             type: [{ minQty: Number, price: Number }],
             default: [],

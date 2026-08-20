@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { ProductVariant, ProductListingComputed } from "./types";
+import { ImageVariants } from "../../types/imageVariants";
 
 export function normalizeVariantArray(raw: unknown): ProductVariant[] {
   if (!Array.isArray(raw)) return [];
@@ -8,6 +9,7 @@ export function normalizeVariantArray(raw: unknown): ProductVariant[] {
 
 export function normalizeVariant(v: any): ProductVariant {
   const mainImage = v.mainImage ?? v.image ?? undefined;
+  const mainImageVariants = v.mainImageVariants ?? undefined;
   const galleryImages = Array.isArray(v.galleryImages)
     ? v.galleryImages
     : mainImage && !v.galleryImages
@@ -44,6 +46,7 @@ export function normalizeVariant(v: any): ProductVariant {
   };
 
   if (mainImage) cleaned.mainImage = mainImage;
+  if (mainImageVariants) cleaned.mainImageVariants = mainImageVariants;
   if (discPrice != null && Number.isFinite(discPrice)) cleaned.discPrice = discPrice;
   if (v.compareAtPrice != null) cleaned.compareAtPrice = Number(v.compareAtPrice) || 0;
   if (v.wholesalePrice != null) cleaned.wholesalePrice = Number(v.wholesalePrice) || 0;
@@ -106,6 +109,14 @@ export function getListingImage(variants: ProductVariant[]): string | null {
   return withImage?.mainImage ?? null;
 }
 
+export function getListingImageVariants(variants: ProductVariant[]): ImageVariants | null {
+  if (!variants.length) return null;
+  const inStock = variants.find((v) => (Number(v.stock) || 0) > 0 && v.mainImageVariants);
+  if (inStock?.mainImageVariants) return inStock.mainImageVariants;
+  const withVariants = variants.find((v) => v.mainImageVariants);
+  return withVariants?.mainImageVariants ?? null;
+}
+
 export function isInStock(variants: ProductVariant[], allowNegative = false): boolean {
   if (!variants.length) return false;
   if (allowNegative) return true;
@@ -157,6 +168,7 @@ export function computeListing(
     maxPrice,
     totalStock,
     imageUrl: getListingImage(variants) ?? product?.mainImage ?? null,
+    imageVariants: getListingImageVariants(variants) ?? null,
     inStock: allowNegative || totalStock > 0,
   };
 }
@@ -289,6 +301,7 @@ export function variantToMongooseSubdoc(v: ProductVariant): Record<string, unkno
     doc.mainImage = v.mainImage;
     doc.image = v.mainImage;
   }
+  if (v.mainImageVariants) doc.mainImageVariants = v.mainImageVariants;
   return doc;
 }
 

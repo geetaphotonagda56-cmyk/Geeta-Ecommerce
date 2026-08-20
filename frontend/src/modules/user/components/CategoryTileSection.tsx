@@ -2,12 +2,14 @@ import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import ViewAllButton from "./ViewAllButton";
 import AutoScrollImages from "./AutoScrollImages";
+import type { ImageVariants } from "../../../components/OptimizedImage";
 
 interface CategoryTile {
   id: string;
   name: string;
   productImages?: (string | undefined)[];
   image?: string; // Support single image property
+  imageVariants?: ImageVariants; // Corresponds to `image`, not `productImages`
   productCount?: number;
   categoryId?: string;
   subcategoryId?: string;
@@ -184,7 +186,11 @@ export default function CategoryTileSection({
                       ) : (
                         // Other sections: auto-cycles through the tile's images when
                         // more than one is available, otherwise shows a static image
-                        <AutoScrollImages images={images} alt={tile.name} />
+                        <AutoScrollImages
+                          images={images}
+                          alt={tile.name}
+                          variants={!tile.productImages ? tile.imageVariants : undefined}
+                        />
                       )
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-3xl">

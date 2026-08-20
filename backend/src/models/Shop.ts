@@ -1,9 +1,11 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { ImageVariants } from '../types/imageVariants';
 
 export interface IShop extends Document {
   name: string;
   storeId: string; // slug/identifier for the store
   image: string;
+  imageVariants?: ImageVariants;
   description?: string;
   headerCategoryId?: mongoose.Types.ObjectId; // Reference to HeaderCategory
   category?: mongoose.Types.ObjectId | mongoose.Types.ObjectId[]; // Reference to Category(s) - supports both single and array
@@ -34,6 +36,13 @@ const ShopSchema = new Schema<IShop>(
       type: String,
       required: [true, 'Shop image is required'],
       trim: true,
+    },
+    imageVariants: {
+      w320: { type: String },
+      w640: { type: String },
+      w1024: { type: String },
+      w1600: { type: String },
+      original: { type: String },
     },
     description: {
       type: String,

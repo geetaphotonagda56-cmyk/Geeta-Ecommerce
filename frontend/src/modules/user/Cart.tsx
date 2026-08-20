@@ -3,6 +3,8 @@ import { useCart } from '../../context/CartContext';
 import Button from '../../components/ui/button';
 import { appConfig } from '../../services/configService';
 import { calculateProductPrice, getCartItemVariantSelector, getCartLineUnitPrice, getCartLineVariantIdentity } from '../../utils/priceUtils';
+import { getProductCardImageVariants } from '../../utils/customerVariantUtils';
+import OptimizedImage from '../../components/OptimizedImage';
 
 export default function Cart() {
   const { cart, updateQuantity, removeFromCart, clearCart, freeGiftRules: activeRules, loading } = useCart();
@@ -147,10 +149,13 @@ export default function Cart() {
                 {/* Product Image */}
                 <div className="w-20 h-20 md:w-24 md:h-24 bg-neutral-100 rounded-lg flex items-center justify-center flex-shrink-0">
                   {prod.imageUrl ? (
-                    <img
+                    <OptimizedImage
                       src={prod.imageUrl}
+                      variants={getProductCardImageVariants(prod as any)}
                       alt={prod.name}
-                      className="w-full h-full object-cover rounded-lg" loading="lazy" decoding="async" />
+                      className="w-full h-full object-cover rounded-lg"
+                      sizes="96px"
+                    />
                   ) : (
                     <span className="text-2xl text-neutral-400">
                       {(prod.name || 'P').charAt(0).toUpperCase()}

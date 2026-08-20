@@ -20,6 +20,7 @@ import AttributeDropdown from "../../../components/AttributeDropdown";
 import SearchableSelect from "../../../components/SearchableSelect";
 import AttachProductModal from "../../../components/AttachProductModal";
 import { searchProductImage } from "../../../services/api/productService";
+import { uploadImageFromUrl } from "../../../services/api/uploadService";
 import ImageCropperModal from "../../../components/ImageCropperModal";
 
 interface AdminStockBulkEditProps {
@@ -213,10 +214,10 @@ export default function AdminStockBulkEdit({
           setSearchedImages(res.data.images?.length ? res.data.images : [res.data.imageUrl]);
       } else {
           setSearchedImages([]);
-          alert("No image found for this keyword");
+          alert(res.message || "No image found for this keyword");
       }
     } catch (error: any) {
-        alert("Failed to search image");
+        alert(error?.response?.data?.message || "Failed to search image");
     } finally {
       setIsSearchingImage(false);
     }
@@ -228,65 +229,91 @@ export default function AdminStockBulkEdit({
       );
   };
 
-  const applySearchedImages = (urls: string[]) => {
-      if (urls.length && imageSourceModalRowIndex !== null) {
-          if (imageSourceModalVariationIndex !== null) {
-              const vIdx = imageSourceModalVariationIndex;
-              setEditableProducts((prev) => {
-                  const updated = [...prev];
-                  const oldProd = updated[imageSourceModalRowIndex];
-                  if (!oldProd) return prev;
-                  const variations = [...(oldProd.variations || [])];
-                  const targetVariation = { ...(variations[vIdx] || {}) };
-                  const [first, ...rest] = urls;
-                  const galleryAdditions = targetVariation.mainImage ? urls : rest;
-                  if (!targetVariation.mainImage) {
-                      targetVariation.mainImage = first;
-                  }
-                  if (galleryAdditions.length) {
-                      targetVariation.galleryImages = [...(targetVariation.galleryImages || []), ...galleryAdditions];
-                  }
-                  variations[vIdx] = targetVariation;
-                  const newProd = { ...oldProd, variations, isChanged: true };
-                  updated[imageSourceModalRowIndex] = newProd;
-                  upsertEditedCache(newProd);
-                  return updated;
-              });
-              setSearchedImages([]);
-              setSelectedSearchImages([]);
-              setImageSearchQuery("");
-              return;
-          }
+  const applySearchedImages = async (urls: string[]) => {
+      if (!urls.length || imageSourceModalRowIndex === null) return;
 
-          const newImages: ProductImage[] = urls.map((url, i) => ({
-            id: `${Date.now()}-${i}`,
-            url
-          }));
+      setIsSearchingImage(true);
+      let uploaded: { url: string; variants: import("../../../services/api/uploadService").ImageVariants | null }[];
+      try {
+        uploaded = (
+          await Promise.all(
+            urls.map(async (url) => {
+              try {
+                const result = await uploadImageFromUrl(url, "Geeta Stores/products");
+                return { url: result.secureUrl || result.url, variants: result.variants ?? null };
+              } catch (err) {
+                console.error("Failed to process search-picked image", url, err);
+                return null;
+              }
+            })
+          )
+        ).filter((r): r is { url: string; variants: any } => r !== null);
+      } finally {
+        setIsSearchingImage(false);
+      }
+
+      if (uploaded.length === 0) {
+        alert("Failed to process the selected image(s). Please try again.");
+        return;
+      }
+
+      if (imageSourceModalVariationIndex !== null) {
+          const vIdx = imageSourceModalVariationIndex;
           setEditableProducts((prev) => {
               const updated = [...prev];
-              const currentProduct = updated[imageSourceModalRowIndex];
-              updated[imageSourceModalRowIndex] = {
-                  ...currentProduct,
-                  images: [...currentProduct.images, ...newImages],
-                  isChanged: true
-              };
-              // Call upsertEditedCache from outer scope since it relies on refs
-              // Let's just inline the logic here because we don't return the array immediately
+              const oldProd = updated[imageSourceModalRowIndex];
+              if (!oldProd) return prev;
+              const variations = [...(oldProd.variations || [])];
+              const targetVariation = { ...(variations[vIdx] || {}) };
+              const [first, ...rest] = uploaded;
+              const galleryAdditions = targetVariation.mainImage ? uploaded : rest;
+              if (!targetVariation.mainImage) {
+                  targetVariation.mainImage = first.url;
+                  targetVariation.mainImageVariants = first.variants || undefined;
+              }
+              if (galleryAdditions.length) {
+                  targetVariation.galleryImages = [
+                    ...(targetVariation.galleryImages || []),
+                    ...galleryAdditions.map((g) => g.url),
+                  ];
+              }
+              variations[vIdx] = targetVariation;
+              const newProd = { ...oldProd, variations, isChanged: true };
+              updated[imageSourceModalRowIndex] = newProd;
+              upsertEditedCache(newProd);
               return updated;
           });
-          // Call upsert after a short timeout to make sure state is ready, or rely on another effect
-          setTimeout(() => {
-              setEditableProducts(current => {
-                  const p = current[imageSourceModalRowIndex];
-                  if (p) upsertEditedCache(p);
-                  return current;
-              });
-          }, 0);
-
           setSearchedImages([]);
           setSelectedSearchImages([]);
           setImageSearchQuery("");
+          return;
       }
+
+      const newImages: ProductImage[] = uploaded.map((u, i) => ({
+        id: `${Date.now()}-${i}`,
+        url: u.url,
+      }));
+      setEditableProducts((prev) => {
+          const updated = [...prev];
+          const currentProduct = updated[imageSourceModalRowIndex];
+          updated[imageSourceModalRowIndex] = {
+              ...currentProduct,
+              images: [...currentProduct.images, ...newImages],
+              isChanged: true
+          };
+          return updated;
+      });
+      setTimeout(() => {
+          setEditableProducts(current => {
+              const p = current[imageSourceModalRowIndex];
+              if (p) upsertEditedCache(p);
+              return current;
+          });
+      }, 0);
+
+      setSearchedImages([]);
+      setSelectedSearchImages([]);
+      setImageSearchQuery("");
   };
 
   useEffect(() => {
@@ -1660,7 +1687,7 @@ export default function AdminStockBulkEdit({
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
     index: 50,
     image: 140,
-    productName: 200,
+    productName: 280,
     category: 150,
     subCategory: 130,
     subSubCategory: 130,
@@ -1797,7 +1824,26 @@ export default function AdminStockBulkEdit({
           </td>
         );
       case "productName":
-        return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm" value={product.productName} onChange={(e) => handleFieldChange(originalIndex, "productName", e.target.value)} /></td>;
+        return (
+          <td key={key} className="p-0 border-r border-neutral-200 align-top">
+            <textarea
+              rows={1}
+              className="w-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm leading-snug resize-none overflow-hidden whitespace-pre-wrap break-words"
+              value={product.productName}
+              onChange={(e) => {
+                handleFieldChange(originalIndex, "productName", e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = `${e.target.scrollHeight}px`;
+              }}
+              ref={(el) => {
+                if (el) {
+                  el.style.height = "auto";
+                  el.style.height = `${el.scrollHeight}px`;
+                }
+              }}
+            />
+          </td>
+        );
       case "category":
         return (
           <td key={key} className="p-0 border-r border-neutral-200">

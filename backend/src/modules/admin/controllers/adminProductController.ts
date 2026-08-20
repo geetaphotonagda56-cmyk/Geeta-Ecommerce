@@ -28,6 +28,7 @@ export const createCategory = asyncHandler(
     const {
       name,
       image,
+      imageVariants,
       order,
       isBestseller,
       hasWarning,
@@ -128,6 +129,7 @@ export const createCategory = asyncHandler(
     const category = await Category.create({
       name,
       image,
+      imageVariants,
       order: finalOrder,
       isBestseller: isBestseller || false,
       hasWarning: hasWarning || false,

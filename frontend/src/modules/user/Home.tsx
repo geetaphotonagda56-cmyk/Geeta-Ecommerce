@@ -4,6 +4,7 @@ import HomeHero from "./components/HomeHero";
 // import PromoStrip from "./components/PromoStrip";
 import LowestPricesEver from "./components/LowestPricesEver";
 import CategoryTileSection from "./components/CategoryTileSection";
+import OptimizedImage from "../../components/OptimizedImage";
 import ViewAllButton from "./components/ViewAllButton";
 import ProductCard from "./components/ProductCard";
 import BannerSlider from "./components/banners/BannerSlider";
@@ -835,15 +836,18 @@ export default function Home() {
                           }}
                           className="block bg-white rounded-2xl shadow-sm border border-neutral-200 hover:shadow-md hover:border-[var(--customer-primary-alpha-30)] transition-all cursor-pointer overflow-hidden">
                           {hasImages ? (
-                            <img
+                            <OptimizedImage
                               src={
                                 tile.image ||
                                 (tile.productImages
                                   ? tile.productImages[0]
                                   : "")
                               }
+                              variants={tile.image ? tile.imageVariants : undefined}
                               alt={tile.name}
-                              className="w-full h-20 object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" decoding="async" />
+                              className="w-full h-20 object-cover transition-transform duration-300 group-hover:scale-105"
+                              sizes="(max-width: 768px) 25vw, 12vw"
+                            />
                           ) : (
                             <div
                               className={`w-full h-20 flex items-center justify-center text-3xl text-neutral-300 ${tile.bgColor || "bg-neutral-50"

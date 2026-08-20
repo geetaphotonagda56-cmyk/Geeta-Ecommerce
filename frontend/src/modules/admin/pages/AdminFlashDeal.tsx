@@ -131,15 +131,18 @@ export default function AdminFlashDeal() {
     setLoading(true);
     try {
         let imageUrl = config.flashDealImage;
+        let imageVariants = config.flashDealImageVariants;
 
         if (selectedFile) {
             const uploadRes = await uploadImage(selectedFile, 'flash-deals');
             imageUrl = uploadRes.secureUrl || uploadRes.url;
+            imageVariants = uploadRes.variants ?? null;
         }
 
         await bannerService.updateDealsConfig({
             flashDealTargetDate: config.flashDealTargetDate,
             flashDealImage: imageUrl,
+            flashDealImageVariants: imageVariants || undefined,
             isActive: config.isActive,
             flashDealProductIds: config.flashDealProductIds
         });

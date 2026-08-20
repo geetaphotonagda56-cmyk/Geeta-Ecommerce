@@ -74,6 +74,7 @@ export function toCreatePayload(state: ProductFormState): CreateProductPayload {
         barcode: v.barcode,
         rackNumber: v.rackNumber || undefined,
         mainImage: v.mainImage || undefined,
+        mainImageVariants: v.mainImageVariants || undefined,
         galleryImages: v.galleryImages,
         status: v.status,
         tieredPrices: (v.tieredPrices || []).filter((t) => t.minQty > 0),

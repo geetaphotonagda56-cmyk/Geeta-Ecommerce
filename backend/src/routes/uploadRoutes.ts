@@ -9,7 +9,8 @@ import {
   uploadVideo,
 } from "../middleware/upload";
 import {
-  uploadImageFromBuffer,
+  uploadImageVariantsFromBuffer,
+  uploadImageVariantsFromUrl,
   uploadDocumentFromBuffer,
   uploadVideoFromBuffer,
   deleteImage,
@@ -41,15 +42,18 @@ router.post(
     }
 
     const folder = (req.body.folder as string) || S3_FOLDERS.PRODUCTS;
-    const result = await uploadImageFromBuffer((req as any).file.buffer, {
-      folder,
-      resourceType: "image",
-      originalFilename: (req as any).file.originalname,
-    });
+    const { result, variants } = await uploadImageVariantsFromBuffer(
+      (req as any).file.buffer,
+      {
+        folder,
+        resourceType: "image",
+        originalFilename: (req as any).file.originalname,
+      }
+    );
 
     return res.status(200).json({
       success: true,
-      data: result,
+      data: { ...result, variants },
     });
   })
 );
@@ -76,19 +80,59 @@ router.post(
     const files = (req as any).files as any[];
 
     const uploadPromises = files.map((file) =>
-      uploadImageFromBuffer(file.buffer, {
+      uploadImageVariantsFromBuffer(file.buffer, {
         folder,
         resourceType: "image",
         originalFilename: file.originalname,
       })
     );
 
-    const results = await Promise.all(uploadPromises);
+    const uploaded = await Promise.all(uploadPromises);
+    const results = uploaded.map(({ result, variants }) => ({ ...result, variants }));
 
     return res.status(200).json({
       success: true,
       data: results,
     });
+  })
+);
+
+/**
+ * POST /api/v1/upload/image-from-url
+ * Download an external image URL server-side and run it through the same
+ * compression pipeline a real upload uses. Used for search-picked
+ * (SerpApi/Google/Unsplash) images so they stop bypassing the pipeline.
+ */
+router.post(
+  "/image-from-url",
+  authenticate,
+  requireUserType("Admin", "Seller"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { url, folder } = req.body;
+
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "url is required",
+      });
+    }
+
+    try {
+      const { result, variants } = await uploadImageVariantsFromUrl(url, {
+        folder: folder || S3_FOLDERS.PRODUCTS,
+        resourceType: "image",
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: { ...result, variants },
+      });
+    } catch (error: any) {
+      return res.status(422).json({
+        success: false,
+        message: error.message || "Failed to fetch and process the image URL",
+      });
+    }
   })
 );
 

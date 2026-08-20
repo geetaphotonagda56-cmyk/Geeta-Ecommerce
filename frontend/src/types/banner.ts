@@ -1,3 +1,5 @@
+import { ImageVariants } from "../services/api/uploadService";
+
 export type BannerPosition =
   | 'Main Banner'
   | 'Popup Banner'
@@ -29,6 +31,7 @@ export interface Banner {
   resourceName?: string;
   imageUrl: string;
   image: string; // Alias for imageUrl
+  imageVariants?: ImageVariants;
   isActive: boolean;
   categoryName?: string;
   title?: string;

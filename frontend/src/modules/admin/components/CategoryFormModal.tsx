@@ -4,7 +4,7 @@ import {
   CreateCategoryData,
   UpdateCategoryData,
 } from "../../../services/api/admin/adminProductService";
-import { uploadImage } from "../../../services/api/uploadService";
+import { uploadImage, ImageVariants } from "../../../services/api/uploadService";
 import {
   validateImageFile,
   createImagePreview,
@@ -52,6 +52,7 @@ export default function CategoryFormModal({
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
+  const [imageVariants, setImageVariants] = useState<ImageVariants | null>(null);
   const [cropperFile, setCropperFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -336,18 +337,22 @@ export default function CategoryFormModal({
       setErrors({});
 
       let imageUrl = formData.image;
+      let submittedVariants = imageVariants;
 
       // Upload image if a new file is selected
       if (imageFile) {
         setUploading(true);
         const imageResult = await uploadImage(imageFile, "Geeta Stores/categories");
         imageUrl = imageResult.secureUrl;
+        submittedVariants = imageResult.variants ?? null;
+        setImageVariants(submittedVariants);
         setUploading(false);
       }
 
       const submitData: CreateCategoryData | UpdateCategoryData = {
         name: formData.name.trim(),
         image: imageUrl,
+        imageVariants: submittedVariants || undefined,
         order: formData.order,
         parentId: formData.parentId,
         headerCategoryId: formData.headerCategoryId,

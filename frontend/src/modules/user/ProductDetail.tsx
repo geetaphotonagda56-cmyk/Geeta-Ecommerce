@@ -37,8 +37,10 @@ import {
   matchesCartVariant,
   normalizeCustomerVariations,
   hasRealVariants,
+  getProductCardImageVariants,
 } from '../../utils/customerVariantUtils';
 import { resolveProductGallery } from '../../utils/productLegacyUtils';
+import OptimizedImage from '../../components/OptimizedImage';
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
@@ -312,6 +314,18 @@ export default function ProductDetail() {
   useEffect(() => {
     setSelectedImageIndex(0);
   }, [effectiveVariantIndex]);
+
+  // Only allImages[0] has a known ImageVariants source (it mirrors the same
+  // variant-vs-product fallback allImages itself uses above) — every other
+  // gallery position is a distinct image with no matching variants.
+  const heroImageVariants = useMemo(() => {
+    if (!product) return null;
+    if (customerVariations.length > 0 && effectiveVariantIndex !== null) {
+      const variant = customerVariations[effectiveVariantIndex] as any;
+      return variant?.mainImageVariants ?? null;
+    }
+    return getProductCardImageVariants(product);
+  }, [product, customerVariations, effectiveVariantIndex]);
 
   // Get selected variant
   const selectedVariant =
@@ -707,12 +721,15 @@ export default function ProductDetail() {
                   style={{ minWidth: '100%' }}
                 >
                   {image ? (
-                    <img
+                    <OptimizedImage
                       src={image}
+                      variants={index === 0 ? heroImageVariants : undefined}
                       alt={`${product.name} - Image ${index + 1}`}
                       className="w-full h-full object-contain"
-                      referrerPolicy="no-referrer"
-                      draggable={false} loading="lazy" decoding="async" />
+                      priority={index === 0}
+                      sizes="100vw"
+                      draggable={false}
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-neutral-400 text-6xl">
                       {(product.name || product.productName || "?")
@@ -727,11 +744,14 @@ export default function ProductDetail() {
             {/* Desktop: Single image display - CONTAINED to ensure full visibility */}
             <div className="hidden md:flex w-full h-full items-center justify-center p-4">
             {currentImage ? (
-              <img
+              <OptimizedImage
                 src={currentImage}
+                variants={selectedImageIndex === 0 ? heroImageVariants : undefined}
                 alt={product.name}
                 className="w-full h-full object-contain mix-blend-multiply"
-                referrerPolicy="no-referrer" loading="lazy" decoding="async" />
+                priority={selectedImageIndex === 0}
+                sizes="50vw"
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-neutral-400 text-6xl">
                 {(product.name || product.productName || "?")

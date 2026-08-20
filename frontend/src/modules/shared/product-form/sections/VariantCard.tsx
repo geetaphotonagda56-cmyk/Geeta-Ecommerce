@@ -407,7 +407,7 @@ export default function VariantCard({
     setUploadingMain(true);
     try {
       const result = await uploadImage(file, "Geeta Stores/products");
-      patch({ mainImage: result.secureUrl });
+      patch({ mainImage: result.secureUrl, mainImageVariants: result.variants ?? undefined });
     } finally {
       setUploadingMain(false);
     }

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { bannerService } from '../../../services/bannerService';
 import { Banner, BannerPosition } from '../../../types/banner';
 import { getCategories } from '../../../services/api/categoryService';
-import { uploadImage } from '../../../services/api/uploadService';
+import { uploadImage, ImageVariants } from '../../../services/api/uploadService';
 import { useToast } from '../../../context/ToastContext';
 import ImageCropperModal from '../../../components/ImageCropperModal';
 
@@ -98,10 +98,12 @@ export default function AdminBannerSetup() {
         if (editingBannerId) {
             // Handle Update
             let finalImageUrl = banners.find(b => b.id === editingBannerId)?.imageUrl || '';
+            let finalImageVariants: ImageVariants | null = null;
 
             if (selectedFiles.length > 0) {
                  const uploadRes = await uploadImage(selectedFiles[0], "banners");
                  finalImageUrl = uploadRes.secureUrl || uploadRes.url;
+                 finalImageVariants = uploadRes.variants ?? null;
             }
 
             await bannerService.updateBanner(editingBannerId, {
@@ -110,7 +112,8 @@ export default function AdminBannerSetup() {
                 resourceId,
                 resourceName,
                 categoryName: resourceName,
-                imageUrl: finalImageUrl
+                imageUrl: finalImageUrl,
+                imageVariants: finalImageVariants || undefined
             });
             showToast("Banner updated successfully", "success");
             setEditingBannerId(null);
@@ -119,6 +122,7 @@ export default function AdminBannerSetup() {
             for (const file of selectedFiles) {
                 const uploadRes = await uploadImage(file, "banners");
                 const finalImageUrl = uploadRes.secureUrl || uploadRes.url;
+                const finalImageVariants = uploadRes.variants ?? null;
 
                 await bannerService.addBanner({
                     position: bannerType,
@@ -127,6 +131,7 @@ export default function AdminBannerSetup() {
                     resourceName,
                     categoryName: resourceName,
                     imageUrl: finalImageUrl,
+                    imageVariants: finalImageVariants || undefined,
                     isActive: true // Default active
                 });
             }

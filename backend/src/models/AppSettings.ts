@@ -151,6 +151,13 @@ export interface IAppSettings extends Document {
   flashDeal?: {
     targetDate?: Date;
     image?: string;
+    imageVariants?: {
+      w320?: string;
+      w640?: string;
+      w1024?: string;
+      w1600?: string;
+      original?: string;
+    };
     active?: boolean;
     productIds?: string[];
   };
@@ -531,6 +538,13 @@ const AppSettingsSchema = new Schema<IAppSettings>(
       image: {
         type: String,
         trim: true,
+      },
+      imageVariants: {
+        w320: { type: String },
+        w640: { type: String },
+        w1024: { type: String },
+        w1600: { type: String },
+        original: { type: String },
       },
       active: {
         type: Boolean,

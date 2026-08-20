@@ -2,6 +2,7 @@ import api from "../config";
 
 
 import { ApiResponse } from "./types";
+import { ImageVariants } from "../uploadService";
 
 export interface User {
   _id: string;
@@ -265,6 +266,7 @@ export const createShopByStore = async (
   data: {
     name: string;
     image: string;
+    imageVariants?: ImageVariants;
     description?: string;
     category?: string;
     subCategory?: string;
@@ -286,6 +288,7 @@ export const updateShopByStore = async (
     name?: string;
     storeId?: string;
     image?: string;
+    imageVariants?: ImageVariants;
     description?: string;
     category?: string;
     subCategory?: string;

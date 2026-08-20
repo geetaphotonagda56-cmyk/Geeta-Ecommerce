@@ -104,10 +104,40 @@ export const searchProductImage = asyncHandler(
         }
     }
 
-    // Strategy C: Unsplash (Disabled by user request for "Original Images")
-    // User explicitly requested to blocking unsplash/pexels/pixabay.
+    // Strategy C: Unsplash — last-resort fallback only, since results are
+    // generic stock photos rather than the exact product. Kept behind
+    // Strategies A/B so it's never preferred while either of those has
+    // working credentials; only reached when both are unavailable/broken.
+    if (!imageUrl && unsplashKey) {
+        try {
+            const response = await axios.get(`https://api.unsplash.com/search/photos`, {
+                params: {
+                    query: query + " product",
+                    per_page: 30,
+                    content_filter: "high",
+                },
+                headers: {
+                    Authorization: `Client-ID ${unsplashKey}`,
+                },
+            });
 
-    // if (!imageUrl && unsplashKey) { ... }
+            const results = response.data?.results;
+            if (Array.isArray(results) && results.length > 0) {
+                images = results
+                    .map((r: any) => r.urls?.regular || r.urls?.small)
+                    .filter(Boolean);
+                imageUrl = images[0] || "";
+                console.log(`[Image Search] Unsplash Found ${images.length} results`);
+            } else {
+                console.warn(`[Image Search] Unsplash returned 0 results.`);
+                debugInfo += ` | Unsplash: No Results`;
+            }
+        } catch (error: any) {
+            const errorMsg = error.response?.data?.errors?.join(", ") || error.message;
+            console.error("[Image Search] Unsplash Error:", errorMsg);
+            debugInfo += ` | Unsplash Error: ${errorMsg}`;
+        }
+    }
 
     if (imageUrl) {
         return res.status(200).json({

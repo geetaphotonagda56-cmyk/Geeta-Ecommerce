@@ -2,6 +2,7 @@ import axios from "axios";
 import api from "../config";
 
 import { ApiResponse } from "./types";
+import { ImageVariants } from "../uploadService";
 
 // ==================== Category Interfaces ====================
 export interface Category {
@@ -31,6 +32,7 @@ export interface Category {
 export interface CreateCategoryData {
   name: string;
   image?: string;
+  imageVariants?: ImageVariants;
   order?: number;
   isBestseller?: boolean;
   hasWarning?: boolean;

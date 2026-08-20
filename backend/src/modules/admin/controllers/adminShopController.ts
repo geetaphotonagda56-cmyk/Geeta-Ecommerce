@@ -6,7 +6,7 @@ import Shop from "../../../models/Shop";
  * Create a new shop
  */
 export const createShop = asyncHandler(async (req: Request, res: Response) => {
-    const { name, storeId, image, description, headerCategoryId, category, subCategory, subSubCategory, products, order, isActive } = req.body;
+    const { name, storeId, image, imageVariants, description, headerCategoryId, category, subCategory, subSubCategory, products, order, isActive } = req.body;
 
     if (!name || !image) {
         return res.status(400).json({
@@ -31,6 +31,7 @@ export const createShop = asyncHandler(async (req: Request, res: Response) => {
         name,
         storeId: finalStoreId,
         image,
+        imageVariants,
         description,
         headerCategoryId: headerCategoryId || undefined,
         category: category || undefined,

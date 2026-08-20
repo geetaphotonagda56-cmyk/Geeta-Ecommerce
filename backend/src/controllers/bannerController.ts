@@ -40,7 +40,7 @@ export const getBanners = asyncHandler(async (req: Request, res: Response) => {
  * @access  Private/Admin
  */
 export const createBanner = asyncHandler(async (req: Request, res: Response) => {
-  const { position, resourceType, resourceId, resourceName, imageUrl, isActive } = req.body;
+  const { position, resourceType, resourceId, resourceName, imageUrl, imageVariants, isActive } = req.body;
 
   const banner = await Banner.create({
     position,
@@ -48,6 +48,7 @@ export const createBanner = asyncHandler(async (req: Request, res: Response) => 
     resourceId,
     resourceName,
     imageUrl,
+    imageVariants,
     isActive: isActive !== undefined ? isActive : true,
   });
 
@@ -119,6 +120,7 @@ export const getFlashDeals = asyncHandler(async (req: Request, res: Response) =>
       ? new Date(settings.flashDeal.targetDate).toISOString() 
       : new Date(Date.now() + 86400000).toISOString(),
     flashDealImage: settings.flashDeal?.image || '',
+    flashDealImageVariants: settings.flashDeal?.imageVariants || null,
     isActive: settings.flashDeal?.active ?? true,
     // Flash Deal Products (separate from Deal of the Day)
     flashDealProductIds: settings.flashDeal?.productIds || [],
@@ -140,7 +142,7 @@ export const getFlashDeals = asyncHandler(async (req: Request, res: Response) =>
  * @access  Private/Admin
  */
 export const updateFlashDeals = asyncHandler(async (req: Request, res: Response) => {
-  const { flashDealTargetDate, flashDealImage, isActive, flashDealProductIds, dealOfTheDayProductIds, featuredDealProductIds } = req.body;
+  const { flashDealTargetDate, flashDealImage, flashDealImageVariants, isActive, flashDealProductIds, dealOfTheDayProductIds, featuredDealProductIds } = req.body;
 
   let settings: any = await AppSettings.findOne();
   if (!settings) {
@@ -156,6 +158,7 @@ export const updateFlashDeals = asyncHandler(async (req: Request, res: Response)
       settings.flashDeal = {
           targetDate: flashDealTargetDate ? new Date(flashDealTargetDate) : settings.flashDeal?.targetDate,
           image: flashDealImage !== undefined ? flashDealImage : settings.flashDeal?.image,
+          imageVariants: flashDealImageVariants !== undefined ? flashDealImageVariants : settings.flashDeal?.imageVariants,
           active: isActive !== undefined ? isActive : (settings.flashDeal?.active ?? true),
           productIds: flashDealProductIds !== undefined ? flashDealProductIds : settings.flashDeal?.productIds
       };
@@ -182,6 +185,7 @@ export const updateFlashDeals = asyncHandler(async (req: Request, res: Response)
   const data = {
     flashDealTargetDate: settings.flashDeal?.targetDate?.toISOString(),
     flashDealImage: settings.flashDeal?.image,
+    flashDealImageVariants: settings.flashDeal?.imageVariants,
     isActive: settings.flashDeal?.active,
     flashDealProductIds: settings.flashDeal?.productIds,
     dealOfTheDayProductIds: settings.dealOfTheDay?.productIds,

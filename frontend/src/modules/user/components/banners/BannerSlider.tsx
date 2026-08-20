@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { bannerService } from '../../../../services/bannerService';
 import { Banner, BannerPosition } from '../../../../types/banner';
 import { getBannerAspectClass } from './bannerDisplayUtils';
+import OptimizedImage from '../../../../components/OptimizedImage';
 
 interface Props {
   position: BannerPosition;
@@ -71,11 +72,13 @@ export default function BannerSlider({
               index === currentIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'
             }`}
           >
-            <img
+            <OptimizedImage
               src={banner.image || banner.imageUrl}
+              variants={banner.imageVariants}
               alt={banner.title || 'Banner'}
               className={`w-full h-full ${imageFit === 'cover' ? 'object-cover' : 'object-contain'} object-center`}
-              loading={index === 0 ? 'eager' : 'lazy'}
+              priority={index === 0}
+              sizes="100vw"
               draggable={false}
             />
             {showTextOverlay && index === currentIndex && (

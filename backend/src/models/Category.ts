@@ -1,9 +1,11 @@
 import mongoose, { Document, Schema, Model } from "mongoose";
+import { ImageVariants } from "../types/imageVariants";
 
 export interface ICategory extends Document {
   name: string;
   slug: string;
   image?: string;
+  imageVariants?: ImageVariants;
   order: number;
   isBestseller: boolean;
   hasWarning: boolean;
@@ -41,6 +43,13 @@ const CategorySchema = new Schema<ICategory>(
     image: {
       type: String,
       trim: true,
+    },
+    imageVariants: {
+      w320: { type: String },
+      w640: { type: String },
+      w1024: { type: String },
+      w1600: { type: String },
+      original: { type: String },
     },
     order: {
       type: Number,

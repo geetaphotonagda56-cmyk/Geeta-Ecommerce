@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { ImageVariants } from "../../types/imageVariants";
 
 export type VariantStatus = "Available" | "Sold out" | "In stock";
 
@@ -20,6 +21,7 @@ export interface ProductVariant {
   blockNumber?: string;
   rackNumber?: string;
   mainImage?: string;
+  mainImageVariants?: ImageVariants;
   galleryImages?: string[];
   /** @deprecated use mainImage */
   image?: string;
@@ -30,6 +32,7 @@ export interface ProductListingComputed {
   maxPrice: number;
   totalStock: number;
   imageUrl: string | null;
+  imageVariants?: ImageVariants | null;
   inStock: boolean;
 }
 

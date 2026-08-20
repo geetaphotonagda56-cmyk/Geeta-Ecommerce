@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { ImageVariants } from '../types/imageVariants';
 
 export interface IBanner extends Document {
   position: 'Main Banner' | 'Popup Banner' | 'Main Section Banner' | 'Deal of the Day' | 'Flash Deals' | 'Footer Banner';
@@ -6,6 +7,7 @@ export interface IBanner extends Document {
   resourceId?: string; // ID of the category or product
   resourceName?: string; // Store name for easier display, optional
   imageUrl: string;
+  imageVariants?: ImageVariants;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -35,6 +37,13 @@ const bannerSchema = new Schema<IBanner>(
     imageUrl: {
       type: String,
       required: true,
+    },
+    imageVariants: {
+      w320: { type: String },
+      w640: { type: String },
+      w1024: { type: String },
+      w1600: { type: String },
+      original: { type: String },
     },
     isActive: {
       type: Boolean,

@@ -6,6 +6,7 @@ import {
   resolveProductGallery,
   resolveRootDisplayPrice,
 } from './productLegacyUtils';
+import type { ImageVariants } from '../components/OptimizedImage';
 
 export { hasRealVariants, normalizeCustomerVariations };
 
@@ -121,6 +122,19 @@ export function getProductCardImage(product: Product | null | undefined): string
 
   const listing = (product as any)?.listing;
   return listing?.imageUrl || product?.imageUrl || product?.mainImage || '';
+}
+
+export function getProductCardImageVariants(
+  product: Product | null | undefined
+): ImageVariants | null {
+  const primary = getPrimaryVariant(product);
+  const variantVariants = (primary as any)?.mainImageVariants;
+  if (variantVariants) return variantVariants;
+
+  const listing = (product as any)?.listing;
+  if (listing?.imageVariants) return listing.imageVariants;
+
+  return null;
 }
 
 export function buildProductWithPrimaryVariant(product: Product): Product & {

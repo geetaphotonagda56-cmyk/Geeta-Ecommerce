@@ -1,7 +1,10 @@
-import { PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
 import { readFile } from "fs/promises";
-import s3Client, { S3_BUCKET_NAME, AWS_REGION, S3_FOLDERS } from "../config/s3";
+import s3Client, { S3_BUCKET_NAME, AWS_REGION, S3_FOLDERS, CLOUDFRONT_DOMAIN } from "../config/s3";
+import { processImageBuffer } from "./imageProcessingService";
+import { ImageVariants } from "../types/imageVariants";
+import { fetchUrlSafely } from "../utils/ssrfSafeUrlFetch";
 
 export interface UploadResult {
   url: string;
@@ -35,13 +38,20 @@ function buildKey(folder: string, originalFilename?: string): string {
   return `${folder}/${randomUUID()}${ext}`;
 }
 
-function buildPublicUrl(key: string): string {
-  // Virtual-hosted-style S3 URL. Percent-encode for the URL only (folder
-  // names contain spaces, e.g. "Geeta Stores/products") - the raw key sent
-  // to S3 in PutObjectCommand/DeleteObjectCommand stays unencoded.
+function buildAssetUrl(key: string): string {
+  // Folder names contain spaces (e.g. "Geeta Stores/products"); percent-encode
+  // for the URL only — the raw key sent to S3 in PutObjectCommand stays
+  // unencoded.
   const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  if (CLOUDFRONT_DOMAIN) {
+    return `https://${CLOUDFRONT_DOMAIN}/${encodedKey}`;
+  }
+  // Fails open to direct S3 when CloudFront isn't configured yet.
   return `https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${encodedKey}`;
 }
+
+// Kept as an alias so no other call site needs to change.
+const buildPublicUrl = buildAssetUrl;
 
 function contentTypeFromExtension(ext: string): string {
   const map: Record<string, string> = {
@@ -217,4 +227,138 @@ export async function deleteMultipleImages(publicIds: string[]): Promise<void> {
   } catch (error) {
     throw new Error(`Failed to delete multiple images: ${error}`);
   }
+}
+
+/**
+ * Upload an image buffer as a set of responsive WebP variants plus the
+ * existing single-file upload (unchanged, for backward compatibility with
+ * every caller that only reads `result.url`/`result.secureUrl`).
+ *
+ * Never throws on processing failure: if sharp can't process the buffer,
+ * `variants` comes back null and `result` is the plain, unprocessed
+ * upload — identical to calling uploadImageFromBuffer directly.
+ */
+export async function uploadImageVariantsFromBuffer(
+  buffer: Buffer,
+  options: UploadOptions = {}
+): Promise<{ result: UploadResult; variants: ImageVariants | null }> {
+  const folder = options.folder || S3_FOLDERS.PRODUCTS;
+  const ext = extractExtension(options.originalFilename);
+  const processed = await processImageBuffer(buffer, ext);
+
+  // Always upload the primary file so `result` is populated exactly like
+  // today, regardless of whether variant generation succeeded.
+  const result = await putBuffer(buffer, folder, options);
+
+  if (!processed) {
+    return { result, variants: null };
+  }
+
+  const baseKey = result.publicId.replace(/\.[a-zA-Z0-9]+$/, "");
+  const variants: ImageVariants = {};
+
+  for (const { width, buffer: variantBuffer } of processed.widths) {
+    const key = `${baseKey}-${width}w.webp`;
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: S3_BUCKET_NAME,
+        Key: key,
+        Body: variantBuffer,
+        ContentType: "image/webp",
+      })
+    );
+    const url = buildAssetUrl(key);
+    if (width <= 320) variants.w320 = url;
+    else if (width <= 640) variants.w640 = url;
+    else if (width <= 1024) variants.w1024 = url;
+    else variants.w1600 = url;
+  }
+
+  const originalKey = `${baseKey}-original.${processed.original.ext}`;
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: S3_BUCKET_NAME,
+      Key: originalKey,
+      Body: processed.original.buffer,
+      ContentType: contentTypeFromExtension(`.${processed.original.ext}`),
+    })
+  );
+  variants.original = buildAssetUrl(originalKey);
+
+  return { result, variants };
+}
+
+/**
+ * Same variant-generation pipeline as uploadImageVariantsFromBuffer, but
+ * for an image that already exists in S3 (used by the backfill script).
+ * Returns null variants on any processing failure, same contract as the
+ * live upload path.
+ */
+export async function backfillVariantsForKey(
+  key: string
+): Promise<ImageVariants | null> {
+  const obj = await s3Client.send(
+    new GetObjectCommand({ Bucket: S3_BUCKET_NAME, Key: key })
+  );
+  const chunks: Buffer[] = [];
+  for await (const chunk of obj.Body as any) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const buffer = Buffer.concat(chunks);
+  const ext = extractExtension(key);
+  const processed = await processImageBuffer(buffer, ext);
+  if (!processed) return null;
+
+  const baseKey = key.replace(/\.[a-zA-Z0-9]+$/, "");
+  const variants: ImageVariants = {};
+  for (const { width, buffer: variantBuffer } of processed.widths) {
+    const variantKey = `${baseKey}-${width}w.webp`;
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: S3_BUCKET_NAME,
+        Key: variantKey,
+        Body: variantBuffer,
+        ContentType: "image/webp",
+      })
+    );
+    const url = buildAssetUrl(variantKey);
+    if (width <= 320) variants.w320 = url;
+    else if (width <= 640) variants.w640 = url;
+    else if (width <= 1024) variants.w1024 = url;
+    else variants.w1600 = url;
+  }
+  const originalKey = `${baseKey}-original.${processed.original.ext}`;
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: S3_BUCKET_NAME,
+      Key: originalKey,
+      Body: processed.original.buffer,
+      ContentType: contentTypeFromExtension(`.${processed.original.ext}`),
+    })
+  );
+  variants.original = buildAssetUrl(originalKey);
+  return variants;
+}
+
+/** Extract the S3 key from a URL this service previously generated. */
+export function keyFromAssetUrl(url: string): string | null {
+  const match = /amazonaws\.com\/(.+)$|(?:^https:\/\/[^/]+\/)(.+)$/.exec(url);
+  const encoded = match?.[1] ?? match?.[2];
+  if (!encoded) return null;
+  return encoded.split("/").map(decodeURIComponent).join("/");
+}
+
+/**
+ * Downloads an external URL server-side (SSRF-hardened) and runs it
+ * through the exact same variant-generation pipeline a real upload uses.
+ * Throws if the URL fails validation/download; callers should catch and
+ * return a client error, since — unlike a real file upload — there's no
+ * buffer to fall back to if the fetch itself fails.
+ */
+export async function uploadImageVariantsFromUrl(
+  url: string,
+  options: UploadOptions = {}
+): Promise<{ result: UploadResult; variants: ImageVariants | null }> {
+  const { buffer } = await fetchUrlSafely(url);
+  return uploadImageVariantsFromBuffer(buffer, options);
 }
