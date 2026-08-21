@@ -37,6 +37,11 @@ export function getVariants(product: Product | null | undefined): VariantLike[] 
 export function getPrimaryVariant(product: Product | null | undefined): VariantLike | null {
   if (!hasRealVariants(product)) return null;
   const variants = normalizeCustomerVariations(product) as VariantLike[];
+  const matchedVariantId = (product as any)?.matchedVariantId;
+  if (matchedVariantId) {
+    const matched = variants.find((v) => getVariantId(v) === String(matchedVariantId));
+    if (matched) return matched;
+  }
   return variants[0] ?? null;
 }
 

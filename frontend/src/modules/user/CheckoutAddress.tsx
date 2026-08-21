@@ -256,7 +256,7 @@ export default function CheckoutAddress() {
                 <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <h1 className="text-base font-bold text-neutral-900">Enter complete address</h1>
+            <h1 className="font-display text-lg font-bold text-neutral-900">Enter complete address</h1>
           </div>
           <button
             onClick={() => navigate(-1)}
@@ -520,14 +520,15 @@ export default function CheckoutAddress() {
       </div>
 
       {/* Save Address Button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 z-[60] shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-[60] shadow-[0_-8px_24px_-8px_rgba(15,23,42,0.18)] px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
         <button
           onClick={handleSaveAddress}
           disabled={!isFormValid || isSaving}
-          className={`w-full py-3 px-4 font-semibold text-sm transition-colors ${isFormValid && !isSaving
-            ? 'bg-[var(--customer-primary-dark)] text-white hover:bg-[var(--customer-primary-darker)]'
-            : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
+          className={`w-full py-3.5 px-4 rounded-full font-semibold text-sm transition-all ${isFormValid && !isSaving
+            ? 'text-white shadow-[0_6px_16px_-4px_var(--customer-primary-alpha-40,rgba(0,0,0,0.3))]'
+            : 'bg-neutral-200 text-neutral-500 cursor-not-allowed'
             }`}
+          style={isFormValid && !isSaving ? { backgroundImage: 'linear-gradient(135deg, var(--customer-primary), var(--customer-primary-dark))' } : undefined}
         >
           {isSaving ? 'Saving...' : 'Save Address'}
         </button>

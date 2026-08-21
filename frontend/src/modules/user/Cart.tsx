@@ -23,7 +23,7 @@ export default function Cart() {
     return (
       <div className="px-4 py-8 md:py-16 text-center">
         <div className="text-6xl md:text-8xl mb-4">🛒</div>
-        <h2 className="text-xl md:text-2xl font-bold text-neutral-900 mb-2">Your cart is empty</h2>
+        <h2 className="font-display text-2xl md:text-3xl font-bold text-neutral-900 mb-2">Your cart is empty</h2>
         <p className="text-neutral-600 mb-6 md:mb-8 md:text-lg">Add some items to get started!</p>
         <Link to="/">
           <Button variant="default" size="lg" className="md:px-8 md:py-3 md:text-lg">
@@ -39,7 +39,7 @@ export default function Cart() {
       {/* Header */}
       <div className="px-4 md:px-6 lg:px-8 py-4 md:py-6 bg-white border-b border-neutral-200 mb-4 md:mb-6 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-xl md:text-2xl font-bold text-neutral-900">Your Basket 🛍️</h1>
+          <h1 className="font-display text-2xl md:text-3xl font-bold text-neutral-900">Your Basket 🛍️</h1>
           {cart.items.length > 0 && (
             <button
               onClick={clearCart}
@@ -143,17 +143,17 @@ export default function Cart() {
           return (
             <div
               key={lineKey}
-              className="bg-white rounded-lg border border-neutral-200 p-4 md:p-6 hover:shadow-md transition-shadow"
+              className="bg-white rounded-2xl border border-neutral-100 shadow-[0_1px_3px_rgba(15,23,42,0.06)] p-4 md:p-6 hover:shadow-[0_8px_20px_-8px_rgba(15,23,42,0.18)] transition-shadow"
             >
               <div className="flex gap-4 md:gap-6">
                 {/* Product Image */}
-                <div className="w-20 h-20 md:w-24 md:h-24 bg-neutral-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="w-20 h-20 md:w-24 md:h-24 bg-neutral-50 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
                   {prod.imageUrl ? (
                     <OptimizedImage
                       src={prod.imageUrl}
                       variants={getProductCardImageVariants(prod as any)}
                       alt={prod.name}
-                      className="w-full h-full object-cover rounded-lg"
+                      className="w-full h-full object-cover"
                       sizes="96px"
                     />
                   ) : (
@@ -175,7 +175,7 @@ export default function Cart() {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex flex-col gap-0.5">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-neutral-900 text-base md:text-lg">
+                        <span className="font-display font-bold text-neutral-900 text-lg md:text-xl">
                           ₹{applicableUnitPrice.toLocaleString('en-IN')}
                         </span>
                         {mrp > applicableUnitPrice && (
@@ -197,31 +197,34 @@ export default function Cart() {
                     </div>
 
                     {!isFreeGift ? (
-                    <div className="flex items-center gap-3 bg-neutral-100 rounded-lg p-1">
+                    <div
+                      className="flex items-center gap-3 rounded-full p-1"
+                      style={{ backgroundColor: 'var(--customer-primary-alpha-10, #f4f4f5)' }}
+                    >
                       <button
                         onClick={() => {
                            const { variantId, variantTitle } = getCartLineVariantIdentity(item);
                            updateQuantity(prodId, qty - 1, variantId, variantTitle);
                         }}
-                        className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center bg-white rounded-md shadow-sm text-neutral-600 hover:text-[var(--customer-primary)] disabled:opacity-50 transition-colors"
+                        className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center bg-white rounded-full shadow-sm text-neutral-600 hover:text-[var(--customer-primary)] disabled:opacity-50 transition-colors"
                         disabled={loading}
                       >
                         -
                       </button>
-                      <span className="w-6 md:w-8 text-center font-medium text-sm md:text-base">{qty}</span>
+                      <span className="w-6 md:w-8 text-center font-display font-bold text-sm md:text-base">{qty}</span>
                       <button
                         onClick={() => {
                            const { variantId, variantTitle } = getCartLineVariantIdentity(item);
                            updateQuantity(prodId, qty + 1, variantId, variantTitle);
                         }}
-                        className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center bg-white rounded-md shadow-sm text-neutral-600 hover:text-[var(--customer-primary-dark)] disabled:opacity-50 transition-colors"
+                        className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center bg-white rounded-full shadow-sm text-neutral-600 hover:text-[var(--customer-primary-dark)] disabled:opacity-50 transition-colors"
                         disabled={loading}
                       >
                         +
                       </button>
                     </div>
                     ) : (
-                        <div className="text-xs font-bold text-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)] px-2 py-1 rounded">
+                        <div className="text-xs font-bold text-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)] px-2 py-1 rounded-full">
                             FREE GIFT
                         </div>
                     )}
@@ -252,8 +255,8 @@ export default function Cart() {
 
       {/* Order Summary */}
       <div className="px-4 md:px-6 lg:px-8 mb-24 md:mb-8">
-        <div className="bg-white rounded-xl border border-neutral-200 p-4 md:p-6 shadow-sm md:max-w-md md:ml-auto">
-          <h2 className="text-lg md:text-xl font-bold text-neutral-900 mb-4 md:mb-6">Order Summary</h2>
+        <div className="bg-white rounded-2xl border border-neutral-100 p-4 md:p-6 shadow-[0_4px_16px_-6px_rgba(15,23,42,0.12)] md:max-w-md md:ml-auto">
+          <h2 className="font-display text-xl md:text-2xl font-bold text-neutral-900 mb-4 md:mb-6">Order Summary</h2>
           <div className="space-y-3 md:space-y-4 mb-4 md:mb-6">
             <div className="flex justify-between text-neutral-700 md:text-base">
               <span>Subtotal</span>
@@ -278,7 +281,7 @@ export default function Cart() {
           <div className="border-t border-neutral-200 pt-4 md:pt-6">
             <div className="flex justify-between items-center mb-4 md:mb-6">
               <span className="text-lg md:text-xl font-bold text-neutral-900">Total</span>
-              <span className="text-xl md:text-2xl font-bold text-neutral-900">
+              <span className="font-display text-2xl md:text-3xl font-bold text-neutral-900">
                 ₹{(totalAmount || 0).toLocaleString('en-IN')}
               </span>
             </div>

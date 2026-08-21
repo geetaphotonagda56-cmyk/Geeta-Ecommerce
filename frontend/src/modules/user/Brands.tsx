@@ -92,42 +92,32 @@ export default function Brands() {
       </div>
 
       {/* Brands Grid */}
-      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <div className="p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
         {brands.map((brand) => (
           <div
             key={brand._id}
             onClick={() => navigate(`/brand/${brand._id}`)}
-            className={`
-              aspect-[3/4] rounded-xl overflow-hidden cursor-pointer
-              transition-transform hover:scale-[1.02] active:scale-95
-              flex flex-col shadow-sm border border-neutral-100
-            `}
+            className="aspect-square rounded-xl overflow-hidden cursor-pointer transition-transform hover:scale-[1.02] active:scale-95 flex flex-col shadow-sm border border-neutral-100 bg-white relative"
           >
-            {/* Top Section - Logo/Name */}
-            <div className={`flex-1 bg-white flex flex-col items-center justify-center p-4 relative`}>
-                 {/* Decorative cloud-like shape (CSS simulation) could be complex, sticking to simple clean design */}
+            {/* Brand Name */}
+            <div className="absolute top-1.5 left-0 right-0 text-center px-1.5 z-10">
+              <span className="text-[9px] sm:text-[10px] font-black text-white uppercase tracking-wider bg-gradient-to-r from-[var(--customer-primary)] to-red-600 px-2 py-0.5 rounded-md shadow-[0_2px_8px_rgba(239,68,68,0.2)] border border-white/20 inline-block truncate max-w-full">
+                {brand.name}
+              </span>
+            </div>
 
-                 {/* Brand Name (Top) */}
-                  <div className="absolute top-2 left-0 right-0 text-center px-2">
-                      <span className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-wider bg-gradient-to-r from-[var(--customer-primary)] to-red-600 px-2.5 py-1 rounded-md shadow-[0_2px_8px_rgba(239,68,68,0.2)] border border-white/20">
-                         {brand.name}
-                      </span>
-                  </div>
-
-
-                 {/* Main Image (Logo/Product) */}
-                 <div className="w-full h-full flex items-center justify-center p-2 mt-4">
-                    {brand.image ? (
-                        <img
-                            src={brand.image}
-                            alt={brand.name}
-                            className="max-w-full max-h-full object-contain" loading="lazy" decoding="async" />
-                    ) : (
-                        <div className="text-4xl font-bold text-neutral-300 select-none">
-                            {brand.name.charAt(0)}
-                        </div>
-                    )}
-                 </div>
+            {/* Main Image (Logo/Product) */}
+            <div className="flex-1 flex items-center justify-center p-3 pt-6">
+              {brand.image ? (
+                <img
+                  src={brand.image}
+                  alt={brand.name}
+                  className="max-w-full max-h-full object-contain" loading="lazy" decoding="async" />
+              ) : (
+                <div className="text-3xl font-bold text-neutral-300 select-none">
+                  {brand.name.charAt(0)}
+                </div>
+              )}
             </div>
           </div>
         ))}

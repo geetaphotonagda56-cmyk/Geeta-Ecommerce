@@ -485,8 +485,13 @@ export default function Search() {
       <div className="sticky top-0 z-40 border-b border-neutral-200 bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-7xl px-4 py-3 md:px-6">
           <div ref={suggestionBoxRef} className="relative">
-            <div className="flex h-12 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 shadow-sm">
-              <SearchIcon className="h-5 w-5 text-neutral-500" aria-hidden="true" />
+            <div className="flex h-12 items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 shadow-[0_4px_14px_-6px_rgba(15,23,42,0.15)] focus-within:border-[var(--customer-primary-dark)] transition-colors">
+              <span
+                className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full"
+                style={{ backgroundColor: 'var(--customer-primary-alpha-20, #f4f4f5)' }}
+              >
+                <SearchIcon className="h-4 w-4 text-[var(--customer-primary-dark,#6b7280)]" aria-hidden="true" />
+              </span>
               <input
                 ref={inputRef}
                 value={inputValue}
@@ -532,7 +537,7 @@ export default function Search() {
             </div>
 
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-14 z-50 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl">
+              <div className="absolute left-0 right-0 top-14 z-50 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl">
                 {suggestions.map((item, index) => (
                   <button
                     key={`${item.type}-${item.id}-${item.name}`}

@@ -102,7 +102,7 @@ export const calculateProductPrice = (product: any, variationSelector?: number |
 /** Card/listing display: first variant when variants exist, else listing min price. */
 export const calculateCardPrice = (product: any): CalculatedPrice => {
   if (hasRealVariants(product)) {
-    const variantPrice = calculateProductPrice(product, 0);
+    const variantPrice = calculateProductPrice(product, product?.matchedVariantId ?? 0);
     if (variantPrice.displayPrice > 0) {
       return variantPrice;
     }

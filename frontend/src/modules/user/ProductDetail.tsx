@@ -946,7 +946,7 @@ export default function ProductDetail() {
           </div>
 
           {/* Product name */}
-          <h2 className="text-lg md:text-2xl font-bold text-neutral-900 mb-0 leading-tight">
+          <h2 className="font-display text-xl md:text-3xl font-bold text-neutral-900 mb-0 leading-tight">
             {product.name}
           </h2>
 
@@ -968,13 +968,13 @@ export default function ProductDetail() {
                         setSelectedImageIndex(0);
                       }}
                       disabled={variantOption.isOutOfStock}
-                      className={`relative flex-shrink-0 w-[96px] md:w-[104px] rounded-md border bg-white p-1.5 text-left transition-all ${
+                      className={`relative flex-shrink-0 w-[96px] md:w-[104px] rounded-xl border-2 bg-white p-1.5 text-left transition-all ${
                         isSelected
-                          ? "border-[var(--customer-primary-dark)] shadow-sm"
-                          : "border-neutral-200 hover:border-neutral-300"
+                          ? "border-[var(--customer-primary-dark)] shadow-[0_4px_12px_-4px_var(--customer-primary-alpha-40,rgba(0,0,0,0.25))]"
+                          : "border-neutral-100 hover:border-neutral-200"
                       } ${variantOption.isOutOfStock ? "opacity-60 cursor-not-allowed" : ""}`}
                     >
-                      <div className="h-14 w-full mb-1 rounded bg-neutral-50 flex items-center justify-center overflow-hidden">
+                      <div className="h-14 w-full mb-1 rounded-lg bg-neutral-50 flex items-center justify-center overflow-hidden">
                         {variantOption.image ? (
                           <img
                             src={variantOption.image}
@@ -1031,7 +1031,7 @@ export default function ProductDetail() {
 
           {/* Price section */}
           <div className={`flex items-center gap-1.5 ${hasVariations ? "mb-1 mt-1" : "mb-1.5"}`}>
-            <span className={`font-bold text-neutral-900 ${hasVariations ? "text-lg" : "text-xl"}`}>
+            <span className={`font-display font-bold text-neutral-900 ${hasVariations ? "text-lg" : "text-2xl"}`}>
               ₹{variantPrice.toLocaleString('en-IN')}
             </span>
             {hasDiscount && (
@@ -1420,7 +1420,7 @@ export default function ProductDetail() {
         {/* Reviews Section */}
         <div className="bg-white px-4 md:px-6 lg:px-8 py-6 border-t border-neutral-100">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-neutral-900">
+            <h3 className="font-display text-xl font-bold text-neutral-900">
               Ratings & Reviews
             </h3>
             {reviewStats.totalReviews > 0 && (
@@ -1615,7 +1615,7 @@ export default function ProductDetail() {
           <div className="mt-6 mb-24">
             <div className="bg-neutral-100/50 border-t border-b border-neutral-200/50 py-4 px-3">
               <div className="flex items-center mb-4 px-1">
-                <h3 className="text-lg font-semibold text-neutral-900">
+                <h3 className="font-display text-xl font-bold text-neutral-900">
                   Similar Products
                 </h3>
               </div>
@@ -1665,8 +1665,8 @@ export default function ProductDetail() {
       </div>
 
       {/* Sticky Footer */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-neutral-200 shadow-lg">
-        <div className="px-4 py-2.5 flex items-center justify-between">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-[0_-8px_24px_-8px_rgba(15,23,42,0.18)]">
+        <div className="px-4 py-3 flex items-center justify-between">
           {/* Left side - Product details */}
           <div className="flex-1">
             {/* First line - Pack size */}
@@ -1677,7 +1677,7 @@ export default function ProductDetail() {
             </div>
             {/* Second line - Price, MRP, and OFF */}
             <div className="flex items-center gap-1.5">
-              <span className="text-base font-bold text-neutral-900">
+              <span className="font-display text-lg font-bold text-neutral-900">
                 ₹{variantPrice.toLocaleString('en-IN')}
               </span>
               {hasDiscount && (

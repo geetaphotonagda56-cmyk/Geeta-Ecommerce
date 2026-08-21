@@ -401,7 +401,7 @@ export default function CategoryPage() {
                   />
                 </svg>
               </button>
-              <h1 className="text-base md:text-xl font-bold text-neutral-900">
+              <h1 className="font-display text-lg md:text-2xl font-bold text-neutral-900">
                 {category?.name}
               </h1>
             </div>

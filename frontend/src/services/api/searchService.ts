@@ -2,6 +2,7 @@ import api from "./config";
 import { Product } from "../../types/domain";
 
 export interface SearchProduct extends Product {
+  matchedVariantId?: string;
   searchScore?: {
     semanticScore: number;
     keywordScore?: number;

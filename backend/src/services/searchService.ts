@@ -10,7 +10,7 @@ import { generateEmbedding } from "../utils/embedding";
 import { findSellersWithinRange } from "../utils/locationHelper";
 import { cache } from "../utils/cache";
 import { toListItem } from "../modules/product/productReadMapper";
-import { getTotalStock, variantsFromProductDoc } from "../modules/product/variantHelpers";
+import { getTotalStock, getVariantDisplayPrice, variantsFromProductDoc } from "../modules/product/variantHelpers";
 import {
   normalizeText,
   getTokens,
@@ -85,6 +85,29 @@ export const keywordScore = (query: string, product: any): number => {
     fieldMatchScore(queryTokens, `${product.smallDescription || ""} ${product.description || ""}`) * 0.08 +
     fieldMatchScore(queryTokens, variantText(product)) * 0.18
   );
+};
+
+// When a query matches a specific variant (e.g. "Chocolate Almond") better than
+// the product's own name, surface that variant's name/image/price in results
+// instead of always defaulting to the first/cheapest variant.
+export const findBestMatchingVariant = (query: string, product: any): any | undefined => {
+  if (!Array.isArray(product.variations) || !product.variations.length) return undefined;
+  const queryTokens = getTokens(query);
+  if (!queryTokens.length) return undefined;
+
+  let best: { variation: any; score: number } | undefined;
+  for (const variation of product.variations) {
+    const text = [variation?.name, variation?.value].filter(Boolean).join(" ");
+    const score = fieldMatchScore(queryTokens, text);
+    if (!best || score > best.score) best = { variation, score };
+  }
+
+  if (!best || best.score < 0.5) return undefined;
+
+  const productNameScore = fieldMatchScore(queryTokens, product.productName);
+  if (best.score <= productNameScore) return undefined;
+
+  return best.variation;
 };
 
 const lexicalCandidateFields = [
@@ -224,7 +247,11 @@ const sortResults = (results: any[], sort: SearchOptions["sort"]) => {
   return results.sort((a, b) => b.searchScore.finalScore - a.searchScore.finalScore);
 };
 
-const mapProductForClient = (product: any, searchScore: Record<string, number>) => {
+const mapProductForClient = (
+  product: any,
+  searchScore: Record<string, number>,
+  matchedVariant?: any
+) => {
   const mapped = toListItem(product);
   const safeProduct = { ...mapped };
   delete (safeProduct as any).embedding;
@@ -232,9 +259,10 @@ const mapProductForClient = (product: any, searchScore: Record<string, number>) 
     ...safeProduct,
     id: String(product._id),
     name: product.productName,
-    imageUrl: mapped.listing.imageUrl,
-    price: mapped.price,
-    stock: mapped.listing.totalStock,
+    imageUrl: matchedVariant?.mainImage || mapped.listing.imageUrl,
+    price: matchedVariant ? getVariantDisplayPrice(matchedVariant) : mapped.price,
+    stock: matchedVariant ? Number(matchedVariant.stock) || 0 : mapped.listing.totalStock,
+    matchedVariantId: matchedVariant?._id ? String(matchedVariant._id) : undefined,
     searchScore,
   };
 };
@@ -332,12 +360,17 @@ export const hybridProductSearch = async (options: SearchOptions) => {
           0,
           semanticScore * SEMANTIC_WEIGHT + lexicalScore * KEYWORD_WEIGHT + popularityBoost - stockPenalty
         );
+        const matchedVariant = findBestMatchingVariant(query, product);
 
-        return mapProductForClient(product, {
-          semanticScore: Number(semanticScore.toFixed(4)),
-          keywordScore: Number(lexicalScore.toFixed(4)),
-          finalScore: Number(finalScore.toFixed(4)),
-        });
+        return mapProductForClient(
+          product,
+          {
+            semanticScore: Number(semanticScore.toFixed(4)),
+            keywordScore: Number(lexicalScore.toFixed(4)),
+            finalScore: Number(finalScore.toFixed(4)),
+          },
+          matchedVariant
+        );
       })
       .filter(
         (product) =>

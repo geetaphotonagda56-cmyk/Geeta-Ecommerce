@@ -255,8 +255,8 @@ export default function ProductCard({
 
           {categoryStyle && showBadge && discount > 0 && (
             <div
-                className="absolute top-2 left-0 z-10 text-white text-[10px] font-bold pl-2 pr-2.5 py-1 rounded-r-full flex items-center gap-1 shadow-[0_3px_8px_-2px_rgba(220,38,38,0.55)]"
-                style={{ background: 'linear-gradient(135deg, #f43f5e, #dc2626)' }}
+                className="absolute top-2 left-0 z-10 text-white text-[10px] font-bold pl-2 pr-2.5 py-1 rounded-r-full flex items-center gap-1 shadow-[0_3px_10px_-2px_rgba(0,0,0,0.45)]"
+                style={{ background: 'linear-gradient(135deg, #27272a, #09090b)' }}
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                 <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
@@ -268,7 +268,7 @@ export default function ProductCard({
 
           {!categoryStyle && showBadge && (badgeText || discount > 0) && (
             <div
-              className="absolute top-2 left-0 z-10 text-white text-[10px] pl-2.5 pr-3 py-1 rounded-r-full font-bold shadow-[0_3px_8px_-2px_rgba(220,38,38,0.55)] flex items-center gap-1"
+              className="absolute top-2 left-0 z-10 text-white text-[10px] pl-2.5 pr-3 py-1 rounded-r-full font-bold shadow-[0_3px_10px_-2px_rgba(0,0,0,0.45)] flex items-center gap-1"
               style={{ background: 'linear-gradient(135deg, #f43f5e, #dc2626)' }}
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">

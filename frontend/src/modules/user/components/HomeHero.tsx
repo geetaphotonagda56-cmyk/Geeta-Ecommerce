@@ -491,10 +491,15 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             border: isSticky ? `1px solid rgba(229, 231, 235, 1)` : 'none',
           }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 md:w-4 md:h-4">
-            <circle cx="11" cy="11" r="8" stroke={isSticky ? "#9ca3af" : "#6b7280"} strokeWidth="2" />
-            <path d="m21 21-4.35-4.35" stroke={isSticky ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
-          </svg>
+          <span
+            className="flex-shrink-0 w-7 h-7 md:w-6 md:h-6 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: 'var(--customer-primary-alpha-20, #f4f4f5)' }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="md:w-[13px] md:h-[13px]">
+              <circle cx="11" cy="11" r="8" stroke="var(--customer-primary-dark, #6b7280)" strokeWidth="2" />
+              <path d="m21 21-4.35-4.35" stroke="var(--customer-primary-dark, #6b7280)" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </span>
           <div className="flex-1 relative h-4 md:h-4 overflow-hidden">
             {searchSuggestions.map((suggestion, index) => {
               const isActive = index === currentSearchIndex;
@@ -577,8 +582,12 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                 type="button"
               >
                 <motion.div
-                  className={`mb-1.5 w-12 h-12 md:w-14 md:h-14 flex items-center justify-center ${tabColor}`}
-                  style={{ transition: 'color 0.3s ease-out' }}
+                  className={`mb-1.5 w-12 h-12 md:w-14 md:h-14 flex items-center justify-center rounded-full ${tabColor}`}
+                  style={{
+                    transition: 'color 0.3s ease-out, background-color 0.3s ease-out, box-shadow 0.3s ease-out',
+                    backgroundColor: isActive ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)',
+                    boxShadow: isActive ? '0 6px 16px -4px rgba(15,23,42,0.25)' : 'none',
+                  }}
                   animate={
                     isActive
                       ? { scale: [1, 1.12, 1], y: [0, -1.5, 0] }
@@ -590,7 +599,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                       : { duration: 0.25, ease: [0.4, 0, 0.2, 1] }
                   }
                 >
-                  <div className="w-full h-full flex items-center justify-center overflow-hidden rounded-xl">
+                  <div className="w-full h-full flex items-center justify-center overflow-hidden rounded-full p-2">
                     {tab.icon}
                   </div>
                 </motion.div>
@@ -610,12 +619,18 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   return (
     <div
       ref={heroRef}
-      className="relative z-20"
+      className="relative z-20 overflow-hidden rounded-b-[28px] shadow-[0_12px_28px_-12px_rgba(15,23,42,0.28)]"
       style={{ background: heroGradient, paddingBottom: 0, marginBottom: 0 }}
     >
+      {/* Soft radial glow for depth — purely decorative, sits behind everything */}
+      <div
+        className="pointer-events-none absolute -top-16 -right-10 w-56 h-56 rounded-full opacity-40 blur-3xl"
+        style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.9), transparent 70%)' }}
+      />
+
       {/* Top section with logo - NOT sticky */}
-      <div>
-        <div ref={topSectionRef} className="px-4 md:px-6 lg:px-8 pt-3 md:pt-0 pb-2 md:pb-0">
+      <div className="relative">
+        <div ref={topSectionRef} className="px-4 md:px-6 lg:px-8 pt-4 md:pt-0 pb-1 md:pb-0">
           <div className="flex items-center justify-between gap-3">
             <div className="flex-shrink-0 md:invisible">
               <img
@@ -625,8 +640,8 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
               />
             </div>
             {locationDisplayText && (
-              <div 
-                className={`flex items-center gap-1 text-neutral-700 text-xs md:text-sm cursor-pointer hover:opacity-80 transition-opacity ${isLocationLoading ? 'opacity-70 pointer-events-none' : ''}`}
+              <div
+                className={`flex items-center gap-1.5 rounded-full bg-white/40 backdrop-blur-sm px-3 py-1.5 text-neutral-800 text-xs md:text-sm cursor-pointer hover:bg-white/55 transition-colors shadow-sm ${isLocationLoading ? 'opacity-70 pointer-events-none' : ''}`}
                 onClick={() => {
                   if (!isLocationLoading) {
                     requestLocation();
@@ -657,7 +672,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
               title={config?.appName || "Geeta Stores"}
               text={`Check out ${config?.appName || "Geeta Stores"} - fast grocery delivery!`}
               imageUrl={config?.appLogo || `${window.location.origin}/assets/geetastoreslogo.png`}
-              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-neutral-700 hover:bg-black/5 transition-colors"
+              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-white/30 backdrop-blur-sm text-neutral-800 hover:bg-white/50 transition-colors"
             />
           </div>
         </div>

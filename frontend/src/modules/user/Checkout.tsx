@@ -77,7 +77,7 @@ export default function Checkout() {
   const [gstin, setGstin] = useState<string>('');
   const [showCancellationPolicy, setShowCancellationPolicy] = useState(false);
   const [giftPackaging, setGiftPackaging] = useState<boolean>(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('Razorpay');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
   const [isPaymentDropdownOpen, setIsPaymentDropdownOpen] = useState(false);
 
   // Redirect if empty
@@ -729,7 +729,12 @@ export default function Checkout() {
     }
 
     if (isProcessingPayment) return;
-    
+
+    if (!selectedPaymentMethod) {
+      setShowPaymentModal(true);
+      return;
+    }
+
     handlePaymentSelection(selectedPaymentMethod);
   };
 
@@ -832,7 +837,7 @@ export default function Checkout() {
                     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                   </svg>
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">
+                <h2 className="font-display text-2xl font-bold text-gray-900">
                   {selectedAddress?.city || "Your Location"}
                 </h2>
               </div>
@@ -846,7 +851,7 @@ export default function Checkout() {
               className="mt-12 text-center"
               style={{ animation: 'slideUp 0.5s ease-out 0.8s both' }}
             >
-              <h3 className="text-3xl font-bold text-[var(--customer-primary-dark)] mb-2">Order Placed!</h3>
+              <h3 className="font-display text-4xl font-bold text-[var(--customer-primary-dark)] mb-2">Order Placed!</h3>
               <p className="text-gray-600">Your order is on the way</p>
             </div>
 
@@ -876,7 +881,7 @@ export default function Checkout() {
           </button>
 
           {/* Title */}
-          <h1 className="text-base font-bold text-neutral-900">Checkout</h1>
+          <h1 className="font-display text-lg font-bold text-neutral-900">Checkout</h1>
 
           {/* Spacer to maintain layout */}
           <div className="w-7 h-7"></div>
@@ -1290,7 +1295,7 @@ export default function Checkout() {
 
       {/* Bill details */}
       <div className="px-4 md:px-6 lg:px-8 py-2.5 md:py-3 border-b border-neutral-200">
-        <h2 className="text-base font-bold text-neutral-900 mb-2.5">Bill details</h2>
+        <h2 className="font-display text-lg font-bold text-neutral-900 mb-2.5">Bill details</h2>
 
         <div className="space-y-2">
           {/* Items total */}
@@ -1609,32 +1614,32 @@ export default function Checkout() {
       {/* Payment Method */}
       <div className="px-4 py-3 border-b border-neutral-200">
         <h3 className="text-sm font-bold text-neutral-900 mb-2">Payment Method</h3>
-        <div className="flex flex-col gap-2">
-          {[
-            { id: 'Cash', label: 'Cash on Delivery' },
-            { id: 'Razorpay', label: 'Online Payment' },
-            { id: 'Cashfree', label: 'Cashfree' }
-          ].map((method) => (
-            <button
-              key={method.id}
-              onClick={() => setSelectedPaymentMethod(method.id)}
-              className={`w-full flex items-center justify-between px-4 py-3 border rounded-xl transition-all ${
-                selectedPaymentMethod === method.id
-                  ? 'border-[var(--customer-primary-dark)] ring-1 ring-[var(--customer-primary-dark)] bg-white'
-                  : 'border-neutral-200 bg-white hover:bg-neutral-50'
-              }`}
-            >
-              <span className={`text-sm font-medium ${selectedPaymentMethod === method.id ? 'text-[var(--customer-primary-dark)]' : 'text-neutral-700'}`}>
-                {method.label}
-              </span>
-              {selectedPaymentMethod === method.id && (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M20 6L9 17l-5-5" stroke="var(--customer-primary-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <button
+          onClick={() => setShowPaymentModal(true)}
+          className={`w-full flex items-center justify-between px-4 py-3 border rounded-xl transition-all ${
+            selectedPaymentMethod
+              ? 'border-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)]'
+              : 'border-[var(--customer-primary-dark)] bg-[var(--customer-primary-dark)]'
+          }`}
+        >
+          {selectedPaymentMethod ? (
+            <span className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-full bg-[var(--customer-primary-alpha-20)] flex items-center justify-center text-[var(--customer-primary-dark)]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              )}
-            </button>
-          ))}
-        </div>
+              </span>
+              <span className="text-sm font-semibold text-neutral-900">
+                {selectedPaymentMethod === 'Cash' ? 'Pay on Delivery' : 'Pay Online'}
+              </span>
+            </span>
+          ) : (
+            <span className="text-sm font-bold text-white">Select Payment Option</span>
+          )}
+          <span className={`text-xs font-semibold ${selectedPaymentMethod ? 'text-[var(--customer-primary-dark)]' : 'text-white'}`}>
+            {selectedPaymentMethod ? 'CHANGE' : 'SELECT'}
+          </span>
+        </button>
       </div>
 
       {/* Cancellation Policy */}
@@ -1857,17 +1862,22 @@ export default function Checkout() {
       </Sheet>
 
       {/* Bottom Sticky Button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 z-[60] shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-[60] shadow-[0_-8px_24px_-8px_rgba(15,23,42,0.18)] px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
         {selectedAddress ? (
           <button
             onClick={handlePlaceOrderClick}
             disabled={cart.items.length === 0 || outOfStockItems.length > 0 || isProcessingPayment}
-            className={`w-full py-3 px-4 font-bold text-sm uppercase tracking-wide transition-colors ${cart.items.length > 0 && outOfStockItems.length === 0 && !isProcessingPayment
-              ? 'bg-[var(--customer-primary-dark)] text-white hover:bg-[var(--customer-primary-darker)]'
-              : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
+            className={`w-full py-3.5 px-4 rounded-full font-bold text-sm uppercase tracking-wide transition-all ${cart.items.length > 0 && outOfStockItems.length === 0 && !isProcessingPayment
+              ? 'text-white shadow-[0_6px_16px_-4px_var(--customer-primary-alpha-40,rgba(0,0,0,0.3))] hover:shadow-[0_8px_20px_-4px_var(--customer-primary-alpha-40,rgba(0,0,0,0.35))]'
+              : 'bg-neutral-200 text-neutral-500 cursor-not-allowed'
               }`}
+            style={
+              cart.items.length > 0 && outOfStockItems.length === 0 && !isProcessingPayment
+                ? { backgroundImage: 'linear-gradient(135deg, var(--customer-primary), var(--customer-primary-dark))' }
+                : undefined
+            }
           >
-            {isProcessingPayment ? 'Processing...' : 'Place Order'}
+            {isProcessingPayment ? 'Processing...' : selectedPaymentMethod ? 'Place Order' : 'Select Payment Option'}
           </button>
         ) : (
           <button
@@ -1876,80 +1886,111 @@ export default function Checkout() {
                 editAddress: savedAddress
               }
             })}
-            className="w-full bg-[var(--customer-primary-dark)] text-white py-3 px-4 font-bold text-sm uppercase tracking-wide hover:bg-[var(--customer-primary-darker)] transition-colors"
+            className="w-full text-white py-3.5 px-4 rounded-full font-bold text-sm uppercase tracking-wide shadow-[0_6px_16px_-4px_var(--customer-primary-alpha-40,rgba(0,0,0,0.3))] transition-all"
+            style={{ backgroundImage: 'linear-gradient(135deg, var(--customer-primary), var(--customer-primary-dark))' }}
           >
             Choose address at next step
           </button>
         )}
       </div>
 
-      {/* PAYMENT MODAL */}
+      {/* PAYMENT METHOD FULL-SCREEN POPUP */}
       {showPaymentModal && (
-        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scaleIn">
-                <div className="bg-gray-800 px-6 py-4 text-white flex justify-between items-center">
-                    <h3 className="font-semibold text-lg">Select Payment Method</h3>
-                    <button onClick={() => { setShowPaymentModal(false); setIsProcessingPayment(false); }} className="text-white/80 hover:text-white">✕</button>
+        <div className="fixed inset-0 bg-white z-[80] flex flex-col animate-[fadeIn_0.2s_ease-in-out]">
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-neutral-200 shrink-0">
+            <button
+              onClick={() => setShowPaymentModal(false)}
+              className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-neutral-100 transition-colors"
+              aria-label="Close"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <h3 className="text-base font-bold text-neutral-900">Payment Setting</h3>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            <button
+              onClick={() => { setSelectedPaymentMethod('Cash'); setShowPaymentModal(false); }}
+              className={`w-full flex items-center gap-3 p-4 border rounded-2xl text-left transition-all ${
+                selectedPaymentMethod === 'Cash'
+                  ? 'border-[var(--customer-primary-dark)] ring-1 ring-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)]'
+                  : 'border-neutral-200 hover:bg-neutral-50'
+              }`}
+            >
+              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="2" y="6" width="20" height="12" rx="2" stroke="#059669" strokeWidth="2" />
+                  <circle cx="12" cy="12" r="2" stroke="#059669" strokeWidth="2" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-neutral-900">Pay on Delivery</p>
+                <p className="text-xs text-neutral-500 mt-0.5">Pay digitally or at your doorstep when your order arrives</p>
+              </div>
+              <span className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                selectedPaymentMethod === 'Cash' ? 'border-[var(--customer-primary-dark)]' : 'border-neutral-300'
+              }`}>
+                {selectedPaymentMethod === 'Cash' && (
+                  <span className="w-2.5 h-2.5 rounded-full bg-[var(--customer-primary-dark)]" />
+                )}
+              </span>
+            </button>
+
+            <button
+              onClick={() => { setSelectedPaymentMethod('Razorpay'); setShowPaymentModal(false); }}
+              className={`w-full flex items-center gap-3 p-4 border rounded-2xl text-left transition-all ${
+                selectedPaymentMethod === 'Razorpay'
+                  ? 'border-[var(--customer-primary-dark)] ring-1 ring-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)]'
+                  : 'border-neutral-200 hover:bg-neutral-50'
+              }`}
+            >
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="2" y="5" width="20" height="14" rx="2" stroke="#2563eb" strokeWidth="2" />
+                  <path d="M2 10h20" stroke="#2563eb" strokeWidth="2" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-neutral-900">Pay Online</p>
+                <p className="text-xs text-neutral-500 mt-0.5">Pay using UPI, Cards, Net Banking, Wallets and more</p>
+                {onlineDiscountAmount > 0 && (
+                  <span className="inline-block mt-1 text-[10px] bg-[var(--customer-primary-alpha-20)] text-[var(--customer-primary-dark)] px-1.5 py-0.5 rounded font-bold">
+                    Save ₹{onlineDiscountAmount.toFixed(2)}
+                  </span>
+                )}
+              </div>
+              <span className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                selectedPaymentMethod === 'Razorpay' ? 'border-[var(--customer-primary-dark)]' : 'border-neutral-300'
+              }`}>
+                {selectedPaymentMethod === 'Razorpay' && (
+                  <span className="w-2.5 h-2.5 rounded-full bg-[var(--customer-primary-dark)]" />
+                )}
+              </span>
+            </button>
+
+            <div className="border border-neutral-200 rounded-2xl overflow-hidden opacity-60">
+              <div className="flex items-center gap-3 p-4">
+                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 7a2 2 0 012-2h13a1 1 0 011 1v2M3 7v10a2 2 0 002 2h14a2 2 0 002-2v-8a1 1 0 00-1-1H5a2 2 0 01-2-2z" stroke="#7c3aed" strokeWidth="2" />
+                    <circle cx="16" cy="13" r="1.5" fill="#7c3aed" />
+                  </svg>
                 </div>
-                <div className="p-6 space-y-4">
-                     <div className="text-center mb-6">
-                         <p className="text-gray-500 text-sm mb-1">Total Amount</p>
-                         <p className="text-3xl font-bold text-gray-900">₹{Math.max(0, grandTotal)}</p>
-                     </div>
-
-                     {isProcessingPayment ? (
-                        <div className="flex flex-col items-center justify-center py-8">
-                            <div className="w-10 h-10 border-4 border-[var(--customer-primary-dark)] border-t-transparent rounded-full animate-spin mb-4"></div>
-                            <p className="text-sm font-medium text-gray-600">Processing Payment...</p>
-                        </div>
-                     ) : (
-                        <div className="space-y-3">
-                            <button
-                              onClick={() => handlePaymentSelection('Razorpay')}
-                              className="w-full group flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-[var(--customer-primary)] hover:bg-[var(--customer-primary-alpha-10)] transition-all text-left"
-                            >
-                                <div className="flex items-center gap-3">
-                                   <div className="w-8 h-8 rounded-full bg-[var(--customer-primary-alpha-20)] flex items-center justify-center text-[var(--customer-primary-dark)] font-bold">R</div>
-                                   <div>
-                                       <span className="block font-semibold text-gray-700 group-hover:text-blue-700">Online Payment</span>
-                                       {onlineDiscountAmount > 0 && (
-                                           <span className="text-[10px] bg-[var(--customer-primary-alpha-20)] text-[var(--customer-primary-dark)] px-1.5 py-0.5 rounded font-bold">₹{(grandTotal - onlineDiscountAmount).toFixed(2)} (-₹{onlineDiscountAmount.toFixed(2)})</span>
-                                       )}
-                                   </div>
-                                </div>
-                                <span className="text-gray-300 group-hover:text-[var(--customer-primary)]">→</span>
-                            </button>
-
-                            <button
-                              onClick={() => handlePaymentSelection('Cashfree')}
-                              className="w-full group flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition-all text-left"
-                            >
-                                <div className="flex items-center gap-3">
-                                   <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold">C</div>
-                                   <div>
-                                       <span className="block font-semibold text-gray-700 group-hover:text-purple-700">Cashfree</span>
-                                       {onlineDiscountAmount > 0 && (
-                                           <span className="text-[10px] bg-[var(--customer-primary-alpha-20)] text-[var(--customer-primary-dark)] px-1.5 py-0.5 rounded font-bold">₹{(grandTotal - onlineDiscountAmount).toFixed(2)} (-₹{onlineDiscountAmount.toFixed(2)})</span>
-                                       )}
-                                   </div>
-                                </div>
-                                <span className="text-gray-300 group-hover:text-purple-500">→</span>
-                            </button>
-
-                             <button
-                              onClick={() => handlePaymentSelection('Cash')}
-                              className="w-full group flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-[var(--customer-primary)] hover:bg-[var(--customer-primary-alpha-10)] transition-all"
-                            >
-                                <div className="flex items-center gap-3">
-                                   <div className="w-8 h-8 rounded-full bg-[var(--customer-primary-alpha-20)] flex items-center justify-center text-[var(--customer-primary-dark)] font-bold text-xs">COD</div>
-                                   <span className="font-semibold text-gray-700 group-hover:text-[var(--customer-primary-dark)]">Cash on Delivery</span>
-                                </div>
-                                <span className="text-gray-300 group-hover:text-[var(--customer-primary)]">→</span>
-                            </button>
-                         </div>
-                     )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-neutral-400">Kuiklo Money</p>
+                  <p className="text-xs text-neutral-400 mt-0.5">Available Balance</p>
+                  <p className="text-sm font-bold text-neutral-400 mt-0.5">₹0.0</p>
                 </div>
+                <span className="w-5 h-5 rounded-full border-2 border-neutral-200 shrink-0" />
+              </div>
+              <div className="flex items-center justify-between px-4 py-3 bg-neutral-50 border-t border-neutral-200">
+                <span className="text-xs text-neutral-500">Insufficient balance in wallet</span>
+                <span className="text-xs font-bold text-neutral-400">Add Money</span>
+              </div>
             </div>
+          </div>
         </div>
       )}
 

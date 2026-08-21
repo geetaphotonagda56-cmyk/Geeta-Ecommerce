@@ -48,6 +48,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }, [headerCategories]);
 
     const themeKey = useMemo(() => {
+        // The "All" tab is the storefront default — it must always reflect the
+        // real admin-configured brand color (--customer-primary etc.), never a
+        // per-category mood theme. Header categories can still be individually
+        // assigned a seasonal theme (e.g. "wedding", "sports") in the admin
+        // panel; that only applies once the shopper picks that specific tab.
+        if (activeCategory === 'all') return 'all';
         return slugToThemeMap.get(activeCategory) || activeCategory || 'all';
     }, [activeCategory, slugToThemeMap]);
 
