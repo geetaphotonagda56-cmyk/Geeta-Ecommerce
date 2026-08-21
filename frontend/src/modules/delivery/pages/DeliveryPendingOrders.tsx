@@ -96,11 +96,18 @@ export default function DeliveryPendingOrders() {
                     <p className="text-neutral-600 text-xs mb-1">{order.customerName}</p>
                     <p className="text-neutral-500 text-xs">{order.customerPhone}</p>
                   </div>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}
-                  >
-                    {order.status}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    {order.routeSequence != null && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-neutral-900 text-white">
+                        Stop {order.routeSequence}
+                      </span>
+                    )}
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}
+                    >
+                      {order.status}
+                    </span>
+                  </div>
                 </div>
                 <div className="border-t border-neutral-200 pt-3 mt-3">
                   <p className="text-neutral-600 text-xs mb-2 line-clamp-2">{order.address}</p>
@@ -113,6 +120,7 @@ export default function DeliveryPendingOrders() {
                   {order.estimatedDeliveryTime && (
                     <p className="text-neutral-500 text-xs">
                       ETA: {order.estimatedDeliveryTime} {order.distance && `• ${order.distance}`}
+                      {order.nextStopType === 'pickup' && ' • Pick up from seller next'}
                     </p>
                   )}
                   <p className="text-neutral-400 text-xs mt-2">

@@ -26,3 +26,14 @@
   font-display: swap;
   src: url('/fonts/poppins-700.woff2') format('woff2');
 }
+
+/* Display face for hero copy, section titles and prices — a warm, characterful
+   serif that reads "fresh market" rather than generic SaaS. Variable font
+   (wght axis), so one file covers the 600-700 range we use it at. */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 600 700;
+  font-display: swap;
+  src: url('/fonts/fraunces-variable.woff2') format('woff2-variations'), url('/fonts/fraunces-variable.woff2') format('woff2');
+}

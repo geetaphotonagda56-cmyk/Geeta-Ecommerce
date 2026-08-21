@@ -150,7 +150,7 @@ export default function DealOfTheDay() {
             style={{ borderColor: BRAND.border }}
           >
               <div>
-                  <h3 className="text-2xl font-bold text-gray-800">Deal of the Day</h3>
+                  <h3 className="font-display text-2xl font-bold text-gray-800">Deal of the Day</h3>
                   <p className="text-sm text-gray-500 mt-1">Grab the best prices before they reset!</p>
               </div>
               <ViewAllButton onClick={() => navigate('/deal-of-the-day')} />

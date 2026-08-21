@@ -485,7 +485,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
         {/* Search Bar */}
         <div
           onClick={() => navigate('/search')}
-          className={`w-full md:w-auto md:max-w-xl md:mx-auto rounded-xl shadow-lg px-3 ${isSticky ? 'py-3 md:py-2.5' : 'py-2 md:py-1.5'} flex items-center gap-2 cursor-pointer hover:shadow-xl transition-all duration-300 mb-2 md:mb-1.5 bg-white relative z-50`}
+          className={`w-full md:w-auto md:max-w-xl md:mx-auto rounded-2xl shadow-[0_6px_20px_-6px_rgba(15,23,42,0.25)] px-3.5 ${isSticky ? 'py-3 md:py-2.5' : 'py-2 md:py-1.5'} flex items-center gap-2 cursor-pointer hover:shadow-[0_10px_28px_-6px_rgba(15,23,42,0.3)] transition-all duration-300 mb-2 md:mb-1.5 bg-white relative z-50`}
           style={{
             backgroundColor: isSticky ? `rgba(249, 250, 251, 1)` : 'white',
             border: isSticky ? `1px solid rgba(229, 231, 235, 1)` : 'none',
@@ -552,8 +552,15 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
         >
           {indicatorStyle.width > 0 && (
             <div
-              className="absolute bottom-0 h-1 bg-neutral-900 rounded-t-md transition-all duration-300 ease-out pointer-events-none"
-              style={{ left: `${indicatorStyle.left}px`, width: `${indicatorStyle.width}px`, transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)', zIndex: 0 }}
+              className="absolute bottom-0 h-[3px] rounded-full transition-all duration-300 ease-out pointer-events-none"
+              style={{
+                left: `${indicatorStyle.left}px`,
+                width: `${indicatorStyle.width}px`,
+                background: 'linear-gradient(90deg, var(--customer-primary), var(--customer-primary-dark, var(--customer-primary)))',
+                boxShadow: '0 0 8px var(--customer-primary-alpha-40, rgba(0,0,0,0.25))',
+                transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                zIndex: 0,
+              }}
             />
           )}
 

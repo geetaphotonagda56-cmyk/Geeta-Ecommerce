@@ -6,6 +6,7 @@ import LowestPricesEver from "./components/LowestPricesEver";
 import CategoryTileSection from "./components/CategoryTileSection";
 import OptimizedImage from "../../components/OptimizedImage";
 import ViewAllButton from "./components/ViewAllButton";
+import SectionHeader from "./components/SectionHeader";
 import ProductCard from "./components/ProductCard";
 import BannerSlider from "./components/banners/BannerSlider";
 import HomePopup from "./components/banners/HomePopup";
@@ -560,7 +561,7 @@ export default function Home() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Oops! Something went wrong</h3>
+        <h3 className="font-display text-lg font-bold text-gray-900 mb-2">Oops! Something went wrong</h3>
         <p className="text-gray-600 mb-6 max-w-xs">{error}</p>
         <button
           onClick={() => window.location.reload()}
@@ -670,12 +671,7 @@ export default function Home() {
         {/* Filtered Products Section */}
         {activeTab !== "all" && (
           <div data-products-section className="mt-6 mb-6 md:mt-8 md:mb-8">
-            <div className="flex items-center gap-2 mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
-              <span className="w-1 h-5 md:h-6 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
-              <h2 className="text-lg md:text-2xl font-bold text-neutral-900 tracking-tight capitalize">
-                {activeTab === "grocery" ? "Grocery Items" : activeTab}
-              </h2>
-            </div>
+            <SectionHeader title={activeTab === "grocery" ? "Grocery Items" : activeTab} />
             <div className="px-4 md:px-6 lg:px-8">
               {filteredProducts.length > 0 ? (
                 <>
@@ -756,17 +752,10 @@ export default function Home() {
                     return (
                       <div key={section.id} className="mt-6 mb-6 md:mt-8 md:mb-8">
                         {section.title && (
-                          <div className="flex items-center justify-between mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
-                            <div className="flex items-center gap-2">
-                              <span className="w-1 h-5 md:h-6 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
-                              <h2 className="text-lg md:text-2xl font-bold text-neutral-900 tracking-tight capitalize">
-                                {section.title}
-                              </h2>
-                            </div>
-                            {section.slug && (
-                              <ViewAllButton onClick={() => navigate(`/section/${section.slug}`)} />
-                            )}
-                          </div>
+                          <SectionHeader
+                            title={section.title}
+                            action={section.slug ? <ViewAllButton onClick={() => navigate(`/section/${section.slug}`)} /> : undefined}
+                          />
                         )}
                         <div className="px-4 md:px-6 lg:px-8">
                           <LazyProductGrid
@@ -805,12 +794,7 @@ export default function Home() {
 
             {/* Shop by Store Section */}
             <div className="mb-6 mt-6 md:mb-8 md:mt-8">
-              <div className="flex items-center gap-2 mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
-                <span className="w-1 h-5 md:h-6 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
-                <h2 className="text-lg md:text-2xl font-bold text-neutral-900 tracking-tight">
-                  Shop by Store
-                </h2>
-              </div>
+              <SectionHeader title="Shop by Store" />
               <div className="px-4 md:px-6 lg:px-8">
                 <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 md:gap-4">
                   {loading && (!homeData.shops || homeData.shops.length === 0)
@@ -872,12 +856,7 @@ export default function Home() {
             {/* All Products - real backend-paginated infinite scroll */}
             {allProducts.length > 0 && (
               <div className="mt-6 mb-6 md:mt-8 md:mb-8">
-                <div className="flex items-center gap-2 mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
-                  <span className="w-1 h-5 md:h-6 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
-                  <h2 className="text-lg md:text-2xl font-bold text-neutral-900 tracking-tight">
-                    All Products
-                  </h2>
-                </div>
+                <SectionHeader title="All Products" />
                 <div className="px-4 md:px-6 lg:px-8">
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
                     {allProducts.map((product) => (

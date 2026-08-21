@@ -13,6 +13,7 @@ import Customer from "../../../models/Customer";
 import Notification from "../../../models/Notification";
 import { sendPushNotification } from "../../../services/firebaseAdmin";
 import { calculateDeliveryCommission } from "../../../services/deliveryCommissionService";
+import { getRouteInfoForOrders } from "../../../services/deliveryRouteService";
 
 /**
  * Notify the customer (push + in-app record) and admin (socket) that an
@@ -150,23 +151,42 @@ export const getTodayOrders = asyncHandler(async (req: Request, res: Response) =
             { updatedAt: { $gte: todayStart, $lte: todayEnd } }  // OR Updated today
         ]
     })
-        .populate("items")
-        .sort({ updatedAt: -1 });
+        .populate("items");
 
-    const formattedOrders = orders.map(order => ({
-        id: order._id,
-        orderId: order.orderNumber,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        status: order.status,
-        address: `${order.deliveryAddress?.address || ''}, ${order.deliveryAddress?.city || ''}`,
-        items: mapOrderItems(order.items), // Real items
-        totalAmount: order.total,
-        estimatedDeliveryTime: order.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
-        createdAt: order.createdAt,
-        // Distance calculation to be implemented. sending null/undefined for now to avoid fake data
-        distance: null
-    }));
+    const routeInfo = await getRouteInfoForOrders(deliveryId as string, orders);
+
+    const formattedOrders = orders.map(order => {
+        const route = routeInfo.get(String(order._id));
+        return {
+            id: order._id,
+            orderId: order.orderNumber,
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            status: order.status,
+            address: `${order.deliveryAddress?.address || ''}, ${order.deliveryAddress?.city || ''}`,
+            items: mapOrderItems(order.items), // Real items
+            totalAmount: order.total,
+            estimatedDeliveryTime: order.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+            createdAt: order.createdAt,
+            // Route sequencing: which stop to visit next (pickup or dropoff),
+            // its position in the suggested route, and distance from the
+            // previous stop - computed fresh from the rider's live location
+            // and every order currently assigned to them (see
+            // deliveryRouteService.getRouteInfoForOrders).
+            routeSequence: route?.sequence ?? null,
+            nextStopType: route?.nextStopType ?? null,
+            distance: route?.distanceFromPrevKm != null ? `${route.distanceFromPrevKm} km` : null
+        };
+    });
+
+    // Unsequenced orders (missing coordinates) sort after sequenced ones,
+    // most-recently-updated first as a fallback.
+    formattedOrders.sort((a, b) => {
+        if (a.routeSequence !== null && b.routeSequence !== null) return a.routeSequence - b.routeSequence;
+        if (a.routeSequence !== null) return -1;
+        if (b.routeSequence !== null) return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 
     return res.status(200).json({
         success: true,
@@ -189,22 +209,35 @@ export const getPendingOrders = asyncHandler(async (req: Request, res: Response)
         deliveryBoy: deliveryId,
         status: { $nin: ["Delivered", "Cancelled", "Rejected", "Returned"] }
     })
-        .populate("items")
-        .sort({ createdAt: -1 });
+        .populate("items");
 
-    const formattedOrders = orders.map(order => ({
-        id: order._id,
-        orderId: order.orderNumber,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        status: order.status,
-        address: `${order.deliveryAddress?.address || ''}, ${order.deliveryAddress?.city || ''}`,
-        items: mapOrderItems(order.items), // Real items
-        totalAmount: order.total,
-        estimatedDeliveryTime: order.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
-        createdAt: order.createdAt,
-        distance: null
-    }));
+    const routeInfo = await getRouteInfoForOrders(deliveryId as string, orders);
+
+    const formattedOrders = orders.map(order => {
+        const route = routeInfo.get(String(order._id));
+        return {
+            id: order._id,
+            orderId: order.orderNumber,
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            status: order.status,
+            address: `${order.deliveryAddress?.address || ''}, ${order.deliveryAddress?.city || ''}`,
+            items: mapOrderItems(order.items), // Real items
+            totalAmount: order.total,
+            estimatedDeliveryTime: order.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+            createdAt: order.createdAt,
+            routeSequence: route?.sequence ?? null,
+            nextStopType: route?.nextStopType ?? null,
+            distance: route?.distanceFromPrevKm != null ? `${route.distanceFromPrevKm} km` : null
+        };
+    });
+
+    formattedOrders.sort((a, b) => {
+        if (a.routeSequence !== null && b.routeSequence !== null) return a.routeSequence - b.routeSequence;
+        if (a.routeSequence !== null) return -1;
+        if (b.routeSequence !== null) return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 
     return res.status(200).json({
         success: true,

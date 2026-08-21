@@ -33,6 +33,12 @@ export default {
         },
         cream: '#FFF7E0',
       },
+      fontFamily: {
+        // Storefront-only type system (AppLayout applies these classes so
+        // admin/seller/delivery keep their existing system-font look).
+        body: ['Poppins', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
+      },
     },
   },
   plugins: [tailwindcssAnimate],

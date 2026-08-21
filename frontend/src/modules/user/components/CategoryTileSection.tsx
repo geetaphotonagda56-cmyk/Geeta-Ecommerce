@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import ViewAllButton from "./ViewAllButton";
+import SectionHeader from "./SectionHeader";
 import AutoScrollImages from "./AutoScrollImages";
 import type { ImageVariants } from "../../../components/OptimizedImage";
 
@@ -88,17 +89,10 @@ export default function CategoryTileSection({
   return (
     <div className="mb-6 md:mb-8 mt-0 overflow-visible">
       {title && (
-        <div className="flex items-center justify-between mb-3 md:mb-6 px-4 md:px-6 lg:px-8">
-          <div className="flex items-center gap-2">
-            <span className="w-1 h-5 md:h-6 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
-            <h2 className="text-lg md:text-2xl font-bold text-neutral-900 tracking-tight">
-              {title}
-            </h2>
-          </div>
-          {viewAllLink && (
-            <ViewAllButton onClick={() => navigate(viewAllLink)} />
-          )}
-        </div>
+        <SectionHeader
+          title={title}
+          action={viewAllLink ? <ViewAllButton onClick={() => navigate(viewAllLink)} /> : undefined}
+        />
       )}
       <div className="px-4 md:px-6 lg:px-8 overflow-visible">
         <div className={`grid ${gridCols} ${gapClass} overflow-visible auto-rows-fr`}>
@@ -151,11 +145,11 @@ export default function CategoryTileSection({
                       handleTileClick(tile);
                     }
                   }}
-                  className={`flex flex-col bg-white shadow-sm border border-neutral-200 hover:shadow-md transition-shadow ${showProductCount ? "px-2.5" : "px-1.5"
+                  className={`flex flex-col bg-white rounded-xl border border-neutral-100 shadow-[0_1px_2px_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-6px_rgba(15,23,42,0.18)] hover:border-neutral-200 transition-all duration-200 ${showProductCount ? "px-2.5 pt-2.5" : "px-1.5 pt-1.5"
                     }`}>
                   {/* Image - Single image for non-bestsellers, 2x2 grid for bestsellers */}
                   <div
-                    className={`w-full overflow-hidden flex items-center justify-center flex-shrink-0 ${showProductCount ? "h-32 md:h-36 mb-2" : "aspect-square"
+                    className={`w-full overflow-hidden rounded-lg flex items-center justify-center flex-shrink-0 ${showProductCount ? "h-32 md:h-36 mb-2" : "aspect-square"
                       } ${tile.bgColor || "bg-cyan-50"}`}
                     style={{ transform: 'scale(0.9)', transformOrigin: 'center' }}>
                     {hasImages ? (
@@ -210,10 +204,11 @@ export default function CategoryTileSection({
 
                   {/* Tile name - inside card only for bestsellers */}
                   {showProductCount && (
-                    <div className="text-[11px] font-semibold text-neutral-900 line-clamp-2 leading-tight text-center w-full block flex-shrink-0">
+                    <div className="pb-2.5 text-[11px] font-semibold text-neutral-900 line-clamp-2 leading-tight text-center w-full block flex-shrink-0">
                       {tile.name}
                     </div>
                   )}
+                  {!showProductCount && <div className="pb-1.5" />}
                 </Link>
 
                 {/* Category name - outside card for non-bestsellers */}

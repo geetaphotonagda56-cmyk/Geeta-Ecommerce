@@ -133,7 +133,7 @@ export default function FeaturedDeal() {
               <div>
                   <div className="flex items-center gap-2">
                     <span className="w-1 h-5 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--customer-primary)' }} />
-                    <h3 className="text-xl font-black text-slate-800 tracking-tight">Featured Deals</h3>
+                    <h3 className="font-display text-xl font-bold text-slate-800 tracking-tight">Featured Deals</h3>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5 ml-3">See the latest deals and exciting new offers!</p>
               </div>

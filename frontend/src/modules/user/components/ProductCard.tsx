@@ -218,7 +218,7 @@ export default function ProductCard({
   return (
     <div
       id={`product-${(product as any).id || product._id}`}
-      className="h-full bg-white overflow-hidden flex flex-col relative rounded-md border border-neutral-100 transition-all duration-200 ease-out hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97]"
+      className="h-full bg-white overflow-hidden flex flex-col relative rounded-2xl border border-neutral-100 shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-all duration-200 ease-out hover:shadow-[0_10px_24px_-8px_rgba(15,23,42,0.2)] hover:border-neutral-200 hover:-translate-y-1 active:scale-[0.97]"
       style={{ backgroundColor: '#ffffff' }}
     >
       <div
@@ -255,7 +255,8 @@ export default function ProductCard({
 
           {categoryStyle && showBadge && discount > 0 && (
             <div
-                className="absolute top-0 left-0 z-10 text-neutral-900 text-[10px] font-bold px-2 py-1 flex items-center gap-1 shadow-sm transition-transform hover:scale-105 bg-neutral-200"
+                className="absolute top-2 left-0 z-10 text-white text-[10px] font-bold pl-2 pr-2.5 py-1 rounded-r-full flex items-center gap-1 shadow-[0_3px_8px_-2px_rgba(220,38,38,0.55)]"
+                style={{ background: 'linear-gradient(135deg, #f43f5e, #dc2626)' }}
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                 <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
@@ -267,7 +268,8 @@ export default function ProductCard({
 
           {!categoryStyle && showBadge && (badgeText || discount > 0) && (
             <div
-              className="absolute top-0 left-0 z-10 text-neutral-900 text-[10px] px-2.5 py-1 font-bold shadow-md flex items-center gap-1 bg-neutral-200"
+              className="absolute top-2 left-0 z-10 text-white text-[10px] pl-2.5 pr-3 py-1 rounded-r-full font-bold shadow-[0_3px_8px_-2px_rgba(220,38,38,0.55)] flex items-center gap-1"
+              style={{ background: 'linear-gradient(135deg, #f43f5e, #dc2626)' }}
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                 <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
@@ -293,7 +295,7 @@ export default function ProductCard({
                 e.stopPropagation();
                 toggleWishlist(e);
               }}
-              className="absolute top-2 right-2 z-30 w-9 h-9 bg-white/95 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-all shadow-md group/heart"
+              className="absolute top-2 right-2 z-30 w-9 h-9 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-all shadow-md group/heart"
               aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
             >
               <svg
@@ -317,7 +319,7 @@ export default function ProductCard({
 
           {variantCount >= 2 && (
             <div className="absolute bottom-2 left-2 z-10">
-              <span className="text-[10px] font-bold text-neutral-700 bg-white/95 backdrop-blur-sm px-2 py-1 shadow-sm border border-neutral-200">
+              <span className="text-[10px] font-bold text-neutral-700 bg-white/95 backdrop-blur-sm px-2 py-1 rounded-full shadow-sm border border-neutral-200">
                 {variantCount} Options
               </span>
             </div>
@@ -370,7 +372,8 @@ export default function ProductCard({
               </div>
             ) : (
               <div
-                className="flex items-center justify-center gap-1.5 bg-neutral-200 px-1 py-0.5 h-8 w-full border border-neutral-300 shadow-sm"
+                className="flex items-center justify-center gap-1.5 rounded-lg px-1 py-0.5 h-8 w-full shadow-inner"
+                style={{ backgroundColor: 'var(--customer-primary-alpha-10, #f4f4f5)' }}
               >
                 <Button
                   variant="default"
@@ -379,14 +382,14 @@ export default function ProductCard({
                     e.stopPropagation();
                     handleDecrease(e);
                   }}
-                  className="w-6 h-6 p-0 bg-white hover:bg-neutral-100 shadow-sm text-neutral-900 transition-colors border border-neutral-300"
+                  className="w-6 h-6 p-0 rounded-md bg-white hover:bg-neutral-50 shadow-sm text-neutral-900 transition-colors border-0"
                   aria-label="Decrease quantity"
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
                 </Button>
-                <span className="text-xs font-black min-w-[1.25rem] text-center text-neutral-900">
+                <span className="font-display text-xs font-bold min-w-[1.25rem] text-center text-neutral-900">
                   {inCartQty}
                 </span>
                 <Button
@@ -397,7 +400,7 @@ export default function ProductCard({
                     e.stopPropagation();
                     handleIncrease(e);
                   }}
-                  className={`w-6 h-6 p-0 bg-white hover:bg-neutral-100 shadow-sm text-neutral-900 transition-colors border border-neutral-300 ${
+                  className={`w-6 h-6 p-0 rounded-md bg-white hover:bg-neutral-50 shadow-sm text-neutral-900 transition-colors border-0 ${
                     product.isAvailable === false ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                   aria-label="Increase quantity"
@@ -482,12 +485,12 @@ export default function ProductCard({
 
               {/* 5. Price with discount */}
               <div className="mt-auto pt-0.5">
-                <div className="flex items-baseline gap-1 flex-wrap">
-                  <span className="text-base md:text-lg font-bold text-red-600 leading-tight">
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                  <span className="font-display text-base md:text-lg font-bold text-neutral-900 leading-tight">
                     ₹{currentUnitPrice.toLocaleString('en-IN')}
                   </span>
                   {mrp && mrp > displayPrice && (
-                    <span className="text-[10px] text-neutral-500 line-through leading-tight">
+                    <span className="text-[10px] text-neutral-400 line-through leading-tight">
                       ₹{mrp.toLocaleString('en-IN')}
                     </span>
                   )}
@@ -560,11 +563,11 @@ export default function ProductCard({
 
               <div className="mt-auto mb-2">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-lg font-bold text-red-600">
+                  <span className="font-display text-lg font-bold text-neutral-900">
                     ₹{displayPrice}
                   </span>
                   {mrp && mrp > displayPrice && (
-                    <span className="text-xs text-neutral-500 line-through">
+                    <span className="text-xs text-neutral-400 line-through">
                       ₹{mrp}
                     </span>
                   )}
@@ -619,20 +622,21 @@ export default function ProductCard({
               </div>
             ) : (
               <div
-                className="flex items-center justify-center gap-2 bg-neutral-200 px-2 py-1 h-9 border border-neutral-300 shadow-sm"
+                className="flex items-center justify-center gap-2 rounded-lg px-2 py-1 h-9 shadow-inner"
+                style={{ backgroundColor: 'var(--customer-primary-alpha-10, #f4f4f5)' }}
               >
                 <Button
                   variant="default"
                   size="icon"
                   onClick={handleDecrease}
-                  className="w-7 h-7 p-0 bg-white hover:bg-neutral-100 shadow-sm text-neutral-900 transition-colors border border-neutral-300"
+                  className="w-7 h-7 p-0 rounded-md bg-white hover:bg-neutral-50 shadow-sm text-neutral-900 transition-colors border-0"
                   aria-label="Decrease quantity"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
                 </Button>
-                <span className="text-xs font-black min-w-[1.5rem] text-center text-neutral-900">
+                <span className="font-display text-xs font-bold min-w-[1.5rem] text-center text-neutral-900">
                   {inCartQty}
                 </span>
                 <Button
@@ -640,7 +644,7 @@ export default function ProductCard({
                   size="icon"
                   disabled={product.isAvailable === false}
                   onClick={handleIncrease}
-                  className={`w-7 h-7 p-0 bg-white hover:bg-neutral-100 shadow-sm text-neutral-900 transition-colors border border-neutral-300 ${
+                  className={`w-7 h-7 p-0 rounded-md bg-white hover:bg-neutral-50 shadow-sm text-neutral-900 transition-colors border-0 ${
                     product.isAvailable === false ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                   aria-label="Increase quantity"
