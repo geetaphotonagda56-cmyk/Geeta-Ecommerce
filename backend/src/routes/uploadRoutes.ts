@@ -17,6 +17,7 @@ import {
 } from "../services/s3Service";
 import { S3_FOLDERS } from "../config/s3";
 import { asyncHandler } from "../utils/asyncHandler";
+import { fetchUrlSafely } from "../utils/ssrfSafeUrlFetch";
 
 const router = Router();
 
@@ -131,6 +132,40 @@ router.post(
       return res.status(422).json({
         success: false,
         message: error.message || "Failed to fetch and process the image URL",
+      });
+    }
+  })
+);
+
+/**
+ * GET /api/v1/upload/proxy-image
+ * Streams back the raw bytes of an external image URL (SSRF-checked) without
+ * persisting anything to S3 - lets the browser turn a search-picked image
+ * into a same-origin File for the crop modal. The eventual crop is uploaded
+ * for real afterwards via /image or /image-from-url.
+ */
+router.get(
+  "/proxy-image",
+  authenticate,
+  requireUserType("Admin", "Seller"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { url } = req.query;
+
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "url is required",
+      });
+    }
+
+    try {
+      const { buffer, contentType } = await fetchUrlSafely(url);
+      res.setHeader("Content-Type", contentType);
+      return res.status(200).send(buffer);
+    } catch (error: any) {
+      return res.status(422).json({
+        success: false,
+        message: error.message || "Failed to fetch the image URL",
       });
     }
   })

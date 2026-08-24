@@ -20,7 +20,7 @@ import AttributeDropdown from "../../../components/AttributeDropdown";
 import SearchableSelect from "../../../components/SearchableSelect";
 import AttachProductModal from "../../../components/AttachProductModal";
 import { searchProductImage } from "../../../services/api/productService";
-import { uploadImageFromUrl } from "../../../services/api/uploadService";
+import { fetchImageAsFile } from "../../../services/api/uploadService";
 import ImageCropperModal from "../../../components/ImageCropperModal";
 
 interface AdminStockBulkEditProps {
@@ -229,90 +229,42 @@ export default function AdminStockBulkEdit({
       );
   };
 
+  // Fetches each search-picked URL back through our own backend (so the
+  // browser gets a same-origin blob, sidestepping hotlink/CORS issues) and
+  // queues it as a File next to locally-uploaded images, so it goes through
+  // the same one-by-one crop popup instead of being applied unedited.
   const applySearchedImages = async (urls: string[]) => {
       if (!urls.length || imageSourceModalRowIndex === null) return;
 
-      setIsSearchingImage(true);
-      let uploaded: { url: string; variants: import("../../../services/api/uploadService").ImageVariants | null }[];
-      try {
-        uploaded = await Promise.all(
-          urls.map(async (url) => {
-            try {
-              const result = await uploadImageFromUrl(url, "Geeta Stores/products");
-              return { url: result.secureUrl || result.url, variants: result.variants ?? null };
-            } catch (err) {
-              // Some source sites block server-side fetches outright (hotlink
-              // protection, bot detection) with no way for us to satisfy
-              // them. Fail open to the original URL rather than blocking the
-              // admin from using an image their own browser can render fine
-              // - same fail-open precedent as sharp/CloudFront elsewhere in
-              // this pipeline. That image just won't get compressed.
-              console.warn("Could not process search-picked image server-side, using it unprocessed", url, err);
-              return { url, variants: null };
-            }
-          })
-        );
-      } finally {
-        setIsSearchingImage(false);
-      }
-
-      if (imageSourceModalVariationIndex !== null) {
-          const vIdx = imageSourceModalVariationIndex;
-          setEditableProducts((prev) => {
-              const updated = [...prev];
-              const oldProd = updated[imageSourceModalRowIndex];
-              if (!oldProd) return prev;
-              const variations = [...(oldProd.variations || [])];
-              const targetVariation = { ...(variations[vIdx] || {}) };
-              const [first, ...rest] = uploaded;
-              const galleryAdditions = targetVariation.mainImage ? uploaded : rest;
-              if (!targetVariation.mainImage) {
-                  targetVariation.mainImage = first.url;
-                  targetVariation.mainImageVariants = first.variants || undefined;
-              }
-              if (galleryAdditions.length) {
-                  targetVariation.galleryImages = [
-                    ...(targetVariation.galleryImages || []),
-                    ...galleryAdditions.map((g) => g.url),
-                  ];
-              }
-              variations[vIdx] = targetVariation;
-              const newProd = { ...oldProd, variations, isChanged: true };
-              updated[imageSourceModalRowIndex] = newProd;
-              upsertEditedCache(newProd);
-              return updated;
-          });
-          setSearchedImages([]);
-          setSelectedSearchImages([]);
-          setImageSearchQuery("");
-          return;
-      }
-
-      const newImages: ProductImage[] = uploaded.map((u, i) => ({
-        id: `${Date.now()}-${i}`,
-        url: u.url,
-      }));
-      setEditableProducts((prev) => {
-          const updated = [...prev];
-          const currentProduct = updated[imageSourceModalRowIndex];
-          updated[imageSourceModalRowIndex] = {
-              ...currentProduct,
-              images: [...currentProduct.images, ...newImages],
-              isChanged: true
-          };
-          return updated;
-      });
-      setTimeout(() => {
-          setEditableProducts(current => {
-              const p = current[imageSourceModalRowIndex];
-              if (p) upsertEditedCache(p);
-              return current;
-          });
-      }, 0);
+      const productIndex = imageSourceModalRowIndex;
+      const variationIndex = imageSourceModalVariationIndex ?? undefined;
 
       setSearchedImages([]);
       setSelectedSearchImages([]);
       setImageSearchQuery("");
+
+      setIsSearchingImage(true);
+      try {
+        const results = await Promise.allSettled(
+          urls.map((url, i) => fetchImageAsFile(url, `search-image-${Date.now()}-${i}.jpg`))
+        );
+        const files = results
+          .filter((r): r is PromiseFulfilledResult<File> => r.status === "fulfilled")
+          .map((r) => r.value);
+        const failedCount = results.length - files.length;
+        if (failedCount > 0) {
+          console.error("Failed to load some selected images for editing", results);
+          alert(`Failed to load ${failedCount} of the selected image(s). The rest will open for cropping.`);
+        }
+        if (files.length) {
+          setImageCropQueue((prev) => [
+            ...prev,
+            ...files.map((file) => ({ productIndex, variationIndex, file })),
+          ]);
+        }
+      } finally {
+        setIsSearchingImage(false);
+      }
   };
 
   useEffect(() => {

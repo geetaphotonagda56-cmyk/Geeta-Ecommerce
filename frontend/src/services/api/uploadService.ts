@@ -76,6 +76,23 @@ export async function uploadImageFromUrl(
 }
 
 /**
+ * Fetches an external image URL through the backend's SSRF-checked proxy and
+ * returns it as a File, so a search-picked image can go through the same
+ * client-side crop step a local upload does before it's actually saved.
+ */
+export async function fetchImageAsFile(
+  url: string,
+  filename: string
+): Promise<File> {
+  const response = await api.get("/upload/proxy-image", {
+    params: { url },
+    responseType: "blob",
+  });
+  const blob: Blob = response.data;
+  return new File([blob], filename, { type: blob.type || "image/jpeg" });
+}
+
+/**
  * Upload multiple images to Cloudinary via backend
  */
 export async function uploadImages(
