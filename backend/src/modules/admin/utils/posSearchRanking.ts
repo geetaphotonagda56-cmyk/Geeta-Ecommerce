@@ -47,6 +47,48 @@ export function scorePOSProduct(product: POSRankableProduct, queryTokens: string
  * products pre-sorted (e.g. by productName) for a deterministic tie-break.
  * Purely reorders - does not drop any input product.
  */
+export interface BulkEditRankableProduct {
+  productName: string;
+  sku?: string;
+  barcode?: string[] | string;
+  hsnCode?: string;
+  variations?: Array<{
+    sku?: string;
+    barcode?: string[] | string;
+    name?: string;
+    value?: string;
+    rackNumber?: string;
+    blockNumber?: string;
+  }>;
+}
+
+/**
+ * Same fuzzy scoring as scorePOSProduct, extended to cover the extra fields
+ * the admin bulk-edit search matches on exactly (variation name/value,
+ * rack/block number, HSN code) so its fuzzy fallback stays consistent with
+ * its own literal-regex search rather than POS's narrower field set.
+ */
+export function scoreBulkEditProduct(product: BulkEditRankableProduct, queryTokens: string[]): number {
+  const nameScore = fieldMatchScore(queryTokens, product.productName) * NAME_WEIGHT;
+  const variationCodeScores = (product.variations || []).flatMap((variation) => [
+    fieldMatchScore(queryTokens, variation.sku),
+    fieldMatchScore(queryTokens, variation.barcode),
+    fieldMatchScore(queryTokens, variation.name),
+    fieldMatchScore(queryTokens, variation.value),
+    fieldMatchScore(queryTokens, variation.rackNumber),
+    fieldMatchScore(queryTokens, variation.blockNumber),
+  ]);
+  const codeScore =
+    Math.max(
+      fieldMatchScore(queryTokens, product.sku),
+      fieldMatchScore(queryTokens, product.barcode),
+      fieldMatchScore(queryTokens, product.hsnCode),
+      ...variationCodeScores,
+      0
+    ) * CODE_WEIGHT;
+  return Math.max(nameScore, codeScore);
+}
+
 export function rankPOSProducts<T extends POSRankableProduct>(
   products: T[],
   search: string

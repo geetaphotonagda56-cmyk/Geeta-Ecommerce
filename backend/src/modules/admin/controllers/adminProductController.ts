@@ -15,7 +15,7 @@ import {
 } from "../../product/productWriteService";
 import { adminProductPolicy } from "../../product/productPolicies";
 import { toDetail, toListItem, toListItems } from "../../product/productReadMapper";
-import { scorePOSProduct, POS_MATCH_SCORE_THRESHOLD } from "../utils/posSearchRanking";
+import { scorePOSProduct, scoreBulkEditProduct, POS_MATCH_SCORE_THRESHOLD } from "../utils/posSearchRanking";
 import { getTokens } from "../../../utils/fuzzyMatch";
 
 // ==================== Category Controllers ====================
@@ -996,30 +996,6 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     query._id = { $in: [...new Set(duplicateIds)] };
   }
 
-  if (search) {
-    const searchFilter = [
-      { productName: { $regex: search as string, $options: "i" } },
-      { sku: { $regex: search as string, $options: "i" } },
-      { barcode: { $regex: search as string, $options: "i" } },
-      { "variations.sku": { $regex: search as string, $options: "i" } },
-      { "variations.barcode": { $regex: search as string, $options: "i" } },
-      { "variations.name": { $regex: search as string, $options: "i" } },
-      { "variations.value": { $regex: search as string, $options: "i" } },
-      { "variations.rackNumber": { $regex: search as string, $options: "i" } },
-      { "variations.blockNumber": { $regex: search as string, $options: "i" } },
-      { hsnCode: { $regex: search as string, $options: "i" } },
-    ];
-
-    if (query._id) {
-       query.$and = [
-         { _id: query._id },
-         { $or: searchFilter }
-       ];
-       delete query._id;
-    } else {
-      query.$or = searchFilter;
-    }
-  }
   if (category) query.category = category;
   if (subcategory) query.subcategory = subcategory;
   if (brand) query.brand = brand;
@@ -1046,18 +1022,81 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+  const limitNum = parseInt(limit as string);
 
-  const [productsRaw, totalEntries] = await Promise.all([
-    Product.find(query)
-      .populate("category", "name")
-      .populate("brand", "name")
-      .populate("seller", "sellerName storeName")
-      .populate("tax", "name percentage")
-      .sort({ updatedAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit as string)),
-    Product.countDocuments(query),
-  ]);
+  let productsRaw: any[];
+  let totalEntries: number;
+
+  if (search) {
+    const searchFilter = [
+      { productName: { $regex: search as string, $options: "i" } },
+      { sku: { $regex: search as string, $options: "i" } },
+      { barcode: { $regex: search as string, $options: "i" } },
+      { "variations.sku": { $regex: search as string, $options: "i" } },
+      { "variations.barcode": { $regex: search as string, $options: "i" } },
+      { "variations.name": { $regex: search as string, $options: "i" } },
+      { "variations.value": { $regex: search as string, $options: "i" } },
+      { "variations.rackNumber": { $regex: search as string, $options: "i" } },
+      { "variations.blockNumber": { $regex: search as string, $options: "i" } },
+      { hsnCode: { $regex: search as string, $options: "i" } },
+    ];
+
+    const searchQuery: any = { ...query };
+    if (searchQuery._id) {
+      searchQuery.$and = [{ _id: searchQuery._id }, { $or: searchFilter }];
+      delete searchQuery._id;
+    } else {
+      searchQuery.$or = searchFilter;
+    }
+
+    const [regexProducts, regexTotal] = await Promise.all([
+      Product.find(searchQuery)
+        .populate("category", "name")
+        .populate("brand", "name")
+        .populate("seller", "sellerName storeName")
+        .populate("tax", "name percentage")
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      Product.countDocuments(searchQuery),
+    ]);
+
+    if (regexTotal > 0) {
+      productsRaw = regexProducts;
+      totalEntries = regexTotal;
+    } else {
+      // No literal substring hit anywhere - most likely a scanner misread or
+      // typo (e.g. one digit off a real barcode). Fall back to fuzzy/typo-
+      // tolerant scoring over the same structurally-filtered pool, mirroring
+      // POS's fallback so a near-miss scan still resolves here too.
+      const candidates = await Product.find(query)
+        .populate("category", "name")
+        .populate("brand", "name")
+        .populate("seller", "sellerName storeName")
+        .populate("tax", "name percentage");
+
+      const queryTokens = getTokens(String(search));
+      const scored = candidates
+        .map((product) => ({ product, score: scoreBulkEditProduct(product.toObject() as any, queryTokens) }))
+        .filter((entry) => entry.score >= POS_MATCH_SCORE_THRESHOLD)
+        .sort((a, b) => b.score - a.score);
+
+      totalEntries = scored.length;
+      productsRaw = scored.slice(skip, skip + limitNum).map((entry) => entry.product);
+    }
+  } else {
+    [productsRaw, totalEntries] = await Promise.all([
+      Product.find(query)
+        .populate("category", "name")
+        .populate("brand", "name")
+        .populate("seller", "sellerName storeName")
+        .populate("tax", "name percentage")
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      Product.countDocuments(query),
+    ]);
+  }
 
   // Manually populate subcategory because it can be from either Category collection (hierarchical) or SubCategory collection (legacy)
   const subIds = [...new Set(productsRaw.map(p => p.subcategory).filter(id => id && typeof id === 'string' || id instanceof mongoose.Types.ObjectId))];
