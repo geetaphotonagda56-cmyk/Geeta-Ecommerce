@@ -109,7 +109,6 @@ export const getProducts = async (req: Request, res: Response) => {
     // Only show products from active categories
     const activeCategories = await Category.find({ status: "Active" }).select("_id").lean();
     const activeCategoryIds = activeCategories.map(c => c._id);
-    query.category = { $in: activeCategoryIds };
 
     // Use $and array to combine conditions safely without overwriting $or blocks
     const andConditions: any[] = [
@@ -118,7 +117,18 @@ export const getProducts = async (req: Request, res: Response) => {
           { isShopByStoreOnly: { $ne: true } },
           { isShopByStoreOnly: { $exists: false } },
         ],
-      }
+      },
+      // A product is visible if its category is active, OR its subcategory is
+      // active (Category is self-referencing, so subcategory is also a
+      // Category doc). This tolerates a stale/dangling `category` ref left
+      // over from a category deletion/merge as long as the subcategory it
+      // actually belongs to is still active.
+      {
+        $or: [
+          { category: { $in: activeCategoryIds } },
+          { subcategory: { $in: activeCategoryIds } },
+        ],
+      },
     ];
 
     if (negativeStockSoldOut) {
@@ -351,15 +361,24 @@ export const getSearchSuggestions = async (req: Request, res: Response) => {
     const query: any = {
       status: "Active",
       publish: true,
-      category: { $in: activeCategoryIds },
-      $or: [
-        { productName: searchRegex },
-        { tags: searchRegex },
-        { sku: searchRegex },
-        { barcode: searchRegex },
-        { "variations.sku": searchRegex },
-        { "variations.barcode": searchRegex }
-      ]
+      $and: [
+        {
+          $or: [
+            { category: { $in: activeCategoryIds } },
+            { subcategory: { $in: activeCategoryIds } },
+          ],
+        },
+        {
+          $or: [
+            { productName: searchRegex },
+            { tags: searchRegex },
+            { sku: searchRegex },
+            { barcode: searchRegex },
+            { "variations.sku": searchRegex },
+            { "variations.barcode": searchRegex }
+          ],
+        },
+      ],
     };
 
     const visibleSellersQuery = { isEnabled: true } as const;
