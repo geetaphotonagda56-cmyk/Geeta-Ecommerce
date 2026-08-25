@@ -71,8 +71,6 @@ export default function ProductDetail() {
   const [similarProducts, setSimilarProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isAvailableAtLocation, setIsAvailableAtLocation] =
-    useState<boolean>(true);
 
   const [reviews, setReviews] = useState<any[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
@@ -109,9 +107,6 @@ export default function ProductDetail() {
         if (response.success && response.data) {
           const productData = response.data as any;
           const normalizedVariations = normalizeCustomerVariations(productData);
-
-          // Set location availability flag
-          setIsAvailableAtLocation(productData.isAvailableAtLocation !== false);
 
           setProduct({
             ...productData,
@@ -383,16 +378,15 @@ export default function ProductDetail() {
   const tieredPrices = activeVariantTieredPrices.length > 0 ? activeVariantTieredPrices : rootTieredPrices;
 
   const variantStock = selectedVariant?.stock !== undefined ? selectedVariant.stock : (product?.stock || 0);
-  const isVariantAvailable = selectedVariant?.status !== "Sold out" && (variantStock > 0 || variantStock === 0); // 0 means unlimited
+  const isVariantAvailable = variantStock > 0 || variantStock === 0; // 0 means unlimited
 
   const variantCardOptions = useMemo(() => {
     if (!product || !customerVariations.length) return [];
     return customerVariations.map((variant: any, index: number) => {
       const { displayPrice, mrp } = calculateProductPrice(product, index);
       const stock = variant.stock !== undefined ? Number(variant.stock) : undefined;
-      const isSoldOut = variant.status === "Sold out";
-      const isOutOfStock = isSoldOut || (stock !== undefined && stock < 0);
-      const inStock = !isSoldOut && (stock === undefined || stock > 0 || stock === 0);
+      const isOutOfStock = stock !== undefined && stock < 0;
+      const inStock = stock === undefined || stock > 0 || stock === 0;
       return {
         key: variant._id || variant.id || `variant-${index}`,
         index,
@@ -536,11 +530,6 @@ export default function ProductDetail() {
       : null;
 
   const handleAddToCart = () => {
-    if (!isAvailableAtLocation) {
-      // Show alert if trying to add item outside delivery area
-      alert("This product is not available for delivery at your location.");
-      return;
-    }
     if (!isVariantAvailable && variantStock !== 0) {
       alert("This variant is currently out of stock.");
       return;
@@ -662,38 +651,6 @@ export default function ProductDetail() {
 
       {/* Scrollable content */}
       <div className="pt-16">
-        {/* Location Availability Banner */}
-        {!isAvailableAtLocation && (
-          <div className="bg-[var(--customer-primary-alpha-10)] border-l-4 border-[var(--customer-primary)] px-4 py-3 mx-4 mt-4 rounded-r-lg">
-            <div className="flex items-start gap-2">
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                className="flex-shrink-0 mt-0.5">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#f59e0b" />
-                <path
-                  d="M2 17l10 5 10-5M2 12l10 5 10-5"
-                  stroke="#f59e0b"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-[var(--customer-primary-dark)]">
-                  Not available at your location
-                </p>
-                <p className="text-xs text-[var(--customer-primary-dark)] mt-1">
-                  This product cannot be delivered to your current location. You
-                  can browse but cannot add to cart.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Product Image Gallery */}
         <div className="relative w-full bg-gradient-to-br from-neutral-100 to-neutral-200 overflow-hidden">
           {/* Main Product Image - Swipeable on mobile */}
@@ -1715,22 +1672,18 @@ export default function ProductDetail() {
                     variant="default"
                     size="default"
                     onClick={handleAddToCart}
-                    disabled={!isAvailableAtLocation || (!isVariantAvailable && variantStock !== 0)}
+                    disabled={!isVariantAvailable && variantStock !== 0}
                     className={`px-6 py-2 text-sm font-semibold h-[36px] ${
-                      !isAvailableAtLocation || (!isVariantAvailable && variantStock !== 0)
+                      !isVariantAvailable && variantStock !== 0
                         ? "opacity-50 cursor-not-allowed"
                         : ""
                     }`}
                     title={
-                      !isAvailableAtLocation
-                        ? "Not available at your location"
-                        : !isVariantAvailable && variantStock !== 0
+                      !isVariantAvailable && variantStock !== 0
                         ? "This variant is out of stock"
                         : ""
                     }>
-                    {!isAvailableAtLocation
-                      ? "Unavailable"
-                      : !isVariantAvailable && variantStock !== 0
+                    {!isVariantAvailable && variantStock !== 0
                       ? "Out of Stock"
                       : "Add to cart"}
                   </Button>

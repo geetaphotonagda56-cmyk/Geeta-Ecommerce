@@ -11,7 +11,6 @@ import PromoStrip from "../../../models/PromoStrip";
 import Seller from "../../../models/Seller";
 import mongoose from "mongoose";
 import { cache } from "../../../utils/cache";
-import { findSellersWithinRange } from "../../../utils/locationHelper";
 import { toListItem } from "../../product/productReadMapper";
 
 // Collects up to 3 preview images for a category/subcategory tile so the
@@ -126,14 +125,7 @@ async function fetchSectionData(
       const visibleSellers = await Seller.find({ isEnabled: true }).select("_id");
       const visibleSellerIds = visibleSellers.map(s => s._id);
 
-      if (nearbySellerIds && nearbySellerIds.length > 0) {
-        const finalIds = visibleSellerIds.filter(id =>
-          nearbySellerIds.some(nearbyId => nearbyId.toString() === id.toString())
-        );
-        query.seller = { $in: finalIds };
-      } else {
-        query.seller = { $in: visibleSellerIds };
-      }
+      query.seller = { $in: visibleSellerIds };
 
       if (categories && categories.length > 0) {
         const categoryIds = categories
@@ -164,9 +156,7 @@ async function fetchSectionData(
 
       return products.map((p: any) => {
         const mapped = toListItem(p);
-        const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p.seller
-          ? nearbySellerIds.some(id => id.toString() === p.seller.toString())
-          : false;
+        const isAvailable = true;
 
         return {
           id: p._id.toString(),
@@ -279,14 +269,7 @@ async function fetchLowestPricesProducts(
     .filter((item: any) => item.product !== null && item.product.category !== null)
     .map((item: any) => {
       const mapped = toListItem(item.product);
-      const isAvailable =
-        nearbySellerIds &&
-        nearbySellerIds.length > 0 &&
-        item.product.seller
-          ? nearbySellerIds.some(
-              (id) => id.toString() === item.product.seller.toString()
-            )
-          : false;
+      const isAvailable = true;
 
       return {
         id: mapped._id,
@@ -320,17 +303,12 @@ export const getHomeContent = async (req: Request, res: Response) => {
   const { headerCategorySlug, latitude, longitude } = req.query; // Get header category slug and location from query params
 
   try {
-    // Find sellers within user's location range
     const userLat = latitude ? parseFloat(latitude as string) : null;
     const userLng = longitude ? parseFloat(longitude as string) : null;
 
-    let nearbySellerIds: mongoose.Types.ObjectId[] = [];
-    if (userLat !== null && userLng !== null) {
-      nearbySellerIds = await findSellersWithinRange(userLat, userLng);
-    } else {
-      // If no location provided, return empty sellers list to enforce filtering
-      nearbySellerIds = [];
-    }
+    // Location no longer gates product visibility for customers; kept only
+    // for the cache bucketing below.
+    const nearbySellerIds: mongoose.Types.ObjectId[] = [];
 
     // Location buckets to ~1.1km so nearby users share a cache entry instead
     // of each minting their own. The response only ever depends on which
@@ -670,10 +648,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
         // If we have promoStrip, add availability flag to featured products
         if (promoStrip && (promoStrip as any).featuredProducts) {
           (promoStrip as any).featuredProducts = (promoStrip as any).featuredProducts.map((p: any) => {
-            const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p.seller
-              ? nearbySellerIds.some(id => id.toString() === p.seller.toString())
-              : false;
-            return { ...p, isAvailable };
+            return { ...p, isAvailable: true };
           });
         }
 
@@ -757,16 +732,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
 export const getLowestPricesProducts = async (req: Request, res: Response) => {
   try {
-    const { latitude, longitude } = req.query;
-    const userLat = latitude ? parseFloat(latitude as string) : null;
-    const userLng = longitude ? parseFloat(longitude as string) : null;
-
-    let nearbySellerIds: mongoose.Types.ObjectId[] = [];
-    if (userLat !== null && userLng !== null) {
-      nearbySellerIds = await findSellersWithinRange(userLat, userLng);
-    }
-
-    const products = await fetchLowestPricesProducts(nearbySellerIds);
+    const products = await fetchLowestPricesProducts([]);
 
     res.status(200).json({
       success: true,
@@ -799,10 +765,7 @@ export const getHomeSectionBySlug = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Section not found" });
     }
 
-    const userLat = latitude ? parseFloat(latitude as string) : null;
-    const userLng = longitude ? parseFloat(longitude as string) : null;
-    const nearbySellerIds =
-      userLat !== null && userLng !== null ? await findSellersWithinRange(userLat, userLng) : [];
+    const nearbySellerIds: mongoose.Types.ObjectId[] = [];
 
     const isProducts = (section as any).displayType === "products";
     const pageNum = Math.max(1, parseInt((page as string) || "1", 10) || 1);
@@ -1038,42 +1001,9 @@ export const getStoreProducts = async (req: Request, res: Response) => {
     // `canCreateCategories` is deliberately excluded.
     const visibleSellersQuery = { isEnabled: true } as const;
 
-    const userLat = latitude ? parseFloat(latitude as string) : null;
-    const userLng = longitude ? parseFloat(longitude as string) : null;
-
-    if (userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng)) {
-      const nearbySellerIds = await findSellersWithinRange(userLat, userLng);
-      console.log(`[getStoreProducts] Found ${nearbySellerIds.length} sellers within range`);
-
-      const visibleSellers = await Seller.find({
-        _id: { $in: nearbySellerIds },
-        ...visibleSellersQuery
-      }).select("_id");
-
-      const visibleSellerIds = visibleSellers.map(s => s._id);
-
-      if (visibleSellerIds.length === 0) {
-        // No visible sellers within range
-        return res.status(200).json({
-          success: true,
-          data: [],
-          shop: shopData,
-          pagination: {
-            page: 1,
-            limit: 50,
-            total: 0,
-            pages: 0,
-          },
-          message: "No sellers available in your area.",
-        });
-      }
-
-      query.seller = { $in: visibleSellerIds };
-    } else {
-      const visibleSellers = await Seller.find(visibleSellersQuery).select("_id");
-      const visibleSellerIds = visibleSellers.map(s => s._id);
-      query.seller = { $in: visibleSellerIds };
-    }
+    const visibleSellers = await Seller.find(visibleSellersQuery).select("_id");
+    const visibleSellerIds = visibleSellers.map(s => s._id);
+    query.seller = { $in: visibleSellerIds };
 
     console.log(`[getStoreProducts] Final query:`, JSON.stringify(query, null, 2));
 

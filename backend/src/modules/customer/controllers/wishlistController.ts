@@ -3,41 +3,22 @@ import { Request, Response } from 'express';
 import Wishlist from '../../../models/Wishlist';
 import Product from '../../../models/Product';
 import Seller from '../../../models/Seller';
-import { findSellersWithinRange } from '../../../utils/locationHelper';
 
 export const getWishlist = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.userId;
-        const { latitude, longitude } = req.query;
 
-        // Parse location
-        const userLat = latitude ? parseFloat(latitude as string) : null;
-        const userLng = longitude ? parseFloat(longitude as string) : null;
-
-        // Strictly enforce location: If no location provided, return empty wishlist or error
-        if (userLat === null || userLng === null || isNaN(userLat) || isNaN(userLng)) {
-            return res.status(200).json({
-                success: true,
-                message: 'Location required to view available items',
-                data: { products: [] }
-            });
-        }
-
-        const nearbySellerIdsRaw = await findSellersWithinRange(userLat, userLng);
-        
-        // Filter nearby sellers by visibility — only `isEnabled` matters.
-        const visibleSellers = await Seller.find({
-            _id: { $in: nearbySellerIdsRaw },
-            isEnabled: true,
-        }).select("_id");
-        const nearbySellerIds = visibleSellers.map(s => s._id);
+        // Visibility is gated only by `isEnabled` — distance to the seller
+        // no longer restricts what a customer can see in their wishlist.
+        const visibleSellers = await Seller.find({ isEnabled: true }).select("_id");
+        const visibleSellerIds = visibleSellers.map(s => s._id);
 
         let wishlist = await Wishlist.findOne({ customer: userId }).populate({
             path: 'products',
             match: {
                 status: 'Active',
                 publish: true,
-                seller: { $in: nearbySellerIds }
+                seller: { $in: visibleSellerIds }
             },
             populate: {
                 path: 'seller',
@@ -67,44 +48,28 @@ export const addToWishlist = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.userId;
         const { productId } = req.body;
-        const { latitude, longitude } = req.query;
 
         if (!productId) {
             return res.status(400).json({ success: false, message: 'Product ID is required' });
         }
 
-        // Parse location
-        const userLat = latitude ? parseFloat(latitude as string) : null;
-        const userLng = longitude ? parseFloat(longitude as string) : null;
-
-        if (userLat === null || userLng === null || isNaN(userLat) || isNaN(userLng)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Location is required to add items to wishlist'
-            });
-        }
-
-        // Verify product exists and is available at location
+        // Verify product exists
         const product = await Product.findOne({ _id: productId, status: 'Active', publish: true });
         if (!product) {
             return res.status(404).json({ success: false, message: 'Product not found or unavailable' });
         }
 
-        const nearbySellerIdsRaw = await findSellersWithinRange(userLat, userLng);
-        
-        // Filter nearby sellers by visibility — only `isEnabled`.
-        const visibleSellers = await Seller.find({
-            _id: { $in: nearbySellerIdsRaw },
-            isEnabled: true,
-        }).select("_id");
-        const nearbySellerIds = visibleSellers.map(s => s._id);
+        // Visibility is gated only by `isEnabled` — distance to the seller
+        // no longer restricts what a customer can wishlist.
+        const visibleSellers = await Seller.find({ isEnabled: true }).select("_id");
+        const visibleSellerIds = visibleSellers.map(s => s._id);
 
-        const isAvailable = nearbySellerIds.some(id => id.toString() === product.seller.toString());
+        const isAvailable = visibleSellerIds.some(id => id.toString() === product.seller.toString());
 
         if (!isAvailable) {
             return res.status(403).json({
                 success: false,
-                message: 'This product is not available in your current location'
+                message: 'This product is not available'
             });
         }
 
@@ -122,7 +87,7 @@ export const addToWishlist = async (req: Request, res: Response) => {
 
         const populatedWishlist = await wishlist.populate({
             path: 'products',
-            match: { seller: { $in: nearbySellerIds } }
+            match: { seller: { $in: visibleSellerIds } }
         });
 
         return res.status(200).json({

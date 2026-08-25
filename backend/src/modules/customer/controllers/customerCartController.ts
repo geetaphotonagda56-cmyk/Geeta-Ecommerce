@@ -3,8 +3,6 @@ import Cart from '../../../models/Cart';
 import CartItem from '../../../models/CartItem';
 import Product from '../../../models/Product';
 import AppSettings from '../../../models/AppSettings';
-import { findSellersWithinRange } from '../../../utils/locationHelper';
-import mongoose from 'mongoose';
 import {
   CART_PRODUCT_SELECT,
   enrichCartItemProduct,
@@ -12,18 +10,24 @@ import {
 } from '../../product/cartProductHelper';
 import { getTotalStock, variantsFromProductDoc } from '../../product/variantHelpers';
 
-const calculateCartTotal = async (cartId: any, nearbySellerIds: mongoose.Types.ObjectId[] = []) => {
+const getVisibleSellerIds = async (): Promise<string[]> => {
+    try {
+        const Seller = (await import("../../../models/Seller")).default;
+        const visibleSellers = await Seller.find({ isEnabled: true }).select("_id");
+        return visibleSellers.map(s => s._id.toString());
+    } catch (e) {
+        console.error("Error fetching visible sellers", e);
+        return [];
+    }
+};
+
+const calculateCartTotal = async (cartId: any) => {
     const items = await CartItem.find({ cart: cartId }).populate({
         path: 'product',
         select: CART_PRODUCT_SELECT,
     });
 
-    let visibleSellerIds: string[] = [];
-    try {
-        const Seller = (await import("../../../models/Seller")).default;
-        const visibleSellers = await Seller.find({ isEnabled: true }).select("_id");
-        visibleSellerIds = visibleSellers.map(s => s._id.toString());
-    } catch (e) { console.error("Error fetching visible sellers", e); }
+    const visibleSellerIds = await getVisibleSellerIds();
 
     const settings = await AppSettings.findOne().lean();
     const inventorySection = settings?.productDisplaySettings?.find(s => s.id === 'inventory');
@@ -42,7 +46,7 @@ const calculateCartTotal = async (cartId: any, nearbySellerIds: mongoose.Types.O
             }
 
             const sellerId = product.seller.toString();
-            const isAvailable = nearbySellerIds.some(id => id.toString() === sellerId) || visibleSellerIds.includes(sellerId);
+            const isAvailable = visibleSellerIds.includes(sellerId);
 
             if (isAvailable) {
                 total += pricing.unitPrice * item.quantity;
@@ -55,25 +59,8 @@ const calculateCartTotal = async (cartId: any, nearbySellerIds: mongoose.Types.O
 export const getCart = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.userId;
-        const { latitude, longitude } = req.query;
 
-        const userLat = latitude ? parseFloat(latitude as string) : null;
-        const userLng = longitude ? parseFloat(longitude as string) : null;
-
-        let nearbySellerIds: mongoose.Types.ObjectId[] = [];
-        let locationProvided = false;
-
-        if (userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng)) {
-             nearbySellerIds = await findSellersWithinRange(userLat, userLng);
-             locationProvided = true;
-        }
-
-        let visibleSellerIds: string[] = [];
-        try {
-            const Seller = (await import("../../../models/Seller")).default;
-            const visibleSellers = await Seller.find({ isEnabled: true }).select("_id");
-            visibleSellerIds = visibleSellers.map(s => s._id.toString());
-        } catch (e) { }
+        const visibleSellerIds = await getVisibleSellerIds();
 
         const settings = await AppSettings.findOne().lean();
         const inventorySection = settings?.productDisplaySettings?.find(s => s.id === 'inventory');
@@ -106,14 +93,8 @@ export const getCart = async (req: Request, res: Response) => {
                     continue;
                 }
 
-                let isAvailable = true;
-
-                if (locationProvided) {
-                    const sellerId = product.seller.toString();
-                    const isVisible = visibleSellerIds.includes(sellerId);
-                    const isNearby = nearbySellerIds.some(id => id.toString() === sellerId);
-                    isAvailable = isVisible || isNearby;
-                }
+                const sellerId = product.seller.toString();
+                const isAvailable = visibleSellerIds.includes(sellerId);
 
                 if (isAvailable) {
                     filteredItems.push(enrichCartItemProduct(product, item));
@@ -148,15 +129,10 @@ export const addToCart = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.userId;
         const { productId, quantity = 1, variation, variantId } = req.body;
-        const { latitude, longitude } = req.query;
 
         if (!productId) {
             return res.status(400).json({ success: false, message: 'Product ID is required' });
         }
-
-        const userLat = latitude ? parseFloat(latitude as string) : null;
-        const userLng = longitude ? parseFloat(longitude as string) : null;
-        const locationProvided = userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng);
 
         const product = await Product.findOne({ _id: productId, status: 'Active', publish: true });
         if (!product) {
@@ -213,12 +189,7 @@ export const addToCart = async (req: Request, res: Response) => {
             cart.items.push(cartItem._id as any);
         }
 
-        let nearbySellerIds: mongoose.Types.ObjectId[] = [];
-        if (userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng)) {
-             nearbySellerIds = await findSellersWithinRange(userLat, userLng);
-        }
-
-        cart.total = await calculateCartTotal(cart._id, nearbySellerIds);
+        cart.total = await calculateCartTotal(cart._id);
         await cart.save();
 
         const updatedCart = await Cart.findById(cart._id).populate({
@@ -229,21 +200,13 @@ export const addToCart = async (req: Request, res: Response) => {
             }
         });
 
-        let visibleSellerIds: string[] = [];
-        try {
-            const Seller = (await import("../../../models/Seller")).default;
-            const visibleSellers = await Seller.find({ isEnabled: true }).select("_id");
-            visibleSellerIds = visibleSellers.map(s => s._id.toString());
-        } catch (e) { }
+        const visibleSellerIds = await getVisibleSellerIds();
 
         const filteredItems = (updatedCart?.items as any[] || [])
           .filter(item => {
             const prod = item.product;
             const sellerId = prod?.seller?.toString();
-            if (nearbySellerIds.length === 0 && !locationProvided) {
-                return true;
-            }
-            return prod && (nearbySellerIds.some(id => id.toString() === sellerId) || visibleSellerIds.includes(sellerId));
+            return prod && visibleSellerIds.includes(sellerId);
           })
           .map((item) => enrichCartItemProduct(item.product, item));
 
@@ -271,19 +234,9 @@ export const updateCartItem = async (req: Request, res: Response) => {
         const userId = req.user?.userId;
         const { itemId } = req.params;
         const { quantity } = req.body;
-        const { latitude, longitude } = req.query;
 
         if (quantity < 1) {
             return res.status(400).json({ success: false, message: 'Quantity must be at least 1' });
-        }
-
-        const userLat = latitude ? parseFloat(latitude as string) : null;
-        const userLng = longitude ? parseFloat(longitude as string) : null;
-        const locationProvided = userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng);
-
-        let nearbySellerIds: mongoose.Types.ObjectId[] = [];
-        if (locationProvided) {
-            nearbySellerIds = await findSellersWithinRange(userLat!, userLng!);
         }
 
         const cart = await Cart.findOne({ customer: userId });
@@ -299,7 +252,7 @@ export const updateCartItem = async (req: Request, res: Response) => {
         cartItem.quantity = quantity;
         await cartItem.save();
 
-        cart.total = await calculateCartTotal(cart._id, nearbySellerIds);
+        cart.total = await calculateCartTotal(cart._id);
         await cart.save();
 
         const updatedCart = await Cart.findById(cart._id).populate({
@@ -310,19 +263,13 @@ export const updateCartItem = async (req: Request, res: Response) => {
             }
         });
 
-        let visibleSellerIds: string[] = [];
-        try {
-            const Seller = (await import("../../../models/Seller")).default;
-            const visibleSellers = await Seller.find({ isEnabled: true }).select("_id");
-            visibleSellerIds = visibleSellers.map(s => s._id.toString());
-        } catch (e) { }
+        const visibleSellerIds = await getVisibleSellerIds();
 
         const filteredItems = (updatedCart?.items as any[] || [])
           .filter(item => {
             const prod = item.product;
             const sellerId = prod?.seller?.toString();
-            if (!locationProvided) return true;
-            return prod && (nearbySellerIds.some(id => id.toString() === sellerId) || visibleSellerIds.includes(sellerId));
+            return prod && visibleSellerIds.includes(sellerId);
           })
           .map((item) => enrichCartItemProduct(item.product, item));
 
@@ -348,10 +295,6 @@ export const removeFromCart = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.userId;
         const { itemId } = req.params;
-        const { latitude, longitude } = req.query;
-
-        const userLat = latitude ? parseFloat(latitude as string) : null;
-        const userLng = longitude ? parseFloat(longitude as string) : null;
 
         const cart = await Cart.findOne({ customer: userId });
         if (!cart) {
@@ -361,12 +304,7 @@ export const removeFromCart = async (req: Request, res: Response) => {
         await CartItem.findOneAndDelete({ _id: itemId, cart: cart._id });
         cart.items = cart.items.filter(id => id.toString() !== itemId);
 
-        let nearbySellerIds: mongoose.Types.ObjectId[] = [];
-        if (userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng)) {
-            nearbySellerIds = await findSellersWithinRange(userLat, userLng);
-        }
-
-        cart.total = await calculateCartTotal(cart._id, nearbySellerIds);
+        cart.total = await calculateCartTotal(cart._id);
         await cart.save();
 
         const updatedCart = await Cart.findById(cart._id).populate({
@@ -378,13 +316,6 @@ export const removeFromCart = async (req: Request, res: Response) => {
         });
 
         const filteredItems = (updatedCart?.items as any[] || [])
-          .filter(item => {
-            const prod = item.product;
-            if (nearbySellerIds.length > 0) {
-                return prod && nearbySellerIds.some(id => id.toString() === prod.seller.toString());
-            }
-            return true;
-          })
           .map((item) => enrichCartItemProduct(item.product, item));
 
         return res.status(200).json({

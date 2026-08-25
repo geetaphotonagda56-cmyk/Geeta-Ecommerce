@@ -136,11 +136,6 @@ export default function ProductCard({
     e.stopPropagation();
     e.preventDefault();
 
-    // Check if product is available in user's location
-    if (product.isAvailable === false) {
-      return;
-    }
-
     // Prevent any operation while another is in progress
     if (isOperationPendingRef.current) {
       return;
@@ -183,11 +178,6 @@ export default function ProductCard({
   const handleIncrease = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-
-    // Check if product is available in user's location
-    if (product.isAvailable === false) {
-      return;
-    }
 
     // Prevent any operation while another is in progress
     if (isOperationPendingRef.current) {
@@ -335,38 +325,23 @@ export default function ProductCard({
                     ref={addButtonRef}
                     variant="default"
                     size="sm"
-                    disabled={product.isAvailable === false}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleAdd(e);
                     }}
-                    className={`w-full font-bold text-[11px] h-8 px-4 flex items-center justify-center gap-1.5 uppercase tracking-wider transition-all duration-300 border-0 ${
-                      product.isAvailable === false
-                      ? 'bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed shadow-none'
-                      : 'text-white shadow-md hover:shadow-lg hover:scale-[1.04] active:scale-95 animate-gradient-flow'
-                    }`}
-                    style={
-                      product.isAvailable === false
-                        ? undefined
-                        : {
-                            backgroundImage:
-                              'linear-gradient(135deg, var(--customer-primary), var(--customer-accent), var(--customer-secondary))',
-                            boxShadow:
-                              '0 4px 10px -2px var(--customer-primary-alpha-40, rgba(0,0,0,0.25)), inset 0 1px 0 rgba(255,255,255,0.25)',
-                          }
-                    }
+                    className="w-full font-bold text-[11px] h-8 px-4 flex items-center justify-center gap-1.5 uppercase tracking-wider transition-all duration-300 border-0 text-white shadow-md hover:shadow-lg hover:scale-[1.04] active:scale-95 animate-gradient-flow"
+                    style={{
+                      backgroundImage:
+                        'linear-gradient(135deg, var(--customer-primary), var(--customer-accent), var(--customer-secondary))',
+                      boxShadow:
+                        '0 4px 10px -2px var(--customer-primary-alpha-40, rgba(0,0,0,0.25)), inset 0 1px 0 rgba(255,255,255,0.25)',
+                    }}
                   >
-                    {product.isAvailable === false ? (
-                       'Out of Range'
-                    ) : (
-                      <>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="12" y1="5" x2="12" y2="19"></line>
-                          <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        <span>ADD</span>
-                      </>
-                    )}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>ADD</span>
                   </Button>
                 </div>
               </div>
@@ -395,14 +370,11 @@ export default function ProductCard({
                 <Button
                   variant="default"
                   size="icon"
-                  disabled={product.isAvailable === false}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleIncrease(e);
                   }}
-                  className={`w-6 h-6 p-0 rounded-md bg-white hover:bg-neutral-50 shadow-sm text-neutral-900 transition-colors border-0 ${
-                    product.isAvailable === false ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
+                  className="w-6 h-6 p-0 rounded-md bg-white hover:bg-neutral-50 shadow-sm text-neutral-900 transition-colors border-0"
                   aria-label="Increase quantity"
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
@@ -587,35 +559,22 @@ export default function ProductCard({
                   ref={addButtonRef}
                   variant="default"
                   size="sm"
-                  disabled={product.isAvailable === false}
                   onClick={handleAdd}
-                  className={`w-full border-0 h-9 text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${
-                    product.isAvailable === false
-                    ? 'border border-neutral-200 text-neutral-400 bg-neutral-50 cursor-not-allowed shadow-none'
-                    : 'text-white shadow-md hover:shadow-lg hover:scale-[1.03] active:scale-95 animate-gradient-flow'
-                  }`}
-                  style={
-                    product.isAvailable === false
-                      ? undefined
-                      : {
-                          backgroundImage:
-                            'linear-gradient(135deg, var(--customer-primary), var(--customer-accent), var(--customer-secondary))',
-                          boxShadow:
-                            '0 4px 10px -2px var(--customer-primary-alpha-40, rgba(0,0,0,0.25)), inset 0 1px 0 rgba(255,255,255,0.25)',
-                        }
-                  }
+                  className="w-full border-0 h-9 text-[11px] font-bold uppercase tracking-wider transition-all duration-300 text-white shadow-md hover:shadow-lg hover:scale-[1.03] active:scale-95 animate-gradient-flow"
+                  style={{
+                    backgroundImage:
+                      'linear-gradient(135deg, var(--customer-primary), var(--customer-accent), var(--customer-secondary))',
+                    boxShadow:
+                      '0 4px 10px -2px var(--customer-primary-alpha-40, rgba(0,0,0,0.25)), inset 0 1px 0 rgba(255,255,255,0.25)',
+                  }}
                 >
-                  {product.isAvailable === false ? (
-                    'Out of Range'
-                  ) : (
-                    <div className="flex items-center justify-center gap-1.5">
-                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                      </svg>
-                      <span>ADD</span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-center gap-1.5">
+                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>ADD</span>
+                  </div>
                 </Button>
                 <div className="h-4 mt-1">
                 </div>
@@ -642,11 +601,8 @@ export default function ProductCard({
                 <Button
                   variant="default"
                   size="icon"
-                  disabled={product.isAvailable === false}
                   onClick={handleIncrease}
-                  className={`w-7 h-7 p-0 rounded-md bg-white hover:bg-neutral-50 shadow-sm text-neutral-900 transition-colors border-0 ${
-                    product.isAvailable === false ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
+                  className="w-7 h-7 p-0 rounded-md bg-white hover:bg-neutral-50 shadow-sm text-neutral-900 transition-colors border-0"
                   aria-label="Increase quantity"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
