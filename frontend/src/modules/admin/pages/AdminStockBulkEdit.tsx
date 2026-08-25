@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import QRScannerModal from "../../../components/QRScannerModal";
 import { openBarcodeScanner } from '../../../utils/scannerPlatform';
+import { useScanDedup } from '../../../hooks/useScanDedup';
 import {
   Product,
   Category,
@@ -189,7 +190,8 @@ export default function AdminStockBulkEdit({
   const [scanVariationIndex, setScanVariationIndex] = useState<number | null>(null);
   const [showSearchScanner, setShowSearchScanner] = useState(false);
   const [searchScannerKey, setSearchScannerKey] = useState(0);
-  const lastSearchScanRef = useRef<{ code: string; time: number }>({ code: "", time: 0 });
+  const isDuplicateSearchScan = useScanDedup(500);
+  const isDuplicateInlineScan = useScanDedup(500);
 
   const [imageSourceModalRowIndex, setImageSourceModalRowIndex] = useState<number | null>(null);
   // Set only when the "Choose Image" modal was opened from a variation row's
@@ -280,11 +282,9 @@ export default function AdminStockBulkEdit({
     const cleaned = (decodedText || "").trim();
     if (!cleaned) return;
 
-    const now = Date.now();
-    if (cleaned === lastSearchScanRef.current.code && now - lastSearchScanRef.current.time < 2000) {
+    if (isDuplicateSearchScan(cleaned, 500)) {
       return;
     }
-    lastSearchScanRef.current = { code: cleaned, time: now };
 
     setSearchTerm(cleaned);
     setPage(1);
@@ -456,16 +456,22 @@ export default function AdminStockBulkEdit({
   };
 
   const onInlineScanSuccess = (decodedText: string) => {
+      const cleaned = (decodedText || "").trim();
+      if (!cleaned) return;
+      if (isDuplicateInlineScan(cleaned, 500)) {
+          return;
+      }
+
       if (scanIndex !== null) {
           if (scanVariationIndex !== null) {
               const currentBarcodes = editableProducts[scanIndex].variations?.[scanVariationIndex]?.barcode || [];
-              if (!currentBarcodes.includes(decodedText)) {
-                  handleVariationFieldChange(scanIndex, scanVariationIndex, 'barcode', [...currentBarcodes, decodedText]);
+              if (!currentBarcodes.includes(cleaned)) {
+                  handleVariationFieldChange(scanIndex, scanVariationIndex, 'barcode', [...currentBarcodes, cleaned]);
               }
           } else {
               const currentBarcodes = editableProducts[scanIndex].barcode || [];
-              if (!currentBarcodes.includes(decodedText)) {
-                  handleFieldChange(scanIndex, 'barcode', [...currentBarcodes, decodedText]);
+              if (!currentBarcodes.includes(cleaned)) {
+                  handleFieldChange(scanIndex, 'barcode', [...currentBarcodes, cleaned]);
               }
           }
       }

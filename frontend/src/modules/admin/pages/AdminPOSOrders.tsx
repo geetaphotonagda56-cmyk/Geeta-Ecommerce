@@ -15,6 +15,7 @@ import autoTable from 'jspdf-autotable';
 import { Html5QrcodeSupportedFormats } from "html5-qrcode";
 import QRScannerModal from '../../../components/QRScannerModal';
 import { openBarcodeScanner } from '../../../utils/scannerPlatform';
+import { useScanDedup } from '../../../hooks/useScanDedup';
 import ConfirmModal from '../../../components/ConfirmModal';
 import ImageCropperModal from '../../../components/ImageCropperModal';
 import { uploadImage } from '../../../services/api/uploadService';
@@ -841,7 +842,7 @@ const AdminPOSOrders = () => {
   // Scanner State
   const [showScanner, setShowScanner] = useState(false);
   const [scanTarget, setScanTarget] = useState<'inventory' | 'quick-add' | 'purchase' | 'purchase-barcode'>('inventory');
-  const lastScanRef = useRef({ code: '', time: 0 });
+  const isDuplicateScan = useScanDedup(500);
   const activeBillIdRef = useRef<string>(activeBillId);
 
   useEffect(() => {
@@ -1018,12 +1019,9 @@ const AdminPOSOrders = () => {
       console.log('===================================================');
 
       // Cooldown for same barcode to avoid double scans (0.5 seconds for instant feel)
-      const now = Date.now();
-      const isDuplicate = decodedText === lastScanRef.current.code && (now - lastScanRef.current.time < 500);
-      if (isDuplicate) {
+      if (isDuplicateScan(decodedText, 500)) {
           return;
       }
-      lastScanRef.current = { code: decodedText, time: now };
 
       // Don't process if loading to prevent spam
       if (loading) {
@@ -1564,12 +1562,10 @@ const AdminPOSOrders = () => {
     if (loading && !isManualEnter) return; // Only block if not a direct Enter/Scan
 
     // Cooldown to prevent double scans from hardware scanners (600ms)
-    const now = Date.now();
-    if (trimmed === lastScanRef.current.code && (now - lastScanRef.current.time < 600)) {
+    if (isDuplicateScan(trimmed, 600)) {
         return;
     }
-    lastScanRef.current = { code: trimmed, time: now };
-    
+
     setLoading(true);
     try {
       const query = trimmed.toLowerCase();
