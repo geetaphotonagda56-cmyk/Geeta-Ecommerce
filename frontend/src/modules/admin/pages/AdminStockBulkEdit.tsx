@@ -303,6 +303,10 @@ export default function AdminStockBulkEdit({
     setPageLoading(true);
     try {
       const res = await getProducts({
+        // Bulk edit is an internal admin tool for managing the whole catalog,
+        // so unpublished products must stay findable here (unlike storefront
+        // or default-listing queries, which intentionally hide them).
+        publish: "all",
         ...(debouncedSearchTerm ? { search: debouncedSearchTerm } : {}),
         ...(redundantFilter ? { redundant: redundantFilter } : {}),
         page: nextPage,

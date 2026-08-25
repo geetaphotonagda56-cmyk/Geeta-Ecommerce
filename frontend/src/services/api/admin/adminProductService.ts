@@ -267,7 +267,7 @@ export interface GetProductsParams {
   brand?: string;
   seller?: string;
   status?: "Active" | "Inactive" | "Pending" | "Rejected";
-  publish?: boolean;
+  publish?: boolean | "all";
   redundant?: boolean | string;
   minVariations?: number;
 }

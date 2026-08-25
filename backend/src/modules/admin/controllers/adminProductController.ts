@@ -1035,7 +1035,11 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   // because the seller is signalling they don't want the product live. The
   // admin can still see them by explicitly filtering for `publish=false`
   // (the "Unpublished" option in the Status dropdown on the stock screen).
-  if (publish !== undefined) {
+  if (publish === "all") {
+    // Explicit opt-out of the publish filter, e.g. admin bulk-edit screens
+    // where the whole point is to find and manage products regardless of
+    // publish state.
+  } else if (publish !== undefined) {
     query.publish = publish === "true";
   } else {
     query.publish = true;
