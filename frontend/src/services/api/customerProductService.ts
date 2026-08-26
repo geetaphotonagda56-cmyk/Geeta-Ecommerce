@@ -7,6 +7,7 @@ export interface Category {
     id?: string; // Virtual ID
     name: string;
     parent?: string | null;
+    parentId?: string | null;
     image?: string;
     icon?: string;
     description?: string;

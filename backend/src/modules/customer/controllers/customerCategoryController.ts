@@ -19,7 +19,7 @@ export const getCategories = async (_req: Request, res: Response) => {
         status: "Active", // Only return active categories
       })
         .sort({ order: 1 })
-        .select("name image icon description color slug _id")
+        .select("name image icon description color slug _id parentId")
         .lean(); // Use lean() for better performance
 
       // Cache for 10 minutes
