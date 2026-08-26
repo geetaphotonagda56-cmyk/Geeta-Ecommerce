@@ -147,6 +147,16 @@ export interface IAppSettings extends Document {
     }>;
   }>;
 
+  // Page Layout Ordering (Home page & Product Detail page section order/visibility)
+  homePageLayout?: Array<{
+    key: string;
+    enabled: boolean;
+  }>;
+  productDetailLayout?: Array<{
+    key: string;
+    enabled: boolean;
+  }>;
+
   // Flash Deal Settings
   flashDeal?: {
     targetDate?: Date;
@@ -527,6 +537,20 @@ const AppSettingsSchema = new Schema<IAppSettings>(
             },
           },
         ],
+      },
+    ],
+
+    // Page Layout Ordering (Home page & Product Detail page section order/visibility)
+    homePageLayout: [
+      {
+        key: { type: String, required: true },
+        enabled: { type: Boolean, default: true },
+      },
+    ],
+    productDetailLayout: [
+      {
+        key: { type: String, required: true },
+        enabled: { type: Boolean, default: true },
       },
     ],
 

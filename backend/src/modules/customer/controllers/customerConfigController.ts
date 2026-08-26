@@ -56,7 +56,11 @@ export const getPublicConfig = asyncHandler(
             gst: { text: "", enabled: false },
             fssai: { text: "", enabled: false }
         },
-        firstOrderOffer: settings.firstOrderOffer || { enabled: false }
+        firstOrderOffer: settings.firstOrderOffer || { enabled: false },
+        pageLayout: {
+          home: settings.homePageLayout || [],
+          productDetail: settings.productDetailLayout || [],
+        },
       };
 
       return res.status(200).json({

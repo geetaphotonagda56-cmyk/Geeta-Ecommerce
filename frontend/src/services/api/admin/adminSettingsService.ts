@@ -2,6 +2,7 @@ import api from "../config";
 
 
 import { ApiResponse } from "./types";
+import type { PageLayoutEntry } from "../../../constants/pageLayoutSections";
 
 export interface PaymentMethod {
   _id: string;
@@ -110,6 +111,8 @@ export interface AppSettings {
       canDelete?: boolean;
     }>;
   }>;
+  homePageLayout?: PageLayoutEntry[];
+  productDetailLayout?: PageLayoutEntry[];
   onlinePaymentDiscount?: {
     enabled: boolean;
     percentage: number;

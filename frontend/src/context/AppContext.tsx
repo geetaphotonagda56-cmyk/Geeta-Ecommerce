@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../services/api/config';
+import type { PageLayoutEntry } from '../constants/pageLayoutSections';
 
 export interface PublicConfig {
     appName: string;
@@ -47,6 +48,10 @@ export interface PublicConfig {
         minOrderAmount: number;
         ctaText: string;
         updatedAt?: string;
+    };
+    pageLayout?: {
+        home: PageLayoutEntry[];
+        productDetail: PageLayoutEntry[];
     };
 }
 

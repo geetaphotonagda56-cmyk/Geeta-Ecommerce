@@ -3,7 +3,7 @@
    useNavigate,
    useLocation as useRouterLocation,
  } from "react-router-dom";
- import { useRef, useState, useEffect, useMemo } from "react";
+ import { Fragment, useRef, useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 // import { products } from '../../data/products'; // REMOVED
 // import { categories } from '../../data/categories'; // REMOVED
@@ -19,6 +19,8 @@ import ShareButton from '../../components/ShareButton';
 import StarRating from "../../components/ui/StarRating";
 import RatingInput from "../../components/ui/RatingInput";
 import { useAuth } from "../../context/AuthContext";
+import { useAppContext } from "../../context/AppContext";
+import { orderedEnabledKeys, PRODUCT_DETAIL_LAYOUT_SECTIONS } from "../../constants/pageLayoutSections";
 import type { Review as ReviewType } from "../../services/api/customerReviewService";
 import ProductCard from "./components/ProductCard";
 import IconLoader from "../../components/loaders/IconLoader";
@@ -50,6 +52,11 @@ export default function ProductDetail() {
   const { location } = useLocation();
   const { startLoading, stopLoading } = useLoading();
   const { isAuthenticated } = useAuth();
+  const { config } = useAppContext();
+  const productDetailSectionOrder = useMemo(
+    () => orderedEnabledKeys(config?.pageLayout?.productDetail, PRODUCT_DETAIL_LAYOUT_SECTIONS),
+    [config?.pageLayout?.productDetail]
+  );
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const [isProductDetailsExpanded, setIsProductDetailsExpanded] =
     useState(false);
@@ -1078,547 +1085,402 @@ export default function ProductDetail() {
           </button>
         </div>
 
-        {/* Expanded Product Details Section */}
-        {isProductDetailsExpanded && (
-          <div className="mt-1.5">
-            {/* Service Guarantees Card */}
-            <div className="bg-white rounded-lg p-3 mb-2">
-              <div className="grid grid-cols-3 gap-2">
-                {/* Replacement */}
-                <div className="flex flex-col items-center">
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="mb-1">
-                    <path
-                      d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3M20.49 15a9 9 0 0 1-14.85 3"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span className="text-sm font-bold text-neutral-900">
-                    48 hours
-                  </span>
-                  <span className="text-xs text-neutral-600">
-                    Replacement
-                  </span>
-                </div>
+        {(() => {
+          const sectionRenderers: Record<string, React.ReactNode> = {
+            serviceGuarantees: isProductDetailsExpanded ? (
+              <div className="bg-white rounded-lg p-3 mb-2">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="flex flex-col items-center">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="mb-1">
+                      <path
+                        d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3M20.49 15a9 9 0 0 1-14.85 3"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="text-sm font-bold text-neutral-900">48 hours</span>
+                    <span className="text-xs text-neutral-600">Replacement</span>
+                  </div>
 
-                {/* Support */}
-                <div className="flex flex-col items-center">
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="mb-1">
-                    <path
-                      d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M13 8H7M17 12H7"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <span className="text-sm font-bold text-neutral-900">
-                    24/7
-                  </span>
-                  <span className="text-xs text-neutral-600">Support</span>
-                </div>
+                  <div className="flex flex-col items-center">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="mb-1">
+                      <path
+                        d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path d="M13 8H7M17 12H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                    <span className="text-sm font-bold text-neutral-900">24/7</span>
+                    <span className="text-xs text-neutral-600">Support</span>
+                  </div>
 
-                {/* Delivery */}
-                <div className="flex flex-col items-center">
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="mb-1">
-                    <path
-                      d="M5 17H2l1-7h18l1 7h-3M5 17l-1-5h20l-1 5M5 17v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5M9 22h6"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span className="text-sm font-bold text-neutral-900">
-                    Fast
-                  </span>
-                  <span className="text-xs text-neutral-600">Delivery</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Highlights Section */}
-            <div className="bg-neutral-100 rounded-lg mb-2 overflow-hidden">
-              <button
-                onClick={() => setIsHighlightsExpanded(!isHighlightsExpanded)}
-                className="w-full px-2 py-2.5 flex items-center justify-between bg-neutral-100">
-                <span className="text-sm font-semibold text-neutral-700">
-                  Highlights
-                </span>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className={`transition-transform ${
-                    isHighlightsExpanded ? "rotate-180" : ""
-                  }`}>
-                  <path
-                    d="M6 9l6 6 6-6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-              {isHighlightsExpanded && (
-                <div className="bg-white px-2 py-2">
-                  <div className="space-y-1.5">
-                    {product.tags && product.tags.length > 0 && (
-                      <div className="flex items-start">
-                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                          Key Features:
-                        </span>
-                        <span className="text-xs text-neutral-600">
-                          {product.tags.map((tag: string, index: number) => (
-                            <span key={tag}>
-                              {tag
-                                .replace(/-/g, " ")
-                                .split(" ")
-                                .map(
-                                  (word: string) =>
-                                    word.charAt(0).toUpperCase() + word.slice(1)
-                                )
-                                .join(" ")}
-                              {index < (product.tags?.length || 0) - 1
-                                ? ", "
-                                : ""}
-                            </span>
-                          ))}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-start">
-                      <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                        Source:
-                      </span>
-                      <span className="text-xs text-neutral-600">
-                        {product.madeIn || "From India"}
-                      </span>
-                    </div>
-                    {category && (
-                      <div className="flex items-start">
-                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                          Category:
-                        </span>
-                        <span className="text-xs text-neutral-600">
-                          {category.name}
-                        </span>
-                      </div>
-                    )}
+                  <div className="flex flex-col items-center">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="mb-1">
+                      <path
+                        d="M5 17H2l1-7h18l1 7h-3M5 17l-1-5h20l-1 5M5 17v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5M9 22h6"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="text-sm font-bold text-neutral-900">Fast</span>
+                    <span className="text-xs text-neutral-600">Delivery</span>
                   </div>
                 </div>
-              )}
-            </div>
-
-            {/* Info Section */}
-            <div className="bg-neutral-100 rounded-lg overflow-hidden">
-              <button
-                onClick={() => setIsInfoExpanded(!isInfoExpanded)}
-                className="w-full px-2 py-2.5 flex items-center justify-between bg-neutral-100">
-                <span className="text-sm font-semibold text-neutral-700">
-                  Info
-                </span>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className={`transition-transform ${
-                    isInfoExpanded ? "rotate-180" : ""
-                  }`}>
-                  <path
-                    d="M6 9l6 6 6-6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-              {isInfoExpanded && (
-                <div className="bg-white px-2 py-2">
-                  <div className="space-y-1.5">
-                    {product.description && (
-                      <div className="flex items-start">
-                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                          Description:
-                        </span>
-                        <span className="text-xs text-neutral-600 leading-relaxed flex-1">
-                          {product.description}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-start">
-                      <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                        Unit:
-                      </span>
-                      <span className="text-xs text-neutral-600">
-                        {product.pack}
-                      </span>
-                    </div>
-                    {product.fssaiLicNo && (
-                      <div className="flex items-start">
-                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                          FSSAI License:
-                        </span>
-                        <span className="text-xs text-neutral-600">
-                          {product.fssaiLicNo}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-start">
-                      <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                        Shelf Life:
-                      </span>
-                      <span className="text-xs text-neutral-600">
-                        Refer to package
-                      </span>
-                    </div>
-                    <div className="flex items-start">
-                      <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                        Disclaimer:
-                      </span>
-                      <span className="text-xs text-neutral-600 leading-relaxed flex-1">
-                        Every effort is made to maintain accuracy of all
-                        Information. However, actual product packaging and
-                        materials may contain more and/or different information.
-                        It is recommended not to solely rely on the information
-                        presented.
-                      </span>
-                    </div>
-                    <div className="flex items-start">
-                      <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                        Customer Care Details:
-                      </span>
-                      <span className="text-xs text-neutral-600">
-                        Email: help@Geeta Stores.com
-                      </span>
-                    </div>
-                    <div className="flex items-start">
-                      <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                        Country of Origin:
-                      </span>
-                      <span className="text-xs text-neutral-600">
-                        {product.madeIn || "India"}
-                      </span>
-                    </div>
-                    {product.manufacturer && (
-                      <div className="flex items-start">
-                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                          Manufacturer:
-                        </span>
-                        <span className="text-xs text-neutral-600 leading-relaxed flex-1">
-                          {product.manufacturer}
-                        </span>
-                      </div>
-                    )}
-                    {/* Marketer same as manufacturer if not present, or hidden */}
-
-                    <div className="flex items-start">
-                      <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                        Return Policy:
-                      </span>
-                      <span className="text-xs text-neutral-600 leading-relaxed flex-1">
-                        {product.isReturnable
-                          ? `This product is returnable within ${
-                              product.maxReturnDays || 2
-                            } days.`
-                          : "This product is non-returnable."}
-                      </span>
-                    </div>
-                    {product.sellerId && (
-                      <div className="flex items-start">
-                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">
-                          Seller:
-                        </span>
-                        <span className="text-xs text-neutral-600 leading-relaxed flex-1">
-                          Geeta Stores Partner (
-                          {product.sellerId.slice(-6).toUpperCase()})
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Reviews Section */}
-        <div className="bg-white px-4 md:px-6 lg:px-8 py-6 border-t border-neutral-100">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display text-xl font-bold text-neutral-900">
-              Ratings & Reviews
-            </h3>
-            {reviewStats.totalReviews > 0 && (
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-bold text-neutral-900">
-                  {reviewStats.avgRating.toFixed(1)}
-                </span>
-                <div className="flex text-yellow-500">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="currentColor">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                </div>
-                <span className="text-xs text-neutral-500">
-                  ({reviewStats.totalReviews} reviews)
-                </span>
               </div>
-            )}
-          </div>
+            ) : null,
 
-          <div className="mb-6 p-4 bg-neutral-50 rounded-lg">
-            {isAuthenticated ? (
-              <>
-                <p className="text-sm font-semibold text-neutral-800 mb-2">
-                  {myReview ? "Edit your review" : "Write a review"}
-                </p>
-                <RatingInput
-                  value={reviewForm.rating}
-                  onChange={(rating) =>
-                    setReviewForm((prev) => ({ ...prev, rating }))
-                  }
-                />
-                <input
-                  type="text"
-                  placeholder="Title (optional)"
-                  value={reviewForm.title}
-                  onChange={(e) =>
-                    setReviewForm((prev) => ({ ...prev, title: e.target.value }))
-                  }
-                  className="w-full mt-3 px-3 py-2 text-sm border border-neutral-200 rounded-lg"
-                />
-                <textarea
-                  placeholder="Share your experience (optional)"
-                  value={reviewForm.comment}
-                  onChange={(e) =>
-                    setReviewForm((prev) => ({ ...prev, comment: e.target.value }))
-                  }
-                  rows={3}
-                  className="w-full mt-2 px-3 py-2 text-sm border border-neutral-200 rounded-lg resize-none"
-                />
+            highlights: isProductDetailsExpanded ? (
+              <div className="bg-neutral-100 rounded-lg mb-2 overflow-hidden">
                 <button
-                  type="button"
-                  onClick={handleSubmitReview}
-                  disabled={reviewForm.rating < 1 || submittingReview}
-                  className="mt-3 px-5 py-2 bg-[var(--customer-primary-dark)] text-white text-sm font-semibold rounded-full disabled:opacity-50"
-                >
-                  {submittingReview
-                    ? "Saving..."
-                    : myReview
-                    ? "Update Review"
-                    : "Submit Review"}
+                  onClick={() => setIsHighlightsExpanded(!isHighlightsExpanded)}
+                  className="w-full px-2 py-2.5 flex items-center justify-between bg-neutral-100">
+                  <span className="text-sm font-semibold text-neutral-700">Highlights</span>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={`transition-transform ${isHighlightsExpanded ? "rotate-180" : ""}`}>
+                    <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </button>
-              </>
-            ) : (
-              <p className="text-sm text-neutral-600">
-                <button
-                  type="button"
-                  onClick={() => navigate("/login")}
-                  className="text-[var(--customer-primary-dark)] font-semibold underline"
-                >
-                  Log in
-                </button>{" "}
-                to write a review.
-              </p>
-            )}
-          </div>
-
-          {reviewsLoading ? (
-            <div className="flex justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--customer-primary-dark)]"></div>
-            </div>
-          ) : reviews.length > 0 ? (
-            <div className="space-y-4">
-              {reviews.map((review) => (
-                <div
-                  key={review._id}
-                  className="border-b border-neutral-50 pb-4 last:border-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base font-semibold text-neutral-900">
-                        {review.customer?.name || "Customer"}
-                      </span>
-                      {review.isVerifiedPurchase && (
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">
-                          Verified Customer
-                        </span>
+                {isHighlightsExpanded && (
+                  <div className="bg-white px-2 py-2">
+                    <div className="space-y-1.5">
+                      {product.tags && product.tags.length > 0 && (
+                        <div className="flex items-start">
+                          <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Key Features:</span>
+                          <span className="text-xs text-neutral-600">
+                            {product.tags.map((tag: string, index: number) => (
+                              <span key={tag}>
+                                {tag
+                                  .replace(/-/g, " ")
+                                  .split(" ")
+                                  .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+                                  .join(" ")}
+                                {index < (product.tags?.length || 0) - 1 ? ", " : ""}
+                              </span>
+                            ))}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-start">
+                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Source:</span>
+                        <span className="text-xs text-neutral-600">{product.madeIn || "From India"}</span>
+                      </div>
+                      {category && (
+                        <div className="flex items-start">
+                          <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Category:</span>
+                          <span className="text-xs text-neutral-600">{category.name}</span>
+                        </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 bg-[var(--customer-primary-alpha-20)] px-1.5 py-0.5 rounded">
-                      <span className="text-xs font-bold text-[var(--customer-primary-dark)]">
-                        {review.rating}
-                      </span>
-                      <svg
-                        width="10"
-                        height="10"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        className="text-[var(--customer-primary-dark)]">
-                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                      </svg>
-                    </div>
                   </div>
-                  <p className="text-sm text-neutral-600 leading-relaxed mb-1">
-                    {review.comment}
-                  </p>
-                  <span className="text-xs text-neutral-400">
-                    {new Date(review.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-4">
-              <p className="text-sm text-neutral-500">
-                No reviews yet. Be the first to review!
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* View More from Brand Card */}
-        {product?.brand && (
-          <div className="px-4 md:px-6 lg:px-8 py-4 mb-2 border-b border-neutral-100">
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                  const brandId = typeof product.brand === 'object' ? (product.brand._id || product.brand.id) : product.brand;
-                  navigate(`/brand/${brandId}`);
-              }}
-              className="w-full flex items-center gap-3 bg-gradient-to-r from-red-500 to-red-600 rounded-2xl border border-red-600/20 shadow-lg shadow-red-500/40 px-4 py-3 text-left hover:shadow-xl hover:shadow-red-500/50 transition-shadow"
-            >
-              <div className="flex-shrink-0 w-11 h-11 rounded-full bg-white/90 border border-white/50 flex items-center justify-center overflow-hidden">
-                {typeof product.brand === 'object' && product.brand.image ? (
-                  <img
-                    src={product.brand.image}
-                    alt={product.brand.name}
-                    className="w-full h-full object-contain"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                ) : (
-                  <span className="text-base font-bold text-neutral-400 select-none">
-                    {(typeof product.brand === 'object' ? product.brand.name : 'B')?.charAt(0)}
-                  </span>
                 )}
               </div>
+            ) : null,
 
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-white truncate">
-                  {typeof product.brand === 'object' ? product.brand.name : 'this brand'}
-                </p>
-                <p className="text-xs text-white/80 font-medium truncate">
-                  Explore all products
-                </p>
-              </div>
-
-              <div className="flex-shrink-0 text-white/80">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </motion.button>
-          </div>
-        )}
-
-        {/* Admin-curated deal sections (order: Deal of the Day → Featured Deals → Flash Deals).
-            Mounted just above Similar Products so the customer always sees the promoted
-            inventory before falling back to algorithmic similars. Each component already
-            self-hides when the admin hasn't configured products for it. */}
-        <div className="mt-2">
-          {/* <DealOfTheDay /> */}
-          <ExploreOurRange />
-          <FeaturedDeal />
-          <FlashDealSection />
-        </div>
-
-        {/* Similar products */}
-        {similarProducts.length > 0 && (
-          <div className="mt-6 mb-24">
-            <div className="bg-neutral-100/50 border-t border-b border-neutral-200/50 py-4 px-3">
-              <div className="flex items-center mb-4 px-1">
-                <h3 className="font-display text-xl font-bold text-neutral-900">
-                  Similar Products
-                </h3>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 pb-2 px-1">
-                {similarProducts.map((similarProduct) => {
-                  const similarCartItem = cart.items.find(
-                    (item) =>
-                      item?.product &&
-                      (item.product.id === similarProduct.id ||
-                        item.product.id === similarProduct._id)
-                  );
-                  const similarInCartQty = similarCartItem?.quantity || 0;
-
-                  return (
-                    <div key={similarProduct.id || similarProduct._id} className="w-full">
-                      <ProductCard
-                        product={similarProduct}
-                        categoryStyle={true}
-                        showBadge={true}
-                        showHeartIcon={true}
-                        showRating={true}
-                        compact={true}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-              {(product?.subcategory?._id || product?.subcategory?.id || category?.id) && hasMoreSimilar && (
-                <div className="relative z-[60] mt-6 flex justify-center pb-2">
-                  <button
-                    onClick={handleLoadMoreSimilar}
-                    disabled={isSimilarLoading}
-                    className="relative z-[60] text-sm font-semibold text-[var(--customer-primary-dark)] hover:text-[var(--customer-primary-dark)] transition-colors border border-[var(--customer-primary-dark)] px-6 py-2 rounded-full hover:bg-[var(--customer-primary-alpha-10)] shadow-sm disabled:opacity-50 min-w-[120px]"
-                  >
-                    {isSimilarLoading ? (
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 border-2 border-[var(--customer-primary-dark)] border-t-transparent rounded-full animate-spin"></div>
-                        <span>loading...</span>
+            infoSpecs: isProductDetailsExpanded ? (
+              <div className="bg-neutral-100 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setIsInfoExpanded(!isInfoExpanded)}
+                  className="w-full px-2 py-2.5 flex items-center justify-between bg-neutral-100">
+                  <span className="text-sm font-semibold text-neutral-700">Info</span>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={`transition-transform ${isInfoExpanded ? "rotate-180" : ""}`}>
+                    <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {isInfoExpanded && (
+                  <div className="bg-white px-2 py-2">
+                    <div className="space-y-1.5">
+                      {product.description && (
+                        <div className="flex items-start">
+                          <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Description:</span>
+                          <span className="text-xs text-neutral-600 leading-relaxed flex-1">{product.description}</span>
+                        </div>
+                      )}
+                      <div className="flex items-start">
+                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Unit:</span>
+                        <span className="text-xs text-neutral-600">{product.pack}</span>
                       </div>
-                    ) : 'view more'}
-                  </button>
+                      {product.fssaiLicNo && (
+                        <div className="flex items-start">
+                          <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">FSSAI License:</span>
+                          <span className="text-xs text-neutral-600">{product.fssaiLicNo}</span>
+                        </div>
+                      )}
+                      <div className="flex items-start">
+                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Shelf Life:</span>
+                        <span className="text-xs text-neutral-600">Refer to package</span>
+                      </div>
+                      <div className="flex items-start">
+                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Disclaimer:</span>
+                        <span className="text-xs text-neutral-600 leading-relaxed flex-1">
+                          Every effort is made to maintain accuracy of all Information. However, actual product
+                          packaging and materials may contain more and/or different information. It is
+                          recommended not to solely rely on the information presented.
+                        </span>
+                      </div>
+                      <div className="flex items-start">
+                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Customer Care Details:</span>
+                        <span className="text-xs text-neutral-600">Email: help@Geeta Stores.com</span>
+                      </div>
+                      <div className="flex items-start">
+                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Country of Origin:</span>
+                        <span className="text-xs text-neutral-600">{product.madeIn || "India"}</span>
+                      </div>
+                      {product.manufacturer && (
+                        <div className="flex items-start">
+                          <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Manufacturer:</span>
+                          <span className="text-xs text-neutral-600 leading-relaxed flex-1">{product.manufacturer}</span>
+                        </div>
+                      )}
+                      <div className="flex items-start">
+                        <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Return Policy:</span>
+                        <span className="text-xs text-neutral-600 leading-relaxed flex-1">
+                          {product.isReturnable
+                            ? `This product is returnable within ${product.maxReturnDays || 2} days.`
+                            : "This product is non-returnable."}
+                        </span>
+                      </div>
+                      {product.sellerId && (
+                        <div className="flex items-start">
+                          <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Seller:</span>
+                          <span className="text-xs text-neutral-600 leading-relaxed flex-1">
+                            Geeta Stores Partner ({product.sellerId.slice(-6).toUpperCase()})
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null,
+
+            reviews: (
+              <div className="bg-white px-4 md:px-6 lg:px-8 py-6 border-t border-neutral-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-display text-xl font-bold text-neutral-900">Ratings & Reviews</h3>
+                  {reviewStats.totalReviews > 0 && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm font-bold text-neutral-900">{reviewStats.avgRating.toFixed(1)}</span>
+                      <div className="flex text-yellow-500">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                      </div>
+                      <span className="text-xs text-neutral-500">({reviewStats.totalReviews} reviews)</span>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
-        )}
+
+                <div className="mb-6 p-4 bg-neutral-50 rounded-lg">
+                  {isAuthenticated ? (
+                    <>
+                      <p className="text-sm font-semibold text-neutral-800 mb-2">
+                        {myReview ? "Edit your review" : "Write a review"}
+                      </p>
+                      <RatingInput
+                        value={reviewForm.rating}
+                        onChange={(rating) => setReviewForm((prev) => ({ ...prev, rating }))}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Title (optional)"
+                        value={reviewForm.title}
+                        onChange={(e) => setReviewForm((prev) => ({ ...prev, title: e.target.value }))}
+                        className="w-full mt-3 px-3 py-2 text-sm border border-neutral-200 rounded-lg"
+                      />
+                      <textarea
+                        placeholder="Share your experience (optional)"
+                        value={reviewForm.comment}
+                        onChange={(e) => setReviewForm((prev) => ({ ...prev, comment: e.target.value }))}
+                        rows={3}
+                        className="w-full mt-2 px-3 py-2 text-sm border border-neutral-200 rounded-lg resize-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSubmitReview}
+                        disabled={reviewForm.rating < 1 || submittingReview}
+                        className="mt-3 px-5 py-2 bg-[var(--customer-primary-dark)] text-white text-sm font-semibold rounded-full disabled:opacity-50"
+                      >
+                        {submittingReview ? "Saving..." : myReview ? "Update Review" : "Submit Review"}
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-sm text-neutral-600">
+                      <button
+                        type="button"
+                        onClick={() => navigate("/login")}
+                        className="text-[var(--customer-primary-dark)] font-semibold underline"
+                      >
+                        Log in
+                      </button>{" "}
+                      to write a review.
+                    </p>
+                  )}
+                </div>
+
+                {reviewsLoading ? (
+                  <div className="flex justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--customer-primary-dark)]"></div>
+                  </div>
+                ) : reviews.length > 0 ? (
+                  <div className="space-y-4">
+                    {reviews.map((review) => (
+                      <div key={review._id} className="border-b border-neutral-50 pb-4 last:border-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base font-semibold text-neutral-900">
+                              {review.customer?.name || "Customer"}
+                            </span>
+                            {review.isVerifiedPurchase && (
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">
+                                Verified Customer
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 bg-[var(--customer-primary-alpha-20)] px-1.5 py-0.5 rounded">
+                            <span className="text-xs font-bold text-[var(--customer-primary-dark)]">{review.rating}</span>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="text-[var(--customer-primary-dark)]">
+                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                            </svg>
+                          </div>
+                        </div>
+                        <p className="text-sm text-neutral-600 leading-relaxed mb-1">{review.comment}</p>
+                        <span className="text-xs text-neutral-400">{new Date(review.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-neutral-500">No reviews yet. Be the first to review!</p>
+                  </div>
+                )}
+              </div>
+            ),
+
+            viewMoreFromBrand: product?.brand ? (
+              <div className="px-4 md:px-6 lg:px-8 py-4 mb-2 border-b border-neutral-100">
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    const brandId = typeof product.brand === "object" ? (product.brand._id || product.brand.id) : product.brand;
+                    navigate(`/brand/${brandId}`);
+                  }}
+                  className="w-full flex items-center gap-3 bg-gradient-to-r from-red-500 to-red-600 rounded-2xl border border-red-600/20 shadow-lg shadow-red-500/40 px-4 py-3 text-left hover:shadow-xl hover:shadow-red-500/50 transition-shadow"
+                >
+                  <div className="flex-shrink-0 w-11 h-11 rounded-full bg-white/90 border border-white/50 flex items-center justify-center overflow-hidden">
+                    {typeof product.brand === "object" && product.brand.image ? (
+                      <img
+                        src={product.brand.image}
+                        alt={product.brand.name}
+                        className="w-full h-full object-contain"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <span className="text-base font-bold text-neutral-400 select-none">
+                        {(typeof product.brand === "object" ? product.brand.name : "B")?.charAt(0)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-white truncate">
+                      {typeof product.brand === "object" ? product.brand.name : "this brand"}
+                    </p>
+                    <p className="text-xs text-white/80 font-medium truncate">Explore all products</p>
+                  </div>
+
+                  <div className="flex-shrink-0 text-white/80">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </motion.button>
+              </div>
+            ) : null,
+
+            exploreOurRange: <ExploreOurRange />,
+            featuredDeal: <FeaturedDeal />,
+            flashDeal: <FlashDealSection />,
+
+            similarProducts:
+              similarProducts.length > 0 ? (
+                <div className="mt-6 mb-24">
+                  <div className="bg-neutral-100/50 border-t border-b border-neutral-200/50 py-4 px-3">
+                    <div className="flex items-center mb-4 px-1">
+                      <h3 className="font-display text-xl font-bold text-neutral-900">Similar Products</h3>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 pb-2 px-1">
+                      {similarProducts.map((similarProduct) => {
+                        const similarCartItem = cart.items.find(
+                          (item) =>
+                            item?.product &&
+                            (item.product.id === similarProduct.id || item.product.id === similarProduct._id)
+                        );
+                        const similarInCartQty = similarCartItem?.quantity || 0;
+
+                        return (
+                          <div key={similarProduct.id || similarProduct._id} className="w-full">
+                            <ProductCard
+                              product={similarProduct}
+                              categoryStyle={true}
+                              showBadge={true}
+                              showHeartIcon={true}
+                              showRating={true}
+                              compact={true}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {(product?.subcategory?._id || product?.subcategory?.id || category?.id) && hasMoreSimilar && (
+                      <div className="relative z-[60] mt-6 flex justify-center pb-2">
+                        <button
+                          onClick={handleLoadMoreSimilar}
+                          disabled={isSimilarLoading}
+                          className="relative z-[60] text-sm font-semibold text-[var(--customer-primary-dark)] hover:text-[var(--customer-primary-dark)] transition-colors border border-[var(--customer-primary-dark)] px-6 py-2 rounded-full hover:bg-[var(--customer-primary-alpha-10)] shadow-sm disabled:opacity-50 min-w-[120px]"
+                        >
+                          {isSimilarLoading ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 border-2 border-[var(--customer-primary-dark)] border-t-transparent rounded-full animate-spin"></div>
+                              <span>loading...</span>
+                            </div>
+                          ) : (
+                            "view more"
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null,
+          };
+
+          return (
+            <>
+              {productDetailSectionOrder.map((key) => (
+                <Fragment key={key}>{sectionRenderers[key]}</Fragment>
+              ))}
+            </>
+          );
+        })()}
       </div>
 
       {/* Sticky Footer */}

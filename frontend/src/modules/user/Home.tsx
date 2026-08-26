@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { Fragment, useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useLocation as useRouterLocation, useNavigate, useNavigationType } from "react-router-dom";
 import HomeHero from "./components/HomeHero";
 // import PromoStrip from "./components/PromoStrip";
@@ -20,6 +20,8 @@ import { getHeaderCategoriesPublic } from "../../services/api/headerCategoryServ
 import { getCachedProducts, getProducts as getCustomerProducts } from "../../services/api/customerProductService";
 import { useLocation } from "../../hooks/useLocation";
 import { useThemeContext } from "../../context/ThemeContext";
+import { useAppContext } from "../../context/AppContext";
+import { orderedEnabledKeys, HOME_LAYOUT_SECTIONS } from "../../constants/pageLayoutSections";
 
 interface LazyProductGridProps {
   products: any[];
@@ -96,6 +98,11 @@ export default function Home() {
   const navigationType = useNavigationType();
   const { location } = useLocation();
   const { activeCategory, setActiveCategory, currentTheme: theme } = useThemeContext();
+  const { config } = useAppContext();
+  const homeSectionOrder = useMemo(
+    () => orderedEnabledKeys(config?.pageLayout?.home, HOME_LAYOUT_SECTIONS),
+    [config?.pageLayout?.home]
+  );
   const activeTab = activeCategory;
   const setActiveTab = setActiveCategory;
   const contentRef = useRef<HTMLDivElement>(null);
@@ -573,25 +580,21 @@ export default function Home() {
     );
   }
 
-  return (
-    <div className="bg-white min-h-screen pb-20 md:pb-0" ref={contentRef}>
-      {/* 1. Popup Banner (First Visit) */}
-      <HomePopup />
+  const sectionRenderers: Record<string, React.ReactNode> = {
+    popup: <HomePopup />,
 
-      {/* Hero Header with Gradient and Tabs */}
-      <HomeHero activeTab={activeTab} onTabChange={handleTabChange} />
+    hero: <HomeHero activeTab={activeTab} onTabChange={handleTabChange} />,
 
-      {/* 2. MAIN SLIDER */}
+    mainBannerSlider: (
       <div className="bg-white px-3 pt-3 pb-2">
-          <BannerSlider position="HOME_MAIN_SLIDER" roundedClass="rounded-md" imageFit="cover" />
+        <BannerSlider position="HOME_MAIN_SLIDER" roundedClass="rounded-md" imageFit="cover" />
       </div>
+    ),
 
-      {/* Promo Strip - commented out per request, replaced with Explore Our Range */}
-      {/* <PromoStrip activeTab={activeTab} /> */}
-      <ExploreOurRange />
+    exploreOurRange: <ExploreOurRange />,
 
-      {/* LOWEST PRICES EVER Section */}
-      {loading && (!homeData.lowestPrices || homeData.lowestPrices.length === 0) ? (
+    lowestPrices:
+      loading && (!homeData.lowestPrices || homeData.lowestPrices.length === 0) ? (
         <div className="px-4 py-4">
           <div className="h-6 w-56 mx-auto rounded bg-neutral-100 animate-pulse mb-3" />
           <div className="flex gap-2 overflow-x-hidden">
@@ -606,47 +609,30 @@ export default function Home() {
         </div>
       ) : (
         <LowestPricesEver activeTab={activeTab} products={homeData.lowestPrices} />
-      )}
+      ),
 
-      {/* FLASH DEAL Section - New addition */}
-      {/* Moved inside main content wrapper to respect layout flow and negative margins */}
+    flashDeal: <FlashDealSection />,
 
-      {/* Main content */}
-      <div
-        ref={contentRef}
-        className="-mt-2 pt-1 space-y-5 md:space-y-8 md:pt-4 pb-12"
-        style={{ backgroundColor: theme.primary[3] }}
-      >
+    featuredDeal: <FeaturedDeal />,
 
-        {/* FLASH DEAL Section */}
-        <FlashDealSection />
-
-        {/* Featured Deal Section */}
-        <FeaturedDeal />
-
-        {/* Bestsellers Section (Moved here as requested) */}
+    bestsellers: (
+      <>
         {activeTab === "all" && homeData.bestsellers && homeData.bestsellers.length > 0 && (
-            <div className="mt-2 md:mt-4">
-              <CategoryTileSection
-                title="Bestsellers"
-                tiles={
-                  homeData.bestsellers
-                    .slice(0, 6)
-                    .map((card: any) => {
-                      return {
-                        id: card.id,
-                        categoryId: card.categoryId,
-                        name: card.name || "Category",
-                        productImages: card.productImages || [],
-                        productCount: card.productCount || 0,
-                      };
-                    })
-                }
-                columns={3}
-                showProductCount={true}
-                viewAllLink="/bestsellers"
-              />
-            </div>
+          <div className="mt-2 md:mt-4">
+            <CategoryTileSection
+              title="Bestsellers"
+              tiles={homeData.bestsellers.slice(0, 6).map((card: any) => ({
+                id: card.id,
+                categoryId: card.categoryId,
+                name: card.name || "Category",
+                productImages: card.productImages || [],
+                productCount: card.productCount || 0,
+              }))}
+              columns={3}
+              showProductCount={true}
+              viewAllLink="/bestsellers"
+            />
+          </div>
         )}
         {activeTab === "all" && loading && (!homeData.bestsellers || homeData.bestsellers.length === 0) && (
           <div className="mt-2 md:mt-4 px-4 md:px-6 lg:px-8">
@@ -661,14 +647,201 @@ export default function Home() {
             </div>
           </div>
         )}
+      </>
+    ),
 
-        {/* Deal of the Day Section */}
-        <DealOfTheDay />
+    dealOfTheDay: <DealOfTheDay />,
 
-        {/* First Order Offer (First-time users) */}
-        <FirstOrderOfferBanner />
+    firstOrderOffer: <FirstOrderOfferBanner />,
 
-        {/* Filtered Products Section */}
+    dynamicHomeSections:
+      activeTab === "all" ? (
+        <>
+          {loading && (!homeData.homeSections || homeData.homeSections.length === 0) && (
+            <div className="mt-6 mb-6 md:mt-8 md:mb-8 px-4 md:px-6 lg:px-8">
+              <div className="h-5 w-40 rounded bg-neutral-100 animate-pulse mb-3" />
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={`section-skel-${i}`} className="rounded-xl border border-neutral-200 bg-white p-2 animate-pulse">
+                    <div className="aspect-square w-full rounded-lg bg-neutral-100" />
+                    <div className="mt-2 h-3 w-3/4 rounded bg-neutral-100" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {homeData.homeSections && homeData.homeSections.length > 0 && (
+            <>
+              {homeData.homeSections.map((section: any) => {
+                const columnCount = Number(section.columns) || 4;
+
+                if (section.displayType === "products" && section.data && section.data.length > 0) {
+                  const gridClass = {
+                    2: "grid-cols-2",
+                    3: "grid-cols-2 md:grid-cols-3",
+                    4: "grid-cols-2 md:grid-cols-4",
+                    6: "grid-cols-2 md:grid-cols-6",
+                    8: "grid-cols-2 md:grid-cols-8",
+                  }[columnCount] || "grid-cols-2 md:grid-cols-4";
+
+                  const isCompact = columnCount >= 4;
+                  const gapClass = columnCount >= 4 ? "gap-2" : "gap-3 md:gap-4";
+
+                  return (
+                    <div key={section.id} className="mt-6 mb-6 md:mt-8 md:mb-8">
+                      {section.title && (
+                        <SectionHeader
+                          title={section.title}
+                          action={section.slug ? <ViewAllButton onClick={() => navigate(`/section/${section.slug}`)} /> : undefined}
+                        />
+                      )}
+                      <div className="px-4 md:px-6 lg:px-8">
+                        <LazyProductGrid
+                          products={section.data}
+                          gridClassName={`grid ${gridClass} ${gapClass}`}
+                          compact={isCompact}
+                          showStockInfo={false}
+                          batchSize={columnCount >= 6 ? 12 : 8}
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (!section.data || section.data.length === 0) return null;
+
+                return (
+                  <CategoryTileSection
+                    key={section.id}
+                    title={section.title}
+                    tiles={section.data}
+                    columns={columnCount as 2 | 3 | 4 | 6 | 8}
+                    showProductCount={false}
+                    viewAllLink={section.slug ? `/section/${section.slug}` : undefined}
+                  />
+                );
+              })}
+            </>
+          )}
+        </>
+      ) : null,
+
+    mainSectionBanner:
+      activeTab === "all" ? (
+        <div className="px-4 md:px-6 lg:px-8 mt-6 mb-6">
+          <BannerSlider position="Main Section Banner" />
+        </div>
+      ) : null,
+
+    shopByStore:
+      activeTab === "all" ? (
+        <div className="mb-6 mt-6 md:mb-8 md:mt-8">
+          <SectionHeader title="Shop by Store" />
+          <div className="px-4 md:px-6 lg:px-8">
+            <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 md:gap-4">
+              {loading && (!homeData.shops || homeData.shops.length === 0)
+                ? Array.from({ length: 8 }).map((_, i) => (
+                    <div key={`shop-skel-${i}`} className="flex flex-col">
+                      <div className="w-full h-20 rounded-2xl bg-neutral-100 animate-pulse" />
+                      <div className="mt-1.5 h-2.5 w-3/4 mx-auto rounded bg-neutral-100 animate-pulse" />
+                    </div>
+                  ))
+                : (homeData.shops || []).map((tile: any) => {
+                    const hasImages = tile.image || (tile.productImages && tile.productImages.filter(Boolean).length > 0);
+
+                    return (
+                      <div key={tile.id} className="flex flex-col group">
+                        <div
+                          onClick={() => {
+                            const storeSlug = tile.slug || tile.id.replace("-store", "");
+                            navigate(`/store/${storeSlug}`);
+                          }}
+                          className="block bg-white rounded-2xl shadow-sm border border-neutral-200 hover:shadow-md hover:border-[var(--customer-primary-alpha-30)] transition-all cursor-pointer overflow-hidden">
+                          {hasImages ? (
+                            <OptimizedImage
+                              src={tile.image || (tile.productImages ? tile.productImages[0] : "")}
+                              variants={tile.image ? tile.imageVariants : undefined}
+                              alt={tile.name}
+                              className="w-full h-20 object-cover transition-transform duration-300 group-hover:scale-105"
+                              sizes="(max-width: 768px) 25vw, 12vw"
+                            />
+                          ) : (
+                            <div className={`w-full h-20 flex items-center justify-center text-3xl text-neutral-300 ${tile.bgColor || "bg-neutral-50"}`}>
+                              {tile.name.charAt(0)}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-1.5 text-center">
+                          <span className="text-xs font-semibold text-neutral-900 line-clamp-2 leading-tight">
+                            {tile.name}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+            </div>
+          </div>
+        </div>
+      ) : null,
+
+    allProducts:
+      activeTab === "all" && allProducts.length > 0 ? (
+        <div className="mt-6 mb-6 md:mt-8 md:mb-8">
+          <SectionHeader title="All Products" />
+          <div className="px-4 md:px-6 lg:px-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
+              {allProducts.map((product) => (
+                <ProductCard
+                  key={product.id || product._id}
+                  product={product}
+                  categoryStyle={true}
+                  showBadge={true}
+                  showPackBadge={false}
+                  showStockInfo={true}
+                />
+              ))}
+            </div>
+            {hasMoreAll && <div ref={allSentinelRef} className="h-1 w-full" />}
+            {allLoadingMore && (
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4 mt-2 md:mt-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={`all-loading-${i}`} className="rounded-xl border border-neutral-200 bg-white p-3 animate-pulse">
+                    <div className="aspect-square w-full rounded-lg bg-neutral-100" />
+                    <div className="mt-3 h-3 w-4/5 rounded bg-neutral-100" />
+                    <div className="mt-2 h-3 w-2/3 rounded bg-neutral-100" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null,
+
+    footerBanner: (
+      <div className="px-4 md:px-6 lg:px-8 mt-6 mb-8">
+        <BannerSlider position="Footer Banner" />
+      </div>
+    ),
+  };
+
+  return (
+    <div className="bg-white min-h-screen pb-20 md:pb-0">
+      <div
+        ref={contentRef}
+        className="-mt-2 pt-1 space-y-5 md:space-y-8 md:pt-4 pb-12"
+        style={{ backgroundColor: theme.primary[3] }}
+      >
+        {homeSectionOrder.map((key) => (
+          <Fragment key={key}>{sectionRenderers[key]}</Fragment>
+        ))}
+
+        {/* Filtered Products Section — fixed position, not part of the
+            orderable catalog. Only shown for non-"All" header-category
+            tabs, which makes it mutually exclusive with every "All"-tab-only
+            entry above (bestsellers, dynamicHomeSections, mainSectionBanner,
+            shopByStore, allProducts) — so its position here has no visual
+            effect relative to them. */}
         {activeTab !== "all" && (
           <div data-products-section className="mt-6 mb-6 md:mt-8 md:mb-8">
             <SectionHeader title={activeTab === "grocery" ? "Grocery Items" : activeTab} />
@@ -691,10 +864,7 @@ export default function Home() {
                   {loadingMoreTab && (
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4 mt-2 md:mt-4">
                       {Array.from({ length: 4 }).map((_, i) => (
-                        <div
-                          key={`tab-loading-${i}`}
-                          className="rounded-xl border border-neutral-200 bg-white p-3 animate-pulse"
-                        >
+                        <div key={`tab-loading-${i}`} className="rounded-xl border border-neutral-200 bg-white p-3 animate-pulse">
                           <div className="aspect-square w-full rounded-lg bg-neutral-100" />
                           <div className="mt-3 h-3 w-4/5 rounded bg-neutral-100" />
                           <div className="mt-2 h-3 w-2/3 rounded bg-neutral-100" />
@@ -706,195 +876,12 @@ export default function Home() {
               ) : (
                 <div className="text-center py-12 md:py-16 text-neutral-500">
                   <p className="text-lg md:text-xl mb-2">No products found</p>
-                  <p className="text-sm md:text-base">
-                    Try selecting a different category
-                  </p>
+                  <p className="text-sm md:text-base">Try selecting a different category</p>
                 </div>
               )}
             </div>
           </div>
         )}
-
-        {/* Bestsellers Section - Originally here, now moved up. Only keeping condition wrapper for other sections if needed */}
-        {activeTab === "all" && (
-          <>
-            {/* Dynamic Home Sections - Render sections created by admin */}
-            {loading && (!homeData.homeSections || homeData.homeSections.length === 0) && (
-              <div className="mt-6 mb-6 md:mt-8 md:mb-8 px-4 md:px-6 lg:px-8">
-                <div className="h-5 w-40 rounded bg-neutral-100 animate-pulse mb-3" />
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={`section-skel-${i}`} className="rounded-xl border border-neutral-200 bg-white p-2 animate-pulse">
-                      <div className="aspect-square w-full rounded-lg bg-neutral-100" />
-                      <div className="mt-2 h-3 w-3/4 rounded bg-neutral-100" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {homeData.homeSections && homeData.homeSections.length > 0 && (
-              <>
-                {homeData.homeSections.map((section: any) => {
-                  const columnCount = Number(section.columns) || 4;
-
-                  if (section.displayType === "products" && section.data && section.data.length > 0) {
-                    const gridClass = {
-                      2: "grid-cols-2",
-                      3: "grid-cols-2 md:grid-cols-3",
-                      4: "grid-cols-2 md:grid-cols-4",
-                      6: "grid-cols-2 md:grid-cols-6",
-                      8: "grid-cols-2 md:grid-cols-8"
-                    }[columnCount] || "grid-cols-2 md:grid-cols-4";
-
-                    const isCompact = columnCount >= 4;
-                    const gapClass = columnCount >= 4 ? "gap-2" : "gap-3 md:gap-4";
-
-                    return (
-                      <div key={section.id} className="mt-6 mb-6 md:mt-8 md:mb-8">
-                        {section.title && (
-                          <SectionHeader
-                            title={section.title}
-                            action={section.slug ? <ViewAllButton onClick={() => navigate(`/section/${section.slug}`)} /> : undefined}
-                          />
-                        )}
-                        <div className="px-4 md:px-6 lg:px-8">
-                          <LazyProductGrid
-                            products={section.data}
-                            gridClassName={`grid ${gridClass} ${gapClass}`}
-                            compact={isCompact}
-                            showStockInfo={false}
-                            batchSize={columnCount >= 6 ? 12 : 8}
-                          />
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  if (!section.data || section.data.length === 0) return null;
-
-                  return (
-                    <CategoryTileSection
-                      key={section.id}
-                      title={section.title}
-                      tiles={section.data}
-                      columns={columnCount as 2 | 3 | 4 | 6 | 8}
-                      showProductCount={false}
-                      viewAllLink={section.slug ? `/section/${section.slug}` : undefined}
-                    />
-                  );
-                })}
-              </>
-            )}
-
-
-            {/* Main Section Banner */}
-            <div className="px-4 md:px-6 lg:px-8 mt-6 mb-6">
-                <BannerSlider position="Main Section Banner" />
-            </div>
-
-            {/* Shop by Store Section */}
-            <div className="mb-6 mt-6 md:mb-8 md:mt-8">
-              <SectionHeader title="Shop by Store" />
-              <div className="px-4 md:px-6 lg:px-8">
-                <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 md:gap-4">
-                  {loading && (!homeData.shops || homeData.shops.length === 0)
-                    ? Array.from({ length: 8 }).map((_, i) => (
-                        <div key={`shop-skel-${i}`} className="flex flex-col">
-                          <div className="w-full h-20 rounded-2xl bg-neutral-100 animate-pulse" />
-                          <div className="mt-1.5 h-2.5 w-3/4 mx-auto rounded bg-neutral-100 animate-pulse" />
-                        </div>
-                      ))
-                    : (homeData.shops || []).map((tile: any) => {
-                    const hasImages =
-                      tile.image ||
-                      (tile.productImages &&
-                        tile.productImages.filter(Boolean).length > 0);
-
-                    return (
-                      <div key={tile.id} className="flex flex-col group">
-                        <div
-                          onClick={() => {
-                            const storeSlug =
-                              tile.slug || tile.id.replace("-store", "");
-                            navigate(`/store/${storeSlug}`);
-                          }}
-                          className="block bg-white rounded-2xl shadow-sm border border-neutral-200 hover:shadow-md hover:border-[var(--customer-primary-alpha-30)] transition-all cursor-pointer overflow-hidden">
-                          {hasImages ? (
-                            <OptimizedImage
-                              src={
-                                tile.image ||
-                                (tile.productImages
-                                  ? tile.productImages[0]
-                                  : "")
-                              }
-                              variants={tile.image ? tile.imageVariants : undefined}
-                              alt={tile.name}
-                              className="w-full h-20 object-cover transition-transform duration-300 group-hover:scale-105"
-                              sizes="(max-width: 768px) 25vw, 12vw"
-                            />
-                          ) : (
-                            <div
-                              className={`w-full h-20 flex items-center justify-center text-3xl text-neutral-300 ${tile.bgColor || "bg-neutral-50"
-                                }`}>
-                              {tile.name.charAt(0)}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="mt-1.5 text-center">
-                          <span className="text-xs font-semibold text-neutral-900 line-clamp-2 leading-tight">
-                            {tile.name}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* All Products - real backend-paginated infinite scroll */}
-            {allProducts.length > 0 && (
-              <div className="mt-6 mb-6 md:mt-8 md:mb-8">
-                <SectionHeader title="All Products" />
-                <div className="px-4 md:px-6 lg:px-8">
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
-                    {allProducts.map((product) => (
-                      <ProductCard
-                        key={product.id || product._id}
-                        product={product}
-                        categoryStyle={true}
-                        showBadge={true}
-                        showPackBadge={false}
-                        showStockInfo={true}
-                      />
-                    ))}
-                  </div>
-                  {hasMoreAll && <div ref={allSentinelRef} className="h-1 w-full" />}
-                  {allLoadingMore && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4 mt-2 md:mt-4">
-                      {Array.from({ length: 4 }).map((_, i) => (
-                        <div
-                          key={`all-loading-${i}`}
-                          className="rounded-xl border border-neutral-200 bg-white p-3 animate-pulse"
-                        >
-                          <div className="aspect-square w-full rounded-lg bg-neutral-100" />
-                          <div className="mt-3 h-3 w-4/5 rounded bg-neutral-100" />
-                          <div className="mt-2 h-3 w-2/3 rounded bg-neutral-100" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Footer Banner */}
-        <div className="px-4 md:px-6 lg:px-8 mt-6 mb-8">
-             <BannerSlider position="Footer Banner" />
-        </div>
       </div>
     </div>
   );
