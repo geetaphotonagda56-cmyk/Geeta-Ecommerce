@@ -347,8 +347,10 @@ export default function ProductCard({
               </div>
             ) : (
               <div
-                className="flex items-center justify-center gap-1.5 rounded-lg px-1 py-0.5 h-8 w-full shadow-inner"
-                style={{ backgroundColor: 'var(--customer-primary-alpha-10, #f4f4f5)' }}
+                className="flex items-center justify-between gap-1 rounded-full px-1 py-1 h-8 w-full shadow-md"
+                style={{
+                  backgroundImage: 'linear-gradient(135deg, var(--customer-primary), var(--customer-primary-dark))',
+                }}
               >
                 <Button
                   variant="default"
@@ -357,14 +359,15 @@ export default function ProductCard({
                     e.stopPropagation();
                     handleDecrease(e);
                   }}
-                  className="w-6 h-6 p-0 rounded-md bg-white hover:bg-neutral-50 shadow-sm text-neutral-900 transition-colors border-0"
+                  className="w-6 h-6 p-0 rounded-full text-white shadow-sm transition-colors border-0"
+                  style={{ backgroundColor: 'var(--customer-primary-darker)' }}
                   aria-label="Decrease quantity"
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
                 </Button>
-                <span className="font-display text-xs font-bold min-w-[1.25rem] text-center text-neutral-900">
+                <span className="font-display text-xs font-bold min-w-[1.25rem] text-center text-white">
                   {inCartQty}
                 </span>
                 <Button
@@ -374,7 +377,8 @@ export default function ProductCard({
                     e.stopPropagation();
                     handleIncrease(e);
                   }}
-                  className="w-6 h-6 p-0 rounded-md bg-white hover:bg-neutral-50 shadow-sm text-neutral-900 transition-colors border-0"
+                  className="w-6 h-6 p-0 rounded-full text-white shadow-sm transition-colors border-0"
+                  style={{ backgroundColor: 'var(--customer-primary-darker)' }}
                   aria-label="Increase quantity"
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
@@ -581,28 +585,32 @@ export default function ProductCard({
               </div>
             ) : (
               <div
-                className="flex items-center justify-center gap-2 rounded-lg px-2 py-1 h-9 shadow-inner"
-                style={{ backgroundColor: 'var(--customer-primary-alpha-10, #f4f4f5)' }}
+                className="flex items-center justify-between gap-1 rounded-full px-1 py-1 h-9 shadow-md"
+                style={{
+                  backgroundImage: 'linear-gradient(135deg, var(--customer-primary), var(--customer-primary-dark))',
+                }}
               >
                 <Button
                   variant="default"
                   size="icon"
                   onClick={handleDecrease}
-                  className="w-7 h-7 p-0 rounded-md bg-white hover:bg-neutral-50 shadow-sm text-neutral-900 transition-colors border-0"
+                  className="w-7 h-7 p-0 rounded-full text-white shadow-sm transition-colors border-0"
+                  style={{ backgroundColor: 'var(--customer-primary-darker)' }}
                   aria-label="Decrease quantity"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
                 </Button>
-                <span className="font-display text-xs font-bold min-w-[1.5rem] text-center text-neutral-900">
+                <span className="font-display text-xs font-bold min-w-[1.5rem] text-center text-white">
                   {inCartQty}
                 </span>
                 <Button
                   variant="default"
                   size="icon"
                   onClick={handleIncrease}
-                  className="w-7 h-7 p-0 rounded-md bg-white hover:bg-neutral-50 shadow-sm text-neutral-900 transition-colors border-0"
+                  className="w-7 h-7 p-0 rounded-full text-white shadow-sm transition-colors border-0"
+                  style={{ backgroundColor: 'var(--customer-primary-darker)' }}
                   aria-label="Increase quantity"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">

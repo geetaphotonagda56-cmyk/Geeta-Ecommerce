@@ -10,6 +10,15 @@ import {
 } from "../utils/variantBarcodeUtils";
 import api from "../../../../services/api/config";
 import ImageCropperModal from "../../../../components/ImageCropperModal";
+import UnitSelectionModal from "../../../../components/UnitSelectionModal";
+
+// Splits a "500 ml" style variant value into its leading number and unit code
+// so the unit picker can swap out just the unit portion.
+function splitPackValue(value: string): { qty: string; unit: string } {
+  const match = (value || "").match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+  if (!match) return { qty: "", unit: value || "" };
+  return { qty: match[1], unit: match[2] || "" };
+}
 
 interface Props {
   index: number;
@@ -87,6 +96,7 @@ export default function VariantCard({
   const [galleryCropQueue, setGalleryCropQueue] = useState<File[]>([]);
   const [showScanner, setShowScanner] = useState(false);
   const [barcodeError, setBarcodeError] = useState("");
+  const [showUnitModal, setShowUnitModal] = useState(false);
   const gradient = variantColors[index % variantColors.length];
 
   const patch = (p: Partial<ProductVariantForm>) =>
@@ -527,12 +537,30 @@ export default function VariantCard({
             />
           </FormField>
           <FormField label="Variant Value" required>
-            <input
-              className={inputClass}
-              value={variant.value}
-              onChange={(e) => patch({ value: e.target.value })}
-              placeholder="e.g. 1kg, Red, Large"
-              required
+            <div className="flex gap-2">
+              <input
+                className={inputClass}
+                value={variant.value}
+                onChange={(e) => patch({ value: e.target.value })}
+                placeholder="e.g. 1kg, 500ml, Red, Large"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowUnitModal(true)}
+                className="shrink-0 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-600 hover:border-slate-300"
+              >
+                Unit
+              </button>
+            </div>
+            <UnitSelectionModal
+              isOpen={showUnitModal}
+              onClose={() => setShowUnitModal(false)}
+              currentValue={splitPackValue(variant.value).unit}
+              onSelect={(unitCode) => {
+                const { qty } = splitPackValue(variant.value);
+                patch({ value: qty ? `${qty}${unitCode}` : unitCode });
+              }}
             />
           </FormField>
           {enabledVariantTypes && enabledVariantTypes.length > 0 && (

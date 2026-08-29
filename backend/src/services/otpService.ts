@@ -41,11 +41,22 @@ function generateOTP(length: number = 4): string {
 
 /**
  * Normalize mobile number to include country code (91)
+ *
+ * Bare 10-digit Indian mobile numbers are prepended with the country code.
+ * We can't rely on checking whether the number already "starts with 91" -
+ * plenty of valid 10-digit mobile numbers (e.g. 9123456780) start with
+ * those digits themselves, which previously caused the country code to be
+ * skipped and the number rejected as too short.
  */
 function normalizeMobileNumber(mobile: string): string {
   let cleanMobile = mobile.replace(/^\+/, '').replace(/\D/g, '');
 
-  if (!cleanMobile.startsWith('91')) {
+  // Strip a leading trunk '0' some users prefix locally (e.g. 09123456780)
+  if (cleanMobile.length === 11 && cleanMobile.startsWith('0')) {
+    cleanMobile = cleanMobile.slice(1);
+  }
+
+  if (cleanMobile.length === 10) {
     cleanMobile = '91' + cleanMobile;
   }
 

@@ -331,55 +331,67 @@ export const getPOSOrders = asyncHandler(
       });
     }
 
+    // Sort + paginate on the bare Order collection first (backed by the
+    // orderDate index) so the aggregation only has to hold `limitNum` docs
+    // in memory. The old pipeline sorted *after* joining every matched
+    // order to its items and grouping back down - with $sort sitting behind
+    // a $facet, Mongo couldn't apply its top-k sort optimization and had to
+    // sort the entire matched set in memory, which blew past the 32MB limit
+    // on datasets with many POS orders (and Atlas M0 doesn't support
+    // allowDiskUse to fall back to an external sort).
     const pipeline: any[] = [
       { $match: matchStage },
       {
-        $lookup: {
-          from: "orderitems",
-          localField: "_id",
-          foreignField: "order",
-          as: "items"
-        }
-      },
-      { $unwind: { path: "$items", preserveNullAndEmptyArrays: true } },
-      {
-        $lookup: {
-          from: "products",
-          localField: "items.product",
-          foreignField: "_id",
-          as: "productInfo"
-        }
-      },
-      { $addFields: buildItemProfitAddFields() },
-      {
-        $group: {
-          _id: "$_id",
-          orderNumber: { $first: "$orderNumber" },
-          orderDate: { $first: "$orderDate" },
-          customer: { $first: "$customer" },
-          customerName: { $first: "$customerName" },
-          customerEmail: { $first: "$customerEmail" },
-          customerPhone: { $first: "$customerPhone" },
-          deliveryAddress: { $first: "$deliveryAddress" },
-          total: { $first: "$total" },
-          paymentMethod: { $first: "$paymentMethod" },
-          paymentStatus: { $first: "$paymentStatus" },
-          status: { $first: "$status" },
-          deliveryBoy: { $first: "$deliveryBoy" },
-          deliveryBoyStatus: { $first: "$deliveryBoyStatus" },
-          adminNotes: { $first: "$adminNotes" },
-          createdAt: { $first: "$createdAt" },
-          updatedAt: { $first: "$updatedAt" },
-          totalMRP: { $sum: { $multiply: [{ $ifNull: ["$items.mrp", 0] }, { $ifNull: ["$items.quantity", 0] }] } },
-          totalSP: { $sum: { $multiply: [{ $ifNull: ["$items.unitPrice", 0] }, { $ifNull: ["$items.quantity", 0] }] } },
-          totalPurchase: { $sum: { $multiply: [{ $ifNull: ["$items.purchasePrice", 0] }, { $ifNull: ["$items.quantity", 0] }] } },
-        }
-      },
-      { $addFields: { profit: { $subtract: ["$totalSP", "$totalPurchase"] } } },
-      { $sort: { orderDate: -1 } },
-      {
         $facet: {
-          data: [{ $skip: skip }, { $limit: limitNum }],
+          data: [
+            { $sort: { orderDate: -1 } },
+            { $skip: skip },
+            { $limit: limitNum },
+            {
+              $lookup: {
+                from: "orderitems",
+                localField: "_id",
+                foreignField: "order",
+                as: "items"
+              }
+            },
+            { $unwind: { path: "$items", preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: "products",
+                localField: "items.product",
+                foreignField: "_id",
+                as: "productInfo"
+              }
+            },
+            { $addFields: buildItemProfitAddFields() },
+            {
+              $group: {
+                _id: "$_id",
+                orderNumber: { $first: "$orderNumber" },
+                orderDate: { $first: "$orderDate" },
+                customer: { $first: "$customer" },
+                customerName: { $first: "$customerName" },
+                customerEmail: { $first: "$customerEmail" },
+                customerPhone: { $first: "$customerPhone" },
+                deliveryAddress: { $first: "$deliveryAddress" },
+                total: { $first: "$total" },
+                paymentMethod: { $first: "$paymentMethod" },
+                paymentStatus: { $first: "$paymentStatus" },
+                status: { $first: "$status" },
+                deliveryBoy: { $first: "$deliveryBoy" },
+                deliveryBoyStatus: { $first: "$deliveryBoyStatus" },
+                adminNotes: { $first: "$adminNotes" },
+                createdAt: { $first: "$createdAt" },
+                updatedAt: { $first: "$updatedAt" },
+                totalMRP: { $sum: { $multiply: [{ $ifNull: ["$items.mrp", 0] }, { $ifNull: ["$items.quantity", 0] }] } },
+                totalSP: { $sum: { $multiply: [{ $ifNull: ["$items.unitPrice", 0] }, { $ifNull: ["$items.quantity", 0] }] } },
+                totalPurchase: { $sum: { $multiply: [{ $ifNull: ["$items.purchasePrice", 0] }, { $ifNull: ["$items.quantity", 0] }] } },
+              }
+            },
+            { $addFields: { profit: { $subtract: ["$totalSP", "$totalPurchase"] } } },
+            { $sort: { orderDate: -1 } },
+          ],
           totalCount: [{ $count: "count" }],
         }
       }

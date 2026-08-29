@@ -249,7 +249,7 @@ export default function AddToCartAnimation({
       // Step 1: Scale up with red glow
       tl.to(linkRef.current, {
         scale: 1.08,
-        boxShadow: '0 10px 25px rgba(239, 68, 68, 0.4)',
+        boxShadow: '0 10px 25px rgba(245, 158, 11, 0.35)',
         duration: 0.15,
         ease: 'power2.out',
         transformOrigin: 'center center',
@@ -258,7 +258,7 @@ export default function AddToCartAnimation({
         // Step 2: Bounce back
         .to(linkRef.current, {
           scale: 1.0,
-          boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.35)',
           duration: 0.2,
           ease: 'power2.inOut',
         })
@@ -390,14 +390,14 @@ export default function AddToCartAnimation({
             <Link
               ref={linkRef}
               to={cart.itemCount > 0 ? linkTo : '/cart'}
-              className={`relative overflow-hidden bg-gradient-to-r from-red-700 via-red-600 to-red-700 text-white rounded-full shadow-xl shadow-red-900/30 px-3 py-2 flex items-center gap-2 hover:from-red-800 hover:via-red-700 hover:to-red-800 transition-all duration-300 pointer-events-auto border border-red-800/30 backdrop-blur-sm ${pillClassName}`}
+              className={`relative overflow-hidden bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-900 text-white rounded-full shadow-xl shadow-black/40 pl-2 pr-2 py-2 flex items-center gap-3 hover:from-black hover:via-neutral-900 hover:to-black transition-all duration-300 pointer-events-auto border border-white/10 ${pillClassName}`}
             >
               {/* Shimmer Effect */}
               <div className="shimmer-overlay" />
-              
+
               {/* Left: Cart Icon or Product thumbnails */}
               {cart.itemCount > 0 ? (
-                <div className="flex items-center -space-x-4 relative z-10">
+                <div className="flex items-center -space-x-3 relative z-10">
                   {thumbnailItems.map((item, idx) => {
                     const prod = item.product;
                     if (!prod) return null;
@@ -417,7 +417,8 @@ export default function AddToCartAnimation({
                         stiffness: 500,
                         damping: 25,
                       }}
-                      className="w-7 h-7 rounded-full border-2 border-white/90 overflow-hidden bg-white flex-shrink-0 shadow-md"
+                      className="w-9 h-9 rounded-xl border-2 border-white/90 overflow-hidden bg-white flex-shrink-0 shadow-md"
+                      style={{ zIndex: thumbnailItems.length - idx }}
                     >
                       {imageUrl ? (
                         <img
@@ -468,15 +469,15 @@ export default function AddToCartAnimation({
 
               {/* Middle: Text */}
               <motion.div
-                className="flex flex-col relative z-10"
+                className="flex flex-col relative z-10 mr-1"
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1, duration: 0.3 }}
               >
-                <span className="text-xs font-bold leading-tight drop-shadow-sm">
-                  {cart.itemCount > 0 ? 'View cart' : 'Cart'}
+                <span className="text-sm font-bold leading-tight drop-shadow-sm">
+                  {cart.itemCount > 0 ? 'Check Order' : 'Cart'}
                 </span>
-                <span className="text-[10px] opacity-95 leading-tight font-medium">
+                <span className="text-[11px] text-neutral-300 leading-tight font-medium">
                   {cart.itemCount > 0
                     ? `${cart.itemCount} ${cart.itemCount === 1 ? 'item' : 'items'}`
                     : 'Empty'
@@ -486,7 +487,7 @@ export default function AddToCartAnimation({
 
               {/* Right: Arrow icon */}
               <motion.div
-                className="ml-auto bg-white/25 rounded-full p-1 backdrop-blur-sm relative z-10"
+                className="ml-auto bg-gradient-to-br from-amber-400 to-orange-500 rounded-full p-2 shadow-md relative z-10 flex-shrink-0"
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.15, duration: 0.3 }}
@@ -503,7 +504,7 @@ export default function AddToCartAnimation({
                   <path
                     d="M6 12L10 8L6 4"
                     stroke="currentColor"
-                    strokeWidth="2"
+                    strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />

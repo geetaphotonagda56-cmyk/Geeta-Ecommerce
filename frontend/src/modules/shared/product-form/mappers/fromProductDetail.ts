@@ -61,6 +61,7 @@ export function fromProductDetail(product: any): ProductFormState {
       mfgDate: product.mfgDate || "",
       expiryDate: product.expiryDate || "",
       pack: product.pack || "",
+      weight: product.weight || "",
       fssaiLicNo: product.fssaiLicNo || "",
       isReturnable: product.isReturnable ? "Yes" : "No",
       maxReturnDays: product.maxReturnDays

@@ -82,6 +82,7 @@ export interface IProduct extends Document {
 
   // Details
   pack?: string;
+  weight?: string;
   shelfLife?: string;
   marketer?: string;
 
@@ -339,6 +340,7 @@ export interface IProduct extends Document {
 
     // Details
     pack: { type: String, trim: true },
+    weight: { type: String, trim: true },
     shelfLife: { type: String, trim: true },
     marketer: { type: String, trim: true },
 

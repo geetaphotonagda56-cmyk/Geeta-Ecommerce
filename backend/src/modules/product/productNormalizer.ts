@@ -59,6 +59,9 @@ export interface NormalizedProductPayload {
   marketer?: string;
   shelfLife?: string;
   pack?: string;
+  weight?: string;
+  mfgDate?: string;
+  expiryDate?: string;
   fssaiLicNo?: string;
   isReturnable: boolean;
   maxReturnDays?: number;
@@ -163,6 +166,9 @@ export function normalizeCreatePayload(
     marketer: parsed.marketer ? String(parsed.marketer) : undefined,
     shelfLife: parsed.shelfLife ? String(parsed.shelfLife) : undefined,
     pack: parsed.pack ? String(parsed.pack) : undefined,
+    weight: parsed.weight ? String(parsed.weight) : undefined,
+    mfgDate: parsed.mfgDate ? String(parsed.mfgDate) : undefined,
+    expiryDate: parsed.expiryDate ? String(parsed.expiryDate) : undefined,
     fssaiLicNo: parsed.fssaiLicNo ? String(parsed.fssaiLicNo) : undefined,
     isReturnable: parseBool(parsed.isReturnable, false),
     maxReturnDays:

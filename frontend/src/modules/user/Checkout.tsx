@@ -12,6 +12,8 @@ import { OrderAddress, Order } from '../../types/order';
 import PartyPopper from './components/PartyPopper';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from '../../components/ui/sheet';
 import WishlistButton from '../../components/WishlistButton';
+import OTPInput from '../../components/OTPInput';
+import { sendOTP, verifyOTP } from '../../services/api/auth/customerAuthService';
 
 import { getCoupons, validateCoupon, Coupon as ApiCoupon } from '../../services/api/customerCouponService';
 import { getAppConfig, AppConfig, appConfig as defaultAppConfig } from '../../services/configService';
@@ -42,7 +44,7 @@ export default function Checkout() {
   const { addOrder } = useOrders();
   const { location: userLocation } = useLocationContext();
   const { showToast: showGlobalToast } = useToast();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
   const location = useRouterLocation();
   const [config, setConfig] = useState<AppConfig>(defaultAppConfig);
@@ -80,6 +82,57 @@ export default function Checkout() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
   const [isPaymentDropdownOpen, setIsPaymentDropdownOpen] = useState(false);
 
+  // Login sheet (shown in place of the address/payment action when the user is a guest)
+  const [showLoginSheet, setShowLoginSheet] = useState(false);
+  const [loginMobile, setLoginMobile] = useState('');
+  const [loginShowOtp, setLoginShowOtp] = useState(false);
+  const [loginSessionId, setLoginSessionId] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
+
+  const handleLoginContinue = async () => {
+    if (loginMobile.length !== 10) return;
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const response = await sendOTP(loginMobile);
+      if (response.sessionId) setLoginSessionId(response.sessionId);
+      setLoginShowOtp(true);
+    } catch (err: any) {
+      setLoginError(err.response?.data?.message || 'Failed to send OTP. Please try again.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleLoginOtpComplete = async (otp: string) => {
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const response = await verifyOTP(loginMobile, otp, loginSessionId);
+      if (response.success && response.data) {
+        login(response.data.token, {
+          id: response.data.user.id,
+          name: response.data.user.name,
+          phone: response.data.user.phone,
+          email: response.data.user.email,
+          walletAmount: response.data.user.walletAmount,
+          refCode: response.data.user.refCode,
+          status: response.data.user.status,
+        });
+        setShowLoginSheet(false);
+        setLoginShowOtp(false);
+        setLoginMobile('');
+        setLoginSessionId('');
+        setAuthRefreshKey((k) => k + 1);
+      }
+    } catch (err: any) {
+      setLoginError(err.response?.data?.message || 'Invalid OTP. Please try again.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
   // Redirect if empty
   useEffect(() => {
     if (!cartLoading && cart.items.length === 0 && !showOrderSuccess) {
@@ -88,8 +141,10 @@ export default function Checkout() {
   }, [cart.items.length, cartLoading, navigate, showOrderSuccess]);
 
   // Load addresses and coupons
+  const [authRefreshKey, setAuthRefreshKey] = useState(0);
   useEffect(() => {
     const fetchInitialData = async () => {
+      if (!isAuthenticated) return;
       try {
         const [addressResponse, couponResponse] = await Promise.all([
           getAddresses(),
@@ -188,7 +243,7 @@ export default function Checkout() {
       }
     };
     fetchInitialData();
-  }, [location.key, userLocation]);
+  }, [location.key, userLocation, isAuthenticated, authRefreshKey]);
 
   // Fetch similar products dynamically
   useEffect(() => {
@@ -702,6 +757,10 @@ export default function Checkout() {
   };
 
   const handlePlaceOrderClick = () => {
+    if (!isAuthenticated) {
+      setShowLoginSheet(true);
+      return;
+    }
     if (!selectedAddress || cart.items.length === 0) {
       return;
     }
@@ -903,6 +962,49 @@ export default function Checkout() {
             Add details
           </button>
         </div>
+      </div>
+
+      {/* Auth / Payment Action Slot - shows Login for guests, then Select Payment Option once logged in */}
+      <div className="px-4 md:px-6 lg:px-8 py-3 border-b border-neutral-200">
+        {!isAuthenticated ? (
+          <button
+            onClick={() => setShowLoginSheet(true)}
+            className="w-full flex items-center justify-between px-4 py-3 border border-[var(--customer-primary-dark)] bg-[var(--customer-primary-dark)] rounded-xl transition-all"
+          >
+            <span className="text-sm font-bold text-white">Login to continue</span>
+            <span className="text-xs font-semibold text-white">LOGIN</span>
+          </button>
+        ) : (
+          <>
+            <h3 className="text-sm font-bold text-neutral-900 mb-2">Payment Method</h3>
+            <button
+              onClick={() => setShowPaymentModal(true)}
+              className={`w-full flex items-center justify-between px-4 py-3 border rounded-xl transition-all ${
+                selectedPaymentMethod
+                  ? 'border-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)]'
+                  : 'border-[var(--customer-primary-dark)] bg-[var(--customer-primary-dark)]'
+              }`}
+            >
+              {selectedPaymentMethod ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-7 h-7 rounded-full bg-[var(--customer-primary-alpha-20)] flex items-center justify-center text-[var(--customer-primary-dark)]">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                  <span className="text-sm font-semibold text-neutral-900">
+                    {selectedPaymentMethod === 'Cash' ? 'Pay on Delivery' : 'Pay Online'}
+                  </span>
+                </span>
+              ) : (
+                <span className="text-sm font-bold text-white">Select Payment Option</span>
+              )}
+              <span className={`text-xs font-semibold ${selectedPaymentMethod ? 'text-[var(--customer-primary-dark)]' : 'text-white'}`}>
+                {selectedPaymentMethod ? 'CHANGE' : 'SELECT'}
+              </span>
+            </button>
+          </>
+        )}
       </div>
 
       {/* Saved Address Section */}
@@ -1611,36 +1713,6 @@ export default function Checkout() {
         </button>
       </div>
 
-      {/* Payment Method */}
-      <div className="px-4 py-3 border-b border-neutral-200">
-        <h3 className="text-sm font-bold text-neutral-900 mb-2">Payment Method</h3>
-        <button
-          onClick={() => setShowPaymentModal(true)}
-          className={`w-full flex items-center justify-between px-4 py-3 border rounded-xl transition-all ${
-            selectedPaymentMethod
-              ? 'border-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)]'
-              : 'border-[var(--customer-primary-dark)] bg-[var(--customer-primary-dark)]'
-          }`}
-        >
-          {selectedPaymentMethod ? (
-            <span className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-full bg-[var(--customer-primary-alpha-20)] flex items-center justify-center text-[var(--customer-primary-dark)]">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              <span className="text-sm font-semibold text-neutral-900">
-                {selectedPaymentMethod === 'Cash' ? 'Pay on Delivery' : 'Pay Online'}
-              </span>
-            </span>
-          ) : (
-            <span className="text-sm font-bold text-white">Select Payment Option</span>
-          )}
-          <span className={`text-xs font-semibold ${selectedPaymentMethod ? 'text-[var(--customer-primary-dark)]' : 'text-white'}`}>
-            {selectedPaymentMethod ? 'CHANGE' : 'SELECT'}
-          </span>
-        </button>
-      </div>
 
       {/* Cancellation Policy */}
       <div className="px-4 py-2">
@@ -1669,6 +1741,116 @@ export default function Checkout() {
           </div>
         </div>
       </div>
+
+      {/* Login Sheet Modal - lets a guest log in without leaving the checkout flow */}
+      <Sheet
+        open={showLoginSheet}
+        onOpenChange={(open) => {
+          setShowLoginSheet(open);
+          if (!open) {
+            setLoginShowOtp(false);
+            setLoginError('');
+          }
+        }}
+      >
+        <SheetContent side="bottom" className="max-h-[70vh]">
+          <SheetHeader className="text-left">
+            <div className="flex items-center justify-between mb-2">
+              <SheetTitle className="text-base font-bold text-neutral-900">
+                {loginShowOtp ? 'Verify your number' : 'Login to continue'}
+              </SheetTitle>
+              <SheetClose onClick={() => setShowLoginSheet(false)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </SheetClose>
+            </div>
+          </SheetHeader>
+
+          <div className="px-4 pb-6 mt-2">
+            {!loginShowOtp ? (
+              <>
+                <p className="text-xs text-neutral-500 mb-4">We'll send a 4-digit OTP to verify your number</p>
+                <div className="mb-3">
+                  <div className="flex items-center bg-neutral-50 border border-neutral-200 rounded-xl overflow-hidden focus-within:border-[var(--customer-primary)] focus-within:ring-2 focus-within:ring-[var(--customer-primary-alpha-10)] transition-all">
+                    <div className="px-3 py-3 text-sm font-semibold text-neutral-500 border-r border-neutral-200">
+                      +91
+                    </div>
+                    <input
+                      type="tel"
+                      value={loginMobile}
+                      onChange={(e) => setLoginMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder="Enter mobile number"
+                      className="flex-1 px-3 py-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none bg-transparent"
+                      maxLength={10}
+                      disabled={loginLoading}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                {loginError && (
+                  <div className="mb-3 text-xs text-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)] px-3 py-2 rounded-lg">
+                    {loginError}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleLoginContinue}
+                  disabled={loginMobile.length !== 10 || loginLoading}
+                  className={`w-full py-3 rounded-xl font-bold text-sm transition-colors shadow-sm ${
+                    loginMobile.length === 10 && !loginLoading
+                      ? 'text-white shadow-md'
+                      : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                  }`}
+                  style={
+                    loginMobile.length === 10 && !loginLoading
+                      ? { background: 'linear-gradient(135deg, var(--customer-primary) 0%, var(--customer-primary-dark) 100%)' }
+                      : undefined
+                  }
+                >
+                  {loginLoading ? 'Sending OTP...' : 'Continue'}
+                </button>
+              </>
+            ) : (
+              <div className="text-center">
+                <p className="text-xs text-neutral-500 mb-1">Enter the 4-digit OTP sent to</p>
+                <p className="text-sm font-bold text-neutral-800 mb-4">+91 {loginMobile}</p>
+
+                <div className="flex justify-center mb-4">
+                  <OTPInput onComplete={handleLoginOtpComplete} disabled={loginLoading} />
+                </div>
+
+                {loginError && (
+                  <div className="mb-4 text-xs text-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)] px-3 py-2 rounded-lg">
+                    {loginError}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setLoginShowOtp(false);
+                      setLoginError('');
+                    }}
+                    disabled={loginLoading}
+                    className="flex-1 py-3 rounded-xl font-bold text-xs bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition-colors"
+                  >
+                    Change Number
+                  </button>
+                  <button
+                    onClick={handleLoginContinue}
+                    disabled={loginLoading}
+                    className="flex-1 py-3 rounded-xl font-bold text-xs text-[var(--customer-primary-dark)] border-2 border-[var(--customer-primary)] hover:bg-[var(--customer-primary-alpha-10)] transition-colors"
+                  >
+                    {loginLoading ? 'Verifying...' : 'Resend OTP'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* GSTIN Sheet Modal */}
       <Sheet open={showGstinSheet} onOpenChange={setShowGstinSheet}>

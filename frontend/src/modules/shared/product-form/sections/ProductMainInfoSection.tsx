@@ -5,6 +5,15 @@ import FormSectionCard from "../components/FormSectionCard";
 import CategoryCascadeFields from "../components/CategoryCascadeFields";
 import { getBrands, Brand } from "../../../../services/api/brandService";
 import { getShops, Shop } from "../../../../services/api/productService";
+import UnitSelectionModal from "../../../../components/UnitSelectionModal";
+
+// Splits a "500 ml" style pack value into its leading number and unit code
+// so the unit picker can swap out just the unit portion.
+function splitPackValue(value: string): { qty: string; unit: string } {
+  const match = (value || "").match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+  if (!match) return { qty: "", unit: value || "" };
+  return { qty: match[1], unit: match[2] || "" };
+}
 
 interface Props {
   role: "admin" | "seller";
@@ -38,6 +47,7 @@ export default function ProductMainInfoSection({
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loadingBrands, setLoadingBrands] = useState(true);
   const [shops, setShops] = useState<Shop[]>([]);
+  const [showUnitModal, setShowUnitModal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,14 +152,41 @@ export default function ProductMainInfoSection({
 
           {showPack && (
             <FormField label="Pack / Unit Size">
-              <input
-                className={inputClass}
-                value={mainInfo.pack}
-                onChange={(e) => onChange({ pack: e.target.value })}
-                placeholder="e.g. 1kg, 500ml"
+              <div className="flex gap-2">
+                <input
+                  className={inputClass}
+                  value={mainInfo.pack}
+                  onChange={(e) => onChange({ pack: e.target.value })}
+                  placeholder="e.g. 1kg, 500ml, 1pcs"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowUnitModal(true)}
+                  className="shrink-0 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  Unit
+                </button>
+              </div>
+              <UnitSelectionModal
+                isOpen={showUnitModal}
+                onClose={() => setShowUnitModal(false)}
+                currentValue={splitPackValue(mainInfo.pack).unit}
+                onSelect={(unitCode) => {
+                  const { qty } = splitPackValue(mainInfo.pack);
+                  onChange({ pack: qty ? `${qty}${unitCode}` : unitCode });
+                }}
               />
             </FormField>
           )}
+
+          <FormField label="Weight">
+            <input
+              className={inputClass}
+              value={mainInfo.weight}
+              onChange={(e) => onChange({ weight: e.target.value })}
+              placeholder="e.g. 500g, 1kg"
+            />
+          </FormField>
 
           {showVideo && (
             <FormField label="Product Video">

@@ -1217,6 +1217,18 @@ export default function ProductDetail() {
                         <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Unit:</span>
                         <span className="text-xs text-neutral-600">{product.pack}</span>
                       </div>
+                      {product.weight && (
+                        <div className="flex items-start">
+                          <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Weight:</span>
+                          <span className="text-xs text-neutral-600">{product.weight}</span>
+                        </div>
+                      )}
+                      {product.expiryDate && (
+                        <div className="flex items-start">
+                          <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Expiry Date:</span>
+                          <span className="text-xs text-neutral-600">{product.expiryDate}</span>
+                        </div>
+                      )}
                       {product.fssaiLicNo && (
                         <div className="flex items-start">
                           <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">FSSAI License:</span>

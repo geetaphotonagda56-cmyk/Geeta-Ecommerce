@@ -37,6 +37,7 @@ export function toCreatePayload(state: ProductFormState): CreateProductPayload {
     mfgDate: mainInfo.mfgDate || undefined,
     expiryDate: mainInfo.expiryDate || undefined,
     pack: mainInfo.pack || undefined,
+    weight: mainInfo.weight || undefined,
     fssaiLicNo: mainInfo.fssaiLicNo || undefined,
     isReturnable: mainInfo.isReturnable === "Yes",
     maxReturnDays: mainInfo.maxReturnDays

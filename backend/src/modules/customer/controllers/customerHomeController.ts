@@ -884,8 +884,6 @@ export const getStoreProducts = async (req: Request, res: Response) => {
     let query: any = {
       status: "Active",
       publish: true,
-      // Only show shop-by-store-only products in shop by store section
-      isShopByStoreOnly: true,
     };
 
     // Only show products from active categories
@@ -945,12 +943,12 @@ export const getStoreProducts = async (req: Request, res: Response) => {
       // If shop has specific products assigned, use those
       if (productIds.length > 0) {
         query._id = { $in: productIds };
-        // Also filter by shopId to ensure products belong to this shop
-        query.shopId = shopId;
-        console.log(`[getStoreProducts] Filtering by product IDs: ${productIds.length} products and shopId: ${shopId}`);
+        console.log(`[getStoreProducts] Filtering by product IDs: ${productIds.length} products`);
       }
       // Otherwise, filter by shopId and category/subcategory
       else {
+        // Only show shop-by-store-only products when falling back to shopId/category matching
+        query.isShopByStoreOnly = true;
         // Filter by shopId to show only products assigned to this shop
         query.shopId = shopId;
         console.log(`[getStoreProducts] Filtering by shopId: ${shopId}`);

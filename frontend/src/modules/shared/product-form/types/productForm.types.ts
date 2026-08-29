@@ -49,6 +49,7 @@ export interface ProductMainInfoForm {
   mfgDate: string;
   expiryDate: string;
   pack: string;
+  weight: string;
   fssaiLicNo: string;
   isReturnable: "Yes" | "No";
   maxReturnDays: string;
@@ -116,6 +117,7 @@ export const defaultMainInfo = (overrides?: Partial<ProductMainInfoForm>): Produ
   mfgDate: "",
   expiryDate: "",
   pack: "",
+  weight: "",
   fssaiLicNo: "",
   isReturnable: "No",
   maxReturnDays: "",
@@ -160,6 +162,7 @@ export interface CreateProductPayload {
   mfgDate?: string;
   expiryDate?: string;
   pack?: string;
+  weight?: string;
   fssaiLicNo?: string;
   isReturnable: boolean;
   maxReturnDays?: number;
