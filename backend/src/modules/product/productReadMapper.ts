@@ -34,6 +34,8 @@ export interface MappedProductListItem {
   stock: number;
   /** @deprecated use listing.imageUrl */
   mainImage: string | null;
+  /** @deprecated use listing.galleryImages */
+  galleryImages: string[];
   discPrice?: number;
   compareAtPrice?: number;
   discount?: number;
@@ -81,6 +83,7 @@ export function toListItem(
     price: minPrice,
     stock: listing.totalStock,
     mainImage: listing.imageUrl || plain.mainImage || null,
+    galleryImages: listing.galleryImages,
     discPrice: minPrice,
     compareAtPrice: mrp,
     discount: computeDiscount(mrp, minPrice),

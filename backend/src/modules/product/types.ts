@@ -33,6 +33,7 @@ export interface ProductListingComputed {
   totalStock: number;
   imageUrl: string | null;
   imageVariants?: ImageVariants | null;
+  galleryImages: string[];
   inStock: boolean;
 }
 

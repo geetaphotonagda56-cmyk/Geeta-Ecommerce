@@ -36,6 +36,19 @@ interface ProductImage {
   file?: File;
 }
 
+// The product-list API (toListItem/productReadMapper on the backend) only
+// ever computes a top-level `mainImage` from the variants - it never rolls
+// variations[0].galleryImages up into a top-level `galleryImages` field, so
+// that field is only ever present on pre-variant-migration legacy docs.
+// Without this fallback, every current-schema product's gallery photos are
+// invisible here and a save would silently wipe them (finalImages would
+// only ever contain the main image).
+const getProductGalleryImages = (p: any): string[] => {
+  if (Array.isArray(p.galleryImages) && p.galleryImages.length > 0) return p.galleryImages;
+  if (Array.isArray(p.galleryImageUrls) && p.galleryImageUrls.length > 0) return p.galleryImageUrls;
+  return p.variations?.[0]?.galleryImages || [];
+};
+
 // Simple Modal for editing pricing slabs
 const PricingSlabsModal = ({ slabs, onClose, onSave }: { slabs: {minQty: number, price: number}[], onClose: () => void, onSave: (newSlabs: any[]) => void }) => {
     const [localSlabs, setSlabs] = useState(slabs.length ? slabs : [{ minQty: 1, price: 0 }]);
@@ -386,11 +399,9 @@ export default function SellerStockBulkEdit({
 
           const images: ProductImage[] = [];
           if (p.mainImage) images.push({ id: `main-${p._id}`, url: p.mainImage });
-          if (p.galleryImages && p.galleryImages.length > 0) {
-            p.galleryImages.forEach((url: string, i: number) => {
-              images.push({ id: `gal-${p._id}-${i}`, url });
-            });
-          }
+          getProductGalleryImages(p).forEach((url: string, i: number) => {
+            images.push({ id: `gal-${p._id}-${i}`, url });
+          });
 
           return {
             id: p._id,
@@ -589,11 +600,9 @@ export default function SellerStockBulkEdit({
       if (p.mainImage) {
         images.push({ id: `main-${p._id}`, url: p.mainImage });
       }
-      if (p.galleryImageUrls && p.galleryImageUrls.length > 0) {
-        p.galleryImageUrls.forEach((url: string, i: number) => {
-           images.push({ id: `gal-${p._id}-${i}`, url });
-        });
-      }
+      getProductGalleryImages(p).forEach((url: string, i: number) => {
+        images.push({ id: `gal-${p._id}-${i}`, url });
+      });
 
       return {
         id: p._id,
@@ -778,7 +787,7 @@ export default function SellerStockBulkEdit({
     customBlockRack: !!(p.blockNumber || p.rackNumber),
     hsnCode: p.hsnCode || "",
     mainImage: p.mainImage || "",
-    galleryImages: p.galleryImages || [],
+    galleryImages: getProductGalleryImages(p),
   });
 
   // Products without real variants still carry one synthesized "Default"/

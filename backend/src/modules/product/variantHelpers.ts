@@ -117,6 +117,14 @@ export function getListingImageVariants(variants: ProductVariant[]): ImageVarian
   return withVariants?.mainImageVariants ?? null;
 }
 
+/** Gallery photos (beyond the main image) belonging to whichever variant getListingImage picked. */
+export function getListingGallery(variants: ProductVariant[]): string[] {
+  if (!variants.length) return [];
+  const inStock = variants.find((v) => (Number(v.stock) || 0) > 0 && v.mainImage);
+  const source = inStock ?? variants.find((v) => v.mainImage) ?? variants[0];
+  return source?.galleryImages ?? [];
+}
+
 export function isInStock(variants: ProductVariant[], allowNegative = false): boolean {
   if (!variants.length) return false;
   if (allowNegative) return true;
@@ -163,12 +171,15 @@ export function computeListing(
     }
   }
 
+  const variantGallery = getListingGallery(variants);
+
   return {
     minPrice,
     maxPrice,
     totalStock,
     imageUrl: getListingImage(variants) ?? product?.mainImage ?? null,
     imageVariants: getListingImageVariants(variants) ?? null,
+    galleryImages: variantGallery.length ? variantGallery : (product?.galleryImages ?? []),
     inStock: allowNegative || totalStock > 0,
   };
 }
