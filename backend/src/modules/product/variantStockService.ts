@@ -25,9 +25,40 @@ export async function decrementVariantStock(
   }
   if (!targetId) return false;
 
+  const targetObjectId = new mongoose.Types.ObjectId(targetId);
+
+  // Unlike the online-checkout path, this runs after a sale/payment has
+  // already happened (POS, order fulfillment), so it can't reject on
+  // insufficient stock - it must clamp at 0 instead. Done as an aggregation
+  // pipeline update so the clamp is evaluated atomically against the
+  // document's current stock, avoiding a read-then-write race that could
+  // still drive it negative under concurrent sales.
   const result = await Product.updateOne(
-    { _id: productId, "variations._id": new mongoose.Types.ObjectId(targetId) },
-    { $inc: { "variations.$.stock": -quantity } },
+    { _id: productId, "variations._id": targetObjectId },
+    [
+      {
+        $set: {
+          variations: {
+            $map: {
+              input: "$variations",
+              as: "v",
+              in: {
+                $cond: [
+                  { $eq: ["$$v._id", targetObjectId] },
+                  {
+                    $mergeObjects: [
+                      "$$v",
+                      { stock: { $max: [0, { $subtract: [{ $ifNull: ["$$v.stock", 0] }, quantity] }] } },
+                    ],
+                  },
+                  "$$v",
+                ],
+              },
+            },
+          },
+        },
+      },
+    ],
     options?.session ? { session: options.session } : {}
   );
   return result.modifiedCount > 0;

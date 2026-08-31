@@ -202,6 +202,12 @@ export default function SellerStockBulkEdit({
   // own Image cell, rather than the parent product row's.
   const [imageSourceModalVariationIndex, setImageSourceModalVariationIndex] = useState<number | null>(null);
   const [showImageSourceModal, setShowImageSourceModal] = useState(false);
+  // Set when the modal was opened via a thumbnail's "Replace" button instead
+  // of the row's "+" Add button, so the picked/searched image swaps into
+  // that exact slot instead of being appended. imageId targets product.images
+  // (id-based); index targets the multi-variation cell's [mainImage, ...gallery]
+  // list, which has no per-image id.
+  const [imageReplaceTarget, setImageReplaceTarget] = useState<{ imageId?: string; index?: number } | null>(null);
   const [imageSearchQuery, setImageSearchQuery] = useState("");
   const [isSearchingImage, setIsSearchingImage] = useState(false);
   const [searchedImages, setSearchedImages] = useState<string[]>([]);
@@ -238,6 +244,13 @@ export default function SellerStockBulkEdit({
   const applySearchedImages = async (urls: string[]) => {
       if (!urls.length || imageSourceModalRowIndex === null) return;
 
+      // Only the first uploaded image takes over the replace target; any
+      // additional images selected alongside it are appended as new, same
+      // as picking multiple files from the gallery during a replace.
+      const replaceImageId = imageReplaceTarget?.imageId;
+      const replaceIndex = imageReplaceTarget?.index;
+      setImageReplaceTarget(null);
+
       setIsSearchingImage(true);
       let uploaded: { url: string; variants: import("../../../services/api/uploadService").ImageVariants | null }[];
       try {
@@ -270,17 +283,38 @@ export default function SellerStockBulkEdit({
               if (!oldProd) return prev;
               const variations = [...(oldProd.variations || [])];
               const targetVariation = { ...(variations[vIdx] || {}) };
-              const [first, ...rest] = uploaded;
-              const galleryAdditions = targetVariation.mainImage ? uploaded : rest;
-              if (!targetVariation.mainImage) {
+              if (replaceIndex != null) {
+                // Overwrite the exact slot in place instead of appending, so
+                // position (and which slot is "Main") is preserved. Any
+                // extra picked images beyond the first still get appended.
+                const [first, ...rest] = uploaded;
+                if (replaceIndex === 0) {
                   targetVariation.mainImage = first.url;
                   targetVariation.mainImageVariants = first.variants || undefined;
-              }
-              if (galleryAdditions.length) {
+                } else {
+                  const gallery = [...(targetVariation.galleryImages || [])];
+                  gallery[replaceIndex - 1] = first.url;
+                  targetVariation.galleryImages = gallery;
+                }
+                if (rest.length) {
                   targetVariation.galleryImages = [
                     ...(targetVariation.galleryImages || []),
-                    ...galleryAdditions.map((g) => g.url),
+                    ...rest.map((g) => g.url),
                   ];
+                }
+              } else {
+                const [first, ...rest] = uploaded;
+                const galleryAdditions = targetVariation.mainImage ? uploaded : rest;
+                if (!targetVariation.mainImage) {
+                    targetVariation.mainImage = first.url;
+                    targetVariation.mainImageVariants = first.variants || undefined;
+                }
+                if (galleryAdditions.length) {
+                    targetVariation.galleryImages = [
+                      ...(targetVariation.galleryImages || []),
+                      ...galleryAdditions.map((g) => g.url),
+                    ];
+                }
               }
               variations[vIdx] = targetVariation;
               const newProd = { ...oldProd, variations, isChanged: true };
@@ -301,9 +335,19 @@ export default function SellerStockBulkEdit({
       setEditableProducts((prev) => {
           const updated = [...prev];
           const currentProduct = updated[imageSourceModalRowIndex];
+          const replaceAt = replaceImageId
+            ? currentProduct.images.findIndex((img) => img.id === replaceImageId)
+            : -1;
+          const [firstNew, ...restNew] = newImages;
+          const images = replaceAt !== -1
+            ? [
+                ...currentProduct.images.map((img, i) => (i === replaceAt ? firstNew : img)),
+                ...restNew,
+              ]
+            : [...currentProduct.images, ...newImages];
           updated[imageSourceModalRowIndex] = {
               ...currentProduct,
-              images: [...currentProduct.images, ...newImages],
+              images,
               isChanged: true
           };
           return updated;
@@ -897,7 +941,7 @@ export default function SellerStockBulkEdit({
     }
   };
 
-  const handleImageChange = (index: number, files: FileList | null) => {
+  const handleImageChange = (index: number, files: FileList | null, replaceImageId?: string) => {
       if (!files || files.length === 0) return;
 
       const newImages: ProductImage[] = Array.from(files).map((f) => ({
@@ -910,9 +954,20 @@ export default function SellerStockBulkEdit({
           const updated = [...prev];
           const currentProduct = updated[index];
 
+          const replaceAt = replaceImageId
+            ? currentProduct.images.findIndex((img) => img.id === replaceImageId)
+            : -1;
+          const [firstNew, ...restNew] = newImages;
+          const images = replaceAt !== -1
+            ? [
+                ...currentProduct.images.map((img, i) => (i === replaceAt ? firstNew : img)),
+                ...restNew,
+              ]
+            : [...currentProduct.images, ...newImages];
+
           updated[index] = {
               ...currentProduct,
-              images: [...currentProduct.images, ...newImages],
+              images,
               isChanged: true
           };
           upsertEditedCache(updated[index]);
@@ -924,9 +979,12 @@ export default function SellerStockBulkEdit({
   // Variations don't have a local pending-upload staging array like
   // product.images does - upload right away so the thumbnail and the
   // eventual save both end up using the same hosted URL.
-  const handleVariationImageChange = async (productIndex: number, variationIndex: number, files: FileList | null) => {
+  const handleVariationImageChange = async (productIndex: number, variationIndex: number, files: FileList | null, replaceIndex?: number) => {
       if (!files || files.length === 0) return;
+      let isFirst = true;
       for (const file of Array.from(files)) {
+        const targetReplaceIndex = isFirst ? replaceIndex : undefined;
+        isFirst = false;
         try {
           const uploadRes = await uploadImage(file);
           if (!uploadRes) {
@@ -940,7 +998,17 @@ export default function SellerStockBulkEdit({
             if (!oldProd) return prev;
             const variations = [...(oldProd.variations || [])];
             const targetVariation = { ...(variations[variationIndex] || {}) };
-            if (targetVariation.mainImage) {
+            if (targetReplaceIndex != null) {
+              // Overwrite the exact slot in place instead of appending, so
+              // position (and which slot is "Main") is preserved.
+              if (targetReplaceIndex === 0) {
+                targetVariation.mainImage = url;
+              } else {
+                const gallery = [...(targetVariation.galleryImages || [])];
+                gallery[targetReplaceIndex - 1] = url;
+                targetVariation.galleryImages = gallery;
+              }
+            } else if (targetVariation.mainImage) {
               targetVariation.galleryImages = [...(targetVariation.galleryImages || []), url];
             } else {
               targetVariation.mainImage = url;
@@ -1791,16 +1859,19 @@ export default function SellerStockBulkEdit({
               {product.images.map((img, i) => (
                 <div key={img.id} className="relative group w-12 h-12 border border-gray-200 rounded overflow-hidden bg-white shrink-0">
                   <img src={img.url} alt={`Img-${i}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                  <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setImageReplaceTarget({ imageId: img.id }); setSearchedImages([]); setSelectedSearchImages([]); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="absolute top-0 left-0 bg-blue-600 text-white w-4 h-4 flex items-center justify-center rounded-br opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-700 z-10" title="Replace">
+                    <span className="text-[10px] font-bold leading-none">&#8635;</span>
+                  </button>
                   <button onClick={() => handleRemoveImage(originalIndex, img.id)} className="absolute top-0 right-0 bg-red-600 text-white w-4 h-4 flex items-center justify-center rounded-bl opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 z-10" title="Remove">
                     <span className="text-[10px] font-bold leading-none">&times;</span>
                   </button>
                   {i === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] py-[1px]">Main</span>}
                 </div>
               ))}
-              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setSearchedImages([]); setSelectedSearchImages([]); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
+              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setImageReplaceTarget(null); setSearchedImages([]); setSelectedSearchImages([]); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
                 <span className="text-xl leading-none font-light">+</span>
               </button>
-              <input id={`file-input-${originalIndex}`} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { handleImageChange(originalIndex, e.target.files); e.target.value = ""; }} />
+              <input id={`file-input-${originalIndex}`} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { handleImageChange(originalIndex, e.target.files, imageReplaceTarget?.imageId); setImageReplaceTarget(null); e.target.value = ""; }} />
             </div>
           </td>
         );
@@ -2105,13 +2176,16 @@ export default function SellerStockBulkEdit({
                 {product.images.map((img, i) => (
                   <div key={img.id} className="relative group w-12 h-12 border border-gray-200 rounded overflow-hidden bg-white shrink-0">
                     <img src={img.url} alt={`Img-${i}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                    <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setImageReplaceTarget({ imageId: img.id }); setSearchedImages([]); setSelectedSearchImages([]); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="absolute top-0 left-0 bg-blue-600 text-white w-4 h-4 flex items-center justify-center rounded-br opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-700 z-10" title="Replace">
+                      <span className="text-[10px] font-bold leading-none">&#8635;</span>
+                    </button>
                     <button onClick={() => handleRemoveImage(originalIndex, img.id)} className="absolute top-0 right-0 bg-red-600 text-white w-4 h-4 flex items-center justify-center rounded-bl opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 z-10" title="Remove">
                       <span className="text-[10px] font-bold leading-none">&times;</span>
                     </button>
                     {i === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] py-[1px]">Main</span>}
                   </div>
                 ))}
-                <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setSearchedImages([]); setSelectedSearchImages([]); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
+                <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(null); setImageReplaceTarget(null); setSearchedImages([]); setSelectedSearchImages([]); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
                   <span className="text-xl leading-none font-light">+</span>
                 </button>
               </div>
@@ -2136,13 +2210,16 @@ export default function SellerStockBulkEdit({
               {images.map((url, i) => (
                 <div key={`${url}-${i}`} className="relative group w-12 h-12 border border-gray-200 rounded overflow-hidden bg-white shrink-0">
                   <img src={url} alt={`Img-${i}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                  <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(variationIndex); setImageReplaceTarget({ index: i }); setSearchedImages([]); setSelectedSearchImages([]); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="absolute top-0 left-0 bg-blue-600 text-white w-4 h-4 flex items-center justify-center rounded-br opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-700 z-10" title="Replace">
+                    <span className="text-[10px] font-bold leading-none">&#8635;</span>
+                  </button>
                   <button onClick={() => removeVariationImage(i)} className="absolute top-0 right-0 bg-red-600 text-white w-4 h-4 flex items-center justify-center rounded-bl opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 z-10" title="Remove">
                     <span className="text-[10px] font-bold leading-none">&times;</span>
                   </button>
                   {i === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] py-[1px]">Main</span>}
                 </div>
               ))}
-              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(variationIndex); setSearchedImages([]); setSelectedSearchImages([]); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
+              <button onClick={() => { setImageSourceModalRowIndex(originalIndex); setImageSourceModalVariationIndex(variationIndex); setImageReplaceTarget(null); setSearchedImages([]); setSelectedSearchImages([]); setImageSearchQuery(""); setShowImageSourceModal(true); }} className="w-10 h-10 border border-dashed border-gray-400 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 text-gray-500 hover:text-[var(--primary-color)] transition-colors shrink-0" title="Add Images">
                 <span className="text-xl leading-none font-light">+</span>
               </button>
               <input
@@ -2151,7 +2228,7 @@ export default function SellerStockBulkEdit({
                 accept="image/*"
                 multiple
                 className="hidden"
-                onChange={(e) => { handleVariationImageChange(originalIndex, variationIndex, e.target.files); e.target.value = ""; }}
+                onChange={(e) => { handleVariationImageChange(originalIndex, variationIndex, e.target.files, imageReplaceTarget?.index); setImageReplaceTarget(null); e.target.value = ""; }}
               />
             </div>
           </td>
@@ -2796,8 +2873,8 @@ export default function SellerStockBulkEdit({
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
               <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden transform transition-all scale-100">
                   <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-pink-50/30">
-                      <h3 className="font-bold text-gray-800 text-lg">Choose Image</h3>
-                      <button onClick={() => { setShowImageSourceModal(false); setSearchedImages([]); setSelectedSearchImages([]); }} className="text-gray-400 hover:text-gray-600 p-1 bg-white rounded-full shadow-sm border border-gray-100">
+                      <h3 className="font-bold text-gray-800 text-lg">{imageReplaceTarget ? "Replace Image" : "Choose Image"}</h3>
+                      <button onClick={() => { setShowImageSourceModal(false); setSearchedImages([]); setSelectedSearchImages([]); setImageReplaceTarget(null); }} className="text-gray-400 hover:text-gray-600 p-1 bg-white rounded-full shadow-sm border border-gray-100">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
                   </div>
