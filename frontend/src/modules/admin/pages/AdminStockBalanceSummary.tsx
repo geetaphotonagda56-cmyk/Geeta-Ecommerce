@@ -373,7 +373,7 @@ const AdminStockBalanceSummary = () => {
                 onChange={(e) => setPagination(prev => ({ ...prev, limit: Number(e.target.value), page: 1 }))}
                 className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:border-pink-500 focus:ring-2 focus:ring-pink-200 outline-none transition-all"
               >
-                {[10, 20, 50, 100, 500].map(val => (
+                {[10, 20, 50, 100, 500, 1000, 2000, 3000].map(val => (
                   <option key={val} value={val}>{val}</option>
                 ))}
               </select>

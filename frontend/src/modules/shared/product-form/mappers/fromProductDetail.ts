@@ -49,6 +49,7 @@ export function fromProductDetail(product: any): ProductFormState {
       publish: product.publish ? "Yes" : "No",
       popular: product.popular ? "Yes" : "No",
       dealOfDay: product.dealOfDay ? "Yes" : "No",
+      isNewArrival: product.isNewArrival ? "Yes" : "No",
       seoTitle: product.seoTitle || "",
       seoKeywords: product.seoKeywords || "",
       seoDescription: product.seoDescription || "",

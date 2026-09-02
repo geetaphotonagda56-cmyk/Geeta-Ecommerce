@@ -37,6 +37,7 @@ export interface ProductMainInfoForm {
   publish: "Yes" | "No";
   popular: "Yes" | "No";
   dealOfDay: "Yes" | "No";
+  isNewArrival: "Yes" | "No";
   seoTitle: string;
   seoKeywords: string;
   seoDescription: string;
@@ -105,6 +106,7 @@ export const defaultMainInfo = (overrides?: Partial<ProductMainInfoForm>): Produ
   publish: "No",
   popular: "No",
   dealOfDay: "No",
+  isNewArrival: "No",
   seoTitle: "",
   seoKeywords: "",
   seoDescription: "",
@@ -150,6 +152,7 @@ export interface CreateProductPayload {
   publish: boolean;
   popular: boolean;
   dealOfDay: boolean;
+  isNewArrival: boolean;
   seoTitle?: string;
   seoKeywords?: string;
   seoDescription?: string;

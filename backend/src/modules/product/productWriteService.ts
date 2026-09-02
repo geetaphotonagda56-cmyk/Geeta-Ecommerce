@@ -88,6 +88,7 @@ function buildMongooseDoc(
     publish: payload.publish,
     popular: payload.popular,
     dealOfDay: payload.dealOfDay,
+    isNewArrival: payload.isNewArrival,
     status: payload.status,
     isReturnable: payload.isReturnable,
     tags: payload.tags,

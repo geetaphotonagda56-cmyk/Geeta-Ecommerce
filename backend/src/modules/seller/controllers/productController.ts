@@ -384,12 +384,13 @@ export const updateProductStatus = asyncHandler(
   async (req: Request, res: Response) => {
     const sellerId = (req as any).user.userId;
     const { id } = req.params;
-    const { publish, popular, dealOfDay } = req.body;
+    const { publish, popular, dealOfDay, isNewArrival } = req.body;
 
     const updateData: any = {};
     if (publish !== undefined) updateData.publish = publish;
     if (popular !== undefined) updateData.popular = popular;
     if (dealOfDay !== undefined) updateData.dealOfDay = dealOfDay;
+    if (isNewArrival !== undefined) updateData.isNewArrival = isNewArrival;
 
     const product = await Product.findOneAndUpdate(
       { _id: id, seller: sellerId },

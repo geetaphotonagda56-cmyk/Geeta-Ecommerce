@@ -59,6 +59,7 @@ export interface IProduct extends Document {
   publish: boolean;
   popular: boolean;
   dealOfDay: boolean;
+  isNewArrival: boolean;
   status: "Active" | "Inactive" | "Pending" | "Rejected";
 
   // Product Details
@@ -202,7 +203,7 @@ export interface IProduct extends Document {
     lowStockQuantity: {
       type: Number,
       min: [0, "Low stock quantity cannot be negative"],
-      default: 5,
+      default: 2,
     },
     deliveryTime: {
       type: String,
@@ -271,6 +272,10 @@ export interface IProduct extends Document {
       default: false,
     },
     dealOfDay: {
+      type: Boolean,
+      default: false,
+    },
+    isNewArrival: {
       type: Boolean,
       default: false,
     },

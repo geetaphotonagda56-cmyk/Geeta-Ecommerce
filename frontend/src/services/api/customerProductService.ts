@@ -31,6 +31,7 @@ export interface GetProductsParams {
     headerCategorySlug?: string; // Home header tabs (e.g. grocery, beauty)
     latitude?: number; // User location latitude
     longitude?: number; // User location longitude
+    isNewArrival?: boolean; // Admin-flagged new/unique products
 }
 
 export interface ProductListResponse {

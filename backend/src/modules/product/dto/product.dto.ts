@@ -49,6 +49,7 @@ const productPayloadShape = {
   publish: z.union([z.boolean(), z.literal("true"), z.literal("false")]).optional(),
   popular: z.union([z.boolean(), z.literal("true"), z.literal("false")]).optional(),
   dealOfDay: z.union([z.boolean(), z.literal("true"), z.literal("false")]).optional(),
+  isNewArrival: z.union([z.boolean(), z.literal("true"), z.literal("false")]).optional(),
   seoTitle: z.string().optional(),
   seoKeywords: z.string().optional(),
   seoDescription: z.string().optional(),

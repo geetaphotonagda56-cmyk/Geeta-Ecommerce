@@ -25,6 +25,7 @@ export function toCreatePayload(state: ProductFormState): CreateProductPayload {
     publish: mainInfo.publish === "Yes",
     popular: mainInfo.popular === "Yes",
     dealOfDay: mainInfo.dealOfDay === "Yes",
+    isNewArrival: mainInfo.isNewArrival === "Yes",
     seoTitle: mainInfo.seoTitle || undefined,
     seoKeywords: mainInfo.seoKeywords || undefined,
     seoDescription: mainInfo.seoDescription || undefined,

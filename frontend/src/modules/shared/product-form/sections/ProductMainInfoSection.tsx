@@ -208,6 +208,9 @@ export default function ProductMainInfoSection({
           <FormField label="Deal of the Day">
             {yesNoSelect(mainInfo.dealOfDay, (v) => onChange({ dealOfDay: v }))}
           </FormField>
+          <FormField label="New Arrival">
+            {yesNoSelect(mainInfo.isNewArrival, (v) => onChange({ isNewArrival: v }))}
+          </FormField>
           {showSellerPicker && (
             <FormField label="Seller ID">
               <input

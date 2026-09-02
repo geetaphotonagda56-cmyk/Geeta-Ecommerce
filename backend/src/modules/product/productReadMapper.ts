@@ -22,6 +22,7 @@ export interface MappedProductListItem {
   publish: boolean;
   popular: boolean;
   dealOfDay: boolean;
+  isNewArrival: boolean;
   status: string;
   seller?: unknown;
   tags?: string[];

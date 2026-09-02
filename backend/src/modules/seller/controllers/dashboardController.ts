@@ -53,7 +53,7 @@ export const getDashboardStats = asyncHandler(
             let isSoldOut = true;
             let isLowStock = false;
 
-            const lowStockThreshold = product.lowStockQuantity || 5;
+            const lowStockThreshold = product.lowStockQuantity || 2;
 
             if (product.variations && product.variations.length > 0) {
                 product.variations.forEach(v => {

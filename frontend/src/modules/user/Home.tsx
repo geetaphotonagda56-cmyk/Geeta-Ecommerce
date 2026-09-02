@@ -3,6 +3,8 @@ import { useLocation as useRouterLocation, useNavigate, useNavigationType } from
 import HomeHero from "./components/HomeHero";
 // import PromoStrip from "./components/PromoStrip";
 import LowestPricesEver from "./components/LowestPricesEver";
+import FavoriteProducts from "./components/FavoriteProducts";
+import NewArrivals from "./components/NewArrivals";
 import CategoryTileSection from "./components/CategoryTileSection";
 import OptimizedImage from "../../components/OptimizedImage";
 import ViewAllButton from "./components/ViewAllButton";
@@ -584,6 +586,10 @@ export default function Home() {
     popup: <HomePopup />,
 
     hero: <HomeHero activeTab={activeTab} onTabChange={handleTabChange} />,
+
+    userFavorites: activeTab === "all" ? <FavoriteProducts /> : null,
+
+    newProducts: activeTab === "all" ? <NewArrivals /> : null,
 
     mainBannerSlider: (
       <div className="bg-white px-3 pt-3 pb-2">

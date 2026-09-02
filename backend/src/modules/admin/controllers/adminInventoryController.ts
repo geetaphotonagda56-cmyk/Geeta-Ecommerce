@@ -459,6 +459,7 @@ export const getLowStockSummary = asyncHandler(
           stock: 1,
           variations: 1,
           lowStockQuantity: 1,
+          updatedAt: 1,
           categoryName: "$categoryDoc.name",
           sellerName: "$sellerDoc.storeName",
         },
@@ -482,9 +483,10 @@ export const getLowStockSummary = asyncHandler(
                     mrp: { $ifNull: ["$$v.compareAtPrice", { $ifNull: ["$compareAtPrice", 0] }] },
                     sellingPrice: { $ifNull: ["$$v.price", { $ifNull: ["$price", 0] }] },
                     quantity: { $ifNull: ["$$v.stock", 0] },
-                    lowStockQty: { $ifNull: ["$lowStockQuantity", 10] },
+                    lowStockQty: { $ifNull: ["$lowStockQuantity", 2] },
                     supplier: { $ifNull: ["$sellerName", "Admin"] },
-                    category: { $ifNull: ["$categoryName", "Uncategorized"] }
+                    category: { $ifNull: ["$categoryName", "Uncategorized"] },
+                    lowStockSince: "$updatedAt"
                   }
                 }
               },
@@ -498,9 +500,10 @@ export const getLowStockSummary = asyncHandler(
                   mrp: { $ifNull: ["$compareAtPrice", 0] },
                   sellingPrice: { $ifNull: ["$price", 0] },
                   quantity: { $ifNull: ["$stock", 0] },
-                  lowStockQty: { $ifNull: ["$lowStockQuantity", 10] },
+                  lowStockQty: { $ifNull: ["$lowStockQuantity", 2] },
                   supplier: { $ifNull: ["$sellerName", "Admin"] },
-                  category: { $ifNull: ["$categoryName", "Uncategorized"] }
+                  category: { $ifNull: ["$categoryName", "Uncategorized"] },
+                  lowStockSince: "$updatedAt"
                 }
               ]
             }
@@ -524,7 +527,8 @@ export const getLowStockSummary = asyncHandler(
           }
         }
       ] : []),
-      { $sort: { name: 1 } },
+      // Most recently low-stocked items first
+      { $sort: { lowStockSince: -1, name: 1 } },
       {
         $facet: {
           data: [
@@ -617,6 +621,7 @@ export const getOutOfStockSummary = asyncHandler(
           price: 1,
           stock: 1,
           variations: 1,
+          updatedAt: 1,
           categoryName: "$categoryDoc.name",
           sellerName: "$sellerDoc.storeName",
         },
@@ -641,7 +646,8 @@ export const getOutOfStockSummary = asyncHandler(
                     sellingPrice: { $ifNull: ["$$v.price", { $ifNull: ["$price", 0] }] },
                     quantity: { $ifNull: ["$$v.stock", 0] },
                     supplier: { $ifNull: ["$sellerName", "Admin"] },
-                    category: { $ifNull: ["$categoryName", "Uncategorized"] }
+                    category: { $ifNull: ["$categoryName", "Uncategorized"] },
+                    outOfStockSince: "$updatedAt"
                   }
                 }
               },
@@ -656,7 +662,8 @@ export const getOutOfStockSummary = asyncHandler(
                   sellingPrice: { $ifNull: ["$price", 0] },
                   quantity: { $ifNull: ["$stock", 0] },
                   supplier: { $ifNull: ["$sellerName", "Admin"] },
-                  category: { $ifNull: ["$categoryName", "Uncategorized"] }
+                  category: { $ifNull: ["$categoryName", "Uncategorized"] },
+                  outOfStockSince: "$updatedAt"
                 }
               ]
             }
@@ -680,7 +687,8 @@ export const getOutOfStockSummary = asyncHandler(
           }
         }
       ] : []),
-      { $sort: { name: 1 } },
+      // Most recently out-of-stocked items first
+      { $sort: { outOfStockSince: -1, name: 1 } },
       {
         $facet: {
           data: [

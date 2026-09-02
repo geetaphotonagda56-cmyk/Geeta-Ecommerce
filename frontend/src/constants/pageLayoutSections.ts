@@ -15,6 +15,8 @@ export interface PageLayoutEntry {
 export const HOME_LAYOUT_SECTIONS: PageLayoutSectionDef[] = [
   { key: "popup", label: "Popup Banner (First Visit)" },
   { key: "hero", label: "Hero Header & Category Tabs" },
+  { key: "userFavorites", label: "Your Favorites (Logged-in Users)" },
+  { key: "newProducts", label: "New Arrivals" },
   { key: "mainBannerSlider", label: "Main Banner Slider" },
   { key: "exploreOurRange", label: "Explore Our Range" },
   { key: "lowestPrices", label: "Lowest Prices Ever" },

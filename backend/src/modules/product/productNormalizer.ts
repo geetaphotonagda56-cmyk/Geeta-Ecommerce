@@ -48,6 +48,7 @@ export interface NormalizedProductPayload {
   publish: boolean;
   popular: boolean;
   dealOfDay: boolean;
+  isNewArrival: boolean;
   status: "Active" | "Inactive" | "Pending" | "Rejected";
   seoTitle?: string;
   seoKeywords?: string;
@@ -153,6 +154,7 @@ export function normalizeCreatePayload(
     publish: parseBool(parsed.publish, defaults.publish),
     popular: parseBool(parsed.popular, false),
     dealOfDay: parseBool(parsed.dealOfDay, false),
+    isNewArrival: parseBool(parsed.isNewArrival, false),
     status: (parsed.status as NormalizedProductPayload["status"]) || "Active",
     seoTitle: parsed.seoTitle ? String(parsed.seoTitle) : undefined,
     seoKeywords: parsed.seoKeywords ? String(parsed.seoKeywords) : undefined,

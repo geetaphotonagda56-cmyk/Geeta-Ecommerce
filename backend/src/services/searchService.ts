@@ -519,7 +519,7 @@ export const getSearchSuggestionsForQuery = async (rawQuery: unknown, limit = 10
 
   const [products, categories, brands, tags, trending] = await Promise.all([
     Product.find({ ...productQuery, productName: regex })
-      .select("productName _id mainImage price compareAtPrice discount category")
+      .select("productName _id mainImage galleryImages variations price compareAtPrice discount category")
       .populate("category", "name")
       .limit(limit)
       .lean(),
@@ -553,7 +553,12 @@ export const getSearchSuggestionsForQuery = async (rawQuery: unknown, limit = 10
       id: product._id,
       name: product.productName,
       type: "product",
-      image: product.mainImage,
+      image:
+        product.mainImage ||
+        product.galleryImages?.[0] ||
+        product.variations?.[0]?.mainImage ||
+        product.variations?.[0]?.image ||
+        product.variations?.[0]?.galleryImages?.[0],
       categoryName: product.category?.name,
       price: product.price,
       mrp: product.compareAtPrice || product.price,

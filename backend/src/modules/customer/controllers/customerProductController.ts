@@ -89,6 +89,7 @@ export const getProducts = async (req: Request, res: Response) => {
       maxPrice,
       brand,
       minDiscount,
+      isNewArrival,
       headerCategorySlug,
       latitude, // User location latitude
       longitude, // User location longitude
@@ -242,6 +243,10 @@ export const getProducts = async (req: Request, res: Response) => {
 
     if (minDiscount) {
       andConditions.push({ discount: { $gte: Number(minDiscount) } });
+    }
+
+    if (isNewArrival === "true") {
+      andConditions.push({ isNewArrival: true });
     }
 
     if (search) {
