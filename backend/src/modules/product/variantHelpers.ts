@@ -106,7 +106,14 @@ export function getListingImage(variants: ProductVariant[]): string | null {
   const inStock = variants.find((v) => (Number(v.stock) || 0) > 0 && v.mainImage);
   if (inStock?.mainImage) return inStock.mainImage;
   const withImage = variants.find((v) => v.mainImage);
-  return withImage?.mainImage ?? null;
+  if (withImage?.mainImage) return withImage.mainImage;
+  // No variant has a mainImage set - fall back to the first gallery photo available.
+  const inStockWithGallery = variants.find(
+    (v) => (Number(v.stock) || 0) > 0 && v.galleryImages?.length
+  );
+  if (inStockWithGallery?.galleryImages?.[0]) return inStockWithGallery.galleryImages[0];
+  const withGallery = variants.find((v) => v.galleryImages?.length);
+  return withGallery?.galleryImages?.[0] ?? null;
 }
 
 export function getListingImageVariants(variants: ProductVariant[]): ImageVariants | null {
