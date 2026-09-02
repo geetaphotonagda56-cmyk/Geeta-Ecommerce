@@ -9,6 +9,8 @@ import "../../../models/Brand";
 import "../../../models/Seller";
 import "../../../models/Tax";
 
+const LOW_STOCK_THRESHOLD = 2;
+
 /**
  * Get Stock Summary Report for Seller
  */
@@ -388,7 +390,7 @@ export const getLowStockSummary = asyncHandler(
                     mrp: { $ifNull: ["$$v.compareAtPrice", { $ifNull: ["$compareAtPrice", 0] }] },
                     sellingPrice: { $ifNull: ["$$v.price", { $ifNull: ["$price", 0] }] },
                     quantity: { $ifNull: ["$$v.stock", 0] },
-                    lowStockQty: { $ifNull: ["$lowStockQuantity", 2] },
+                    lowStockQty: LOW_STOCK_THRESHOLD,
                     supplier: { $ifNull: ["$sellerName", "Unknown"] },
                     category: { $ifNull: ["$categoryName", "Uncategorized"] },
                     lowStockSince: "$updatedAt"
@@ -417,7 +419,8 @@ export const getLowStockSummary = asyncHandler(
       },
       { $unwind: "$items" },
       { $replaceRoot: { newRoot: "$items" } },
-      { $match: { $expr: { $lte: ["$quantity", "$lowStockQty"] } } },
+      // Filter for Low Stock items (fixed threshold, ignores per-product lowStockQuantity)
+      { $match: { quantity: { $lte: LOW_STOCK_THRESHOLD } } },
       ...(searchRegex ? [
         {
           $match: {

@@ -13,6 +13,8 @@ import "../../../models/Brand";
 import "../../../models/Seller";
 import "../../../models/Tax";
 
+const LOW_STOCK_THRESHOLD = 2;
+
 const parseQuotationRowId = (
   rowId: string
 ): { entryId: string; itemIndex: number } | null => {
@@ -483,7 +485,7 @@ export const getLowStockSummary = asyncHandler(
                     mrp: { $ifNull: ["$$v.compareAtPrice", { $ifNull: ["$compareAtPrice", 0] }] },
                     sellingPrice: { $ifNull: ["$$v.price", { $ifNull: ["$price", 0] }] },
                     quantity: { $ifNull: ["$$v.stock", 0] },
-                    lowStockQty: { $ifNull: ["$lowStockQuantity", 2] },
+                    lowStockQty: LOW_STOCK_THRESHOLD,
                     supplier: { $ifNull: ["$sellerName", "Admin"] },
                     category: { $ifNull: ["$categoryName", "Uncategorized"] },
                     lowStockSince: "$updatedAt"
@@ -512,8 +514,8 @@ export const getLowStockSummary = asyncHandler(
       },
       { $unwind: "$items" },
       { $replaceRoot: { newRoot: "$items" } },
-      // Filter for Low Stock items
-      { $match: { $expr: { $lte: ["$quantity", "$lowStockQty"] } } },
+      // Filter for Low Stock items (fixed threshold, ignores per-product lowStockQuantity)
+      { $match: { quantity: { $lte: LOW_STOCK_THRESHOLD } } },
       // Apply search filter if present
       ...(searchRegex ? [
         {
