@@ -27,11 +27,18 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Mapped to the admin's customer Theme Settings so Tailwind colour
+        // utilities stay in sync with the runtime CSS variables. Opacity
+        // modifiers are not supported on these — use the --customer-*-alpha-*
+        // variables for translucency.
         primary: {
-          DEFAULT: '#FFC94A',
-          dark: '#FFB020',
+          DEFAULT: 'var(--customer-primary)',
+          dark: 'var(--customer-primary-dark)',
+          light: 'var(--customer-primary-light)',
         },
-        cream: '#FFF7E0',
+        accent: {
+          DEFAULT: 'var(--customer-accent)',
+        },
       },
       fontFamily: {
         // Storefront-only type system (AppLayout applies these classes so

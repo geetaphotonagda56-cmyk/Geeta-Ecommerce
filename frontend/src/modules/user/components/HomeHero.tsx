@@ -294,6 +294,10 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   const [isSticky, setIsSticky] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+  // Height of the search + category shelf. When the shelf detaches to the
+  // top of the screen it leaves the flow, so the hero reserves exactly the
+  // space it used to occupy instead of a hardcoded guess that jumps.
+  const [shelfHeight, setShelfHeight] = useState(150);
   const { language, setLanguage } = useLanguage();
 
   // Format location display text
@@ -422,6 +426,14 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     };
   }, []);
 
+  // Measure the shelf while it is still in normal flow, so the spacer that
+  // replaces it when it goes sticky is exactly the right height.
+  useEffect(() => {
+    if (isSticky || !stickyRef.current) return;
+    const measured = stickyRef.current.offsetHeight;
+    if (measured > 0) setShelfHeight(measured);
+  }, [isSticky, tabs.length]);
+
   // Update sliding indicator
   useEffect(() => {
     const updateIndicator = (shouldScroll = true) => {
@@ -470,37 +482,41 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   };
 
   const theme = getTheme(currentThemeKey);
-  const heroGradient = `linear-gradient(to bottom right, ${theme.primary[0]}, ${theme.primary[1]}, ${theme.primary[2]})`;
+  // The hero is the one place the storefront gets to state who it is, so it
+  // uses the fixed brand canopy gradient rather than the per-category tint.
+  // Category identity still comes through on the tab indicator and section
+  // accents below.
+  const heroGradient = 'var(--grad-canopy)';
+  void theme;
 
-  // Render the sticky content (Search + Tabs)
+  // Render the sticky content (Search + Tabs).
+  //
+  // This is the "shelf": a white surface that sits over the bottom of the
+  // dark canopy band and detaches to the top of the screen on scroll.
+  // Because it is white in both states, sticking no longer flips every
+  // colour in here — the only thing that changes is its corner radius.
   const renderStickyContent = () => (
     <div
       ref={stickyRef}
-      className={isSticky ? 'fixed top-0 left-0 right-0 z-[9999] bg-[#fff7ed] shadow-md animate-fade-in' : 'relative z-50 bg-transparent'}
-      style={{
-        transition: 'background-color 0.3s ease',
-      }}
+      className={
+        isSticky
+          ? 'fixed top-0 left-0 right-0 z-[9999] bg-white elev-2 animate-fade-in'
+          : 'relative z-50 bg-white rounded-t-[28px]'
+      }
     >
-      <div className={`px-4 md:px-6 lg:px-8 pt-2 ${isSticky ? 'md:pt-2.5' : 'md:pt-0'} pb-2 md:pb-2`}>
+      <div className="px-4 md:px-6 lg:px-8 pt-3.5 md:pt-4 pb-1">
         {/* Search Bar */}
         <div
           onClick={() => navigate('/search')}
-          className={`w-full md:w-auto md:max-w-xl md:mx-auto rounded-2xl shadow-[0_6px_20px_-6px_rgba(15,23,42,0.25)] px-3.5 ${isSticky ? 'py-3 md:py-2.5' : 'py-2 md:py-1.5'} flex items-center gap-2 cursor-pointer hover:shadow-[0_10px_28px_-6px_rgba(15,23,42,0.3)] transition-all duration-300 mb-2 md:mb-1.5 bg-white relative z-50`}
-          style={{
-            backgroundColor: isSticky ? `rgba(249, 250, 251, 1)` : 'white',
-            border: isSticky ? `1px solid rgba(229, 231, 235, 1)` : 'none',
-          }}
+          className="w-full md:max-w-2xl md:mx-auto rounded-2xl border border-neutral-200 bg-white px-3.5 py-3 flex items-center gap-2.5 cursor-pointer transition-colors duration-200 hover:border-[var(--customer-primary-light)]"
         >
-          <span
-            className="flex-shrink-0 w-7 h-7 md:w-6 md:h-6 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: 'var(--customer-primary-alpha-20, #f4f4f5)' }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="md:w-[13px] md:h-[13px]">
-              <circle cx="11" cy="11" r="8" stroke="var(--customer-primary-dark, #6b7280)" strokeWidth="2" />
-              <path d="m21 21-4.35-4.35" stroke="var(--customer-primary-dark, #6b7280)" strokeWidth="2" strokeLinecap="round" />
+          <span className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-[var(--customer-primary-alpha-10)]">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="11" cy="11" r="8" stroke="var(--customer-primary)" strokeWidth="2" />
+              <path d="m21 21-4.35-4.35" stroke="var(--customer-primary)" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </span>
-          <div className="flex-1 relative h-4 md:h-4 overflow-hidden">
+          <div className="flex-1 relative h-4 overflow-hidden">
             {searchSuggestions.map((suggestion, index) => {
               const isActive = index === currentSearchIndex;
               const prevIndex = (currentSearchIndex - 1 + searchSuggestions.length) % searchSuggestions.length;
@@ -510,7 +526,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                   key={suggestion}
                   className={`absolute inset-0 flex items-center transition-all duration-500 ${isActive ? 'translate-y-0 opacity-100' : isPrev ? '-translate-y-full opacity-0' : 'translate-y-full opacity-0'}`}
                 >
-                  <span className={`text-xs md:text-xs`} style={{ color: isSticky ? '#9ca3af' : '#6b7280' }}>
+                  <span className="text-xs text-neutral-500">
                     {language === 'HI' ? 'खोजें' : 'Search'} &apos;{suggestion}&apos;
                   </span>
                 </div>
@@ -530,22 +546,21 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
               e.stopPropagation();
               handleVoiceSearch();
             }}
-            className="flex-shrink-0 flex items-center justify-center w-6 h-6 md:w-5 md:h-5 rounded-full bg-gradient-to-r from-red-500 to-red-600 shadow-sm shadow-red-500/40 hover:shadow-md hover:shadow-red-500/50 active:scale-95 transition-all"
+            className="grad-action flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full active:scale-95 transition-transform"
             aria-label="Search by voice"
             title="Search by voice"
           >
-            <Mic className="h-3.5 w-3.5 md:h-3 md:w-3 text-white" />
+            <Mic className="h-3.5 w-3.5 text-white" />
           </button>
         </div>
       </div>
 
       {/* Category Tabs */}
-      <div className="border-b border-neutral-400/40 w-full" style={{ paddingBottom: 0 }}>
-          <div
-           ref={tabsContainerRef}
-          className="relative flex gap-2 md:gap-3 overflow-x-auto scrollbar-hide -mx-4 md:mx-0 px-4 md:px-6 lg:px-8 scroll-smooth"
-          style={{ paddingBottom: '12px' }}
-          data-padding-bottom="md:8px"
+      <div className="w-full">
+        <div
+          ref={tabsContainerRef}
+          className="relative flex gap-1 md:gap-2 overflow-x-auto scrollbar-hide px-4 md:px-6 lg:px-8 pt-2.5 scroll-smooth"
+          style={{ paddingBottom: '10px' }}
           onWheel={(e) => {
             // Web view: mouse wheel is vertical; use it to scroll categories horizontally.
             if (window.innerWidth >= 768 && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
@@ -557,12 +572,10 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
         >
           {indicatorStyle.width > 0 && (
             <div
-              className="absolute bottom-0 h-[3px] rounded-full transition-all duration-300 ease-out pointer-events-none"
+              className="grad-action absolute bottom-0 h-[3px] rounded-full pointer-events-none"
               style={{
                 left: `${indicatorStyle.left}px`,
                 width: `${indicatorStyle.width}px`,
-                background: 'linear-gradient(90deg, var(--customer-primary), var(--customer-primary-dark, var(--customer-primary)))',
-                boxShadow: '0 0 8px var(--customer-primary-alpha-40, rgba(0,0,0,0.25))',
                 transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 zIndex: 0,
               }}
@@ -571,39 +584,33 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
 
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
-            const tabColor = isActive ? 'text-neutral-900' : isSticky ? 'text-neutral-600' : 'text-neutral-800';
             return (
               <button
                 key={tab.id}
                 ref={(el) => { if (el) tabRefs.current.set(tab.id, el); else tabRefs.current.delete(tab.id); }}
                 onClick={() => handleTabClick(tab.id)}
-                className={`flex-shrink-0 flex flex-col items-center justify-center w-auto min-w-[75px] md:w-auto md:min-w-[95px] px-1 md:px-3 py-2 relative ${tabColor} z-10`}
-                style={{ transition: 'color 0.3s ease-out' }}
+                className={`flex-shrink-0 flex flex-col items-center justify-start w-auto min-w-[68px] md:min-w-[84px] px-1 md:px-2 pt-1 pb-2 relative z-10 transition-colors duration-200 ${
+                  isActive ? 'text-[var(--customer-primary-dark)]' : 'text-neutral-400 hover:text-neutral-600'
+                }`}
                 type="button"
               >
                 <motion.div
-                  className={`mb-1.5 w-12 h-12 md:w-14 md:h-14 flex items-center justify-center rounded-full ${tabColor}`}
+                  className="mb-1.5 w-12 h-12 md:w-[52px] md:h-[52px] flex items-center justify-center rounded-2xl overflow-hidden"
                   style={{
-                    transition: 'color 0.3s ease-out, background-color 0.3s ease-out, box-shadow 0.3s ease-out',
-                    backgroundColor: isActive ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)',
-                    boxShadow: isActive ? '0 6px 16px -4px rgba(15,23,42,0.25)' : 'none',
+                    transition: 'background-color 0.25s ease-out, box-shadow 0.25s ease-out',
+                    backgroundColor: '#ffffff',
+                    boxShadow: isActive
+                      ? 'inset 0 0 0 2px var(--customer-primary-alpha-50)'
+                      : 'inset 0 0 0 1px rgba(14,28,21,0.10)',
                   }}
-                  animate={
-                    isActive
-                      ? { scale: [1, 1.12, 1], y: [0, -1.5, 0] }
-                      : { scale: 1, y: 0 }
-                  }
-                  transition={
-                    isActive
-                      ? { duration: 1.6, repeat: Infinity, ease: 'easeInOut' }
-                      : { duration: 0.25, ease: [0.4, 0, 0.2, 1] }
-                  }
+                  animate={{ scale: isActive ? 1.06 : 1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 22 }}
                 >
-                  <div className="w-full h-full flex items-center justify-center overflow-hidden rounded-full p-2">
+                  <div className="w-full h-full flex items-center justify-center overflow-hidden rounded-2xl p-2">
                     {tab.icon}
                   </div>
                 </motion.div>
-                <span className={`text-[10px] md:text-xs md:whitespace-nowrap ${isActive ? 'font-bold' : 'font-medium'}`} style={{ transition: 'font-weight 0.3s ease-out' }}>
+                <span className={`text-[10px] md:text-[11px] leading-tight text-center md:whitespace-nowrap ${isActive ? 'font-bold' : 'font-medium'}`}>
                   {tab.label}
                 </span>
               </button>
@@ -619,68 +626,70 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   return (
     <div
       ref={heroRef}
-      className="relative z-20 overflow-hidden rounded-b-[28px] shadow-[0_12px_28px_-12px_rgba(15,23,42,0.28)]"
+      className="texture-weave relative z-20 overflow-hidden rounded-b-[32px]"
       style={{ background: heroGradient, paddingBottom: 0, marginBottom: 0 }}
     >
-      {/* Soft radial glow for depth — purely decorative, sits behind everything */}
+      {/* Warm light spilling in from the top-right — the sunrise accent
+          showing up as atmosphere rather than another coloured element. */}
       <div
-        className="pointer-events-none absolute -top-16 -right-10 w-56 h-56 rounded-full opacity-40 blur-3xl"
-        style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.9), transparent 70%)' }}
+        className="pointer-events-none absolute -top-24 -right-16 w-72 h-72 rounded-full opacity-30 blur-3xl"
+        style={{ background: 'radial-gradient(circle, var(--customer-accent), transparent 70%)' }}
+        aria-hidden="true"
       />
 
-      {/* Top section with logo - NOT sticky */}
+      {/* Top section with logo + delivery address - NOT sticky */}
       <div className="relative">
-        <div ref={topSectionRef} className="px-4 md:px-6 lg:px-8 pt-4 md:pt-0 pb-1 md:pb-0">
+        <div ref={topSectionRef} className="px-4 md:px-6 lg:px-8 pt-4 pb-5 md:pt-5 md:pb-6">
           <div className="flex items-center justify-between gap-3">
             <div className="flex-shrink-0 md:invisible">
               <img
                 src={config?.appLogo || "/assets/geetastoreslogo.png"}
                 alt={config?.appName || "Geeta Stores"}
-                className="h-10 md:h-12 w-auto object-contain"
+                className="h-9 md:h-11 w-auto object-contain"
               />
             </div>
-            {locationDisplayText && (
-              <div
-                className={`flex items-center gap-1.5 rounded-full bg-white/40 backdrop-blur-sm px-3 py-1.5 text-neutral-800 text-xs md:text-sm cursor-pointer hover:bg-white/55 transition-colors shadow-sm ${isLocationLoading ? 'opacity-70 pointer-events-none' : ''}`}
-                onClick={() => {
-                  if (!isLocationLoading) {
-                    requestLocation();
-                  }
-                }}
-              >
-                {isLocationLoading ? (
-                  <svg className="animate-spin h-3.5 w-3.5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                )}
-                <span className="line-clamp-1 font-medium" title={locationDisplayText}>
-                  {isLocationLoading ? 'Updating location...' : locationDisplayText}
-                </span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-                  <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-            )}
             <ShareButton
               iconOnly
               title={config?.appName || "Geeta Stores"}
               text={`Check out ${config?.appName || "Geeta Stores"} - fast grocery delivery!`}
               imageUrl={config?.appLogo || `${window.location.origin}/assets/geetastoreslogo.png`}
-              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-white/30 backdrop-blur-sm text-neutral-800 hover:bg-white/50 transition-colors"
+              className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full bg-white/12 backdrop-blur-sm text-white hover:bg-white/22 transition-colors"
             />
           </div>
+
+          {/* Where the order is going. Left-aligned to the same edge as the
+              logo above and the search field below, so the whole band reads
+              as one column rather than three separately-placed rows. */}
+          <button
+            type="button"
+            onClick={() => { if (!isLocationLoading) requestLocation(); }}
+            disabled={isLocationLoading}
+            className={`group mt-4 block w-full text-left ${isLocationLoading ? 'opacity-70' : ''}`}
+          >
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">
+              Delivering to
+            </span>
+            <span className="mt-1 flex items-center gap-1.5 text-white">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 text-white/70" aria-hidden="true">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span className="truncate text-[15px] md:text-lg font-semibold" title={locationDisplayText}>
+                {isLocationLoading
+                  ? 'Finding you…'
+                  : locationDisplayText || 'Set your location'}
+              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 text-white/60 transition-transform group-hover:translate-y-0.5" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </button>
         </div>
       </div>
 
       {isSticky ? (
         <>
-          <div style={{ height: '110px' }} />
+          <div style={{ height: `${shelfHeight}px` }} />
           {createPortal(renderStickyContent(), document.body)}
         </>
       ) : (
@@ -700,9 +709,9 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             onClick={(event) => event.stopPropagation()}
           >
             <div className="relative flex h-24 w-24 items-center justify-center">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500/30" />
-              <span className="absolute inline-flex h-16 w-16 animate-pulse rounded-full bg-red-500/20" />
-              <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--customer-primary-alpha-30)]" />
+              <span className="absolute inline-flex h-16 w-16 animate-pulse rounded-full bg-[var(--customer-primary-alpha-20)]" />
+              <span className="relative flex h-14 w-14 items-center justify-center rounded-full grad-action text-white elev-2">
                 <Mic className="h-6 w-6" />
               </span>
             </div>

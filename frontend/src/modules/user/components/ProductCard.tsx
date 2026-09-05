@@ -208,21 +208,21 @@ export default function ProductCard({
   return (
     <div
       id={`product-${(product as any).id || product._id}`}
-      className="h-full bg-white overflow-hidden flex flex-col relative rounded-2xl border border-neutral-100 shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-all duration-200 ease-out hover:shadow-[0_10px_24px_-8px_rgba(15,23,42,0.2)] hover:border-neutral-200 hover:-translate-y-1 active:scale-[0.97]"
+      className="group/card h-full bg-white overflow-hidden flex flex-col relative rounded-3xl border border-neutral-200 transition-all duration-300 ease-out hover:elev-2 hover:border-[var(--customer-primary-light)] hover:-translate-y-1.5 active:scale-[0.98]"
       style={{ backgroundColor: '#ffffff' }}
     >
       <div
         onClick={handleCardClick}
         className="cursor-pointer flex-1 flex flex-col"
       >
-        <div className={`w-full ${compact ? 'h-48 md:h-56' : categoryStyle ? 'h-56 md:h-64' : 'h-64 md:h-80'} bg-white flex items-center justify-center overflow-hidden relative`}>
+        <div className={`w-full ${compact ? 'h-48 md:h-56' : categoryStyle ? 'h-56 md:h-64' : 'h-64 md:h-80'} bg-white flex items-center justify-center overflow-hidden relative p-2`}>
           {cardImageUrl ? (
             <OptimizedImage
               ref={imageRef}
               src={cardImageUrl}
               variants={cardImageVariants}
               alt={product.name || product.productName || 'Product'}
-              className="w-full h-full object-contain"
+              className="relative z-[1] w-full h-full object-contain transition-transform duration-500 ease-out group-hover/card:scale-[1.06]"
               sizes="(max-width: 768px) 50vw, 25vw"
               onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
                 // Hide broken image and show fallback
@@ -238,34 +238,28 @@ export default function ProductCard({
               }}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-neutral-100 text-neutral-400 text-4xl">
+            <div className="relative z-[1] w-full h-full flex items-center justify-center bg-white font-display text-4xl text-[var(--customer-primary-light)]">
               {(product.name || product.productName || '?').charAt(0).toUpperCase()}
             </div>
           )}
 
           {categoryStyle && showBadge && discount > 0 && (
-            <div
-                className="absolute top-2 left-0 z-10 text-white text-[10px] font-bold pl-2 pr-2.5 py-1 rounded-r-full flex items-center gap-1 shadow-[0_3px_10px_-2px_rgba(0,0,0,0.45)]"
-                style={{ background: 'linear-gradient(135deg, #27272a, #09090b)' }}
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-                <line x1="7" y1="7" x2="7.01" y2="7"></line>
-              </svg>
-              <span>{discount}% OFF</span>
+            <div className="price-stamp grad-accent absolute top-2 left-2 z-20 flex h-10 w-10 flex-col items-center justify-center text-[var(--customer-accent-text)] leading-none rotate-[-8deg] elev-action">
+              <span className="font-display text-[11px] font-bold">{discount}%</span>
+              <span className="text-[6px] font-bold tracking-[0.1em]">OFF</span>
             </div>
           )}
 
           {!categoryStyle && showBadge && (badgeText || discount > 0) && (
-            <div
-              className="absolute top-2 left-0 z-10 text-white text-[10px] pl-2.5 pr-3 py-1 rounded-r-full font-bold shadow-[0_3px_10px_-2px_rgba(0,0,0,0.45)] flex items-center gap-1"
-              style={{ background: 'linear-gradient(135deg, #f43f5e, #dc2626)' }}
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-                <line x1="7" y1="7" x2="7.01" y2="7"></line>
-              </svg>
-              <span>{badgeText || `${discount}% OFF`}</span>
+            <div className="price-stamp grad-accent absolute top-2 left-2 z-20 flex h-11 w-11 flex-col items-center justify-center text-[var(--customer-accent-text)] leading-none rotate-[-8deg] elev-action">
+              {badgeText ? (
+                <span className="text-[8px] font-extrabold px-1 text-center">{badgeText}</span>
+              ) : (
+                <>
+                  <span className="font-display text-xs font-bold">{discount}%</span>
+                  <span className="text-[6px] font-bold tracking-[0.1em]">OFF</span>
+                </>
+              )}
             </div>
           )}
 
@@ -294,7 +288,7 @@ export default function ProductCard({
                 viewBox="0 0 24 24"
                 fill={isWishlisted ? "var(--customer-primary)" : "none"}
                 xmlns="http://www.w3.org/2000/svg"
-                className={`transition-colors ${isWishlisted ? "text-[var(--customer-primary)]" : "text-neutral-400 group-hover/heart:text-red-400"}`}
+                className={`transition-colors ${isWishlisted ? "text-[var(--customer-primary)]" : "text-neutral-400 group-hover/heart:text-[var(--customer-primary-light)]"}`}
               >
                 <path
                   d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
@@ -308,9 +302,9 @@ export default function ProductCard({
           )}
 
           {variantCount >= 2 && (
-            <div className="absolute bottom-2 left-2 z-10">
-              <span className="text-[10px] font-bold text-neutral-700 bg-white/95 backdrop-blur-sm px-2 py-1 rounded-full shadow-sm border border-neutral-200">
-                {variantCount} Options
+            <div className="absolute bottom-2 left-2 z-20">
+              <span className="bg-white/90 backdrop-blur-sm text-[10px] font-bold text-[var(--customer-primary-dark)] px-2.5 py-1 rounded-full border border-neutral-200">
+                {variantCount} options
               </span>
             </div>
           )}
@@ -329,13 +323,8 @@ export default function ProductCard({
                       e.stopPropagation();
                       handleAdd(e);
                     }}
-                    className="w-full font-bold text-[11px] h-8 px-4 flex items-center justify-center gap-1.5 uppercase tracking-wider transition-all duration-300 border-0 text-white shadow-md hover:shadow-lg hover:scale-[1.04] active:scale-95 animate-gradient-flow"
-                    style={{
-                      backgroundImage:
-                        'linear-gradient(135deg, var(--customer-primary), var(--customer-accent), var(--customer-secondary))',
-                      boxShadow:
-                        '0 4px 10px -2px var(--customer-primary-alpha-40, rgba(0,0,0,0.25)), inset 0 1px 0 rgba(255,255,255,0.25)',
-                    }}
+                    className="sheen grad-action elev-2 w-full font-bold text-[11px] h-9 px-4 flex items-center justify-center gap-1.5 uppercase tracking-[0.12em] transition-all duration-200 border-0 text-white hover:brightness-110 active:scale-95"
+                    style={{ boxShadow: 'inset 0 1.5px 0 rgba(255,255,255,0.28), var(--elev-2)' }}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -347,10 +336,7 @@ export default function ProductCard({
               </div>
             ) : (
               <div
-                className="flex items-center justify-between gap-1 rounded-full px-1 py-1 h-8 w-full shadow-md"
-                style={{
-                  backgroundImage: 'linear-gradient(135deg, var(--customer-primary), var(--customer-primary-dark))',
-                }}
+                className="grad-action flex items-center justify-between gap-1 rounded-full px-1 py-1 h-9 w-full"
               >
                 <Button
                   variant="default"
@@ -360,7 +346,7 @@ export default function ProductCard({
                     handleDecrease(e);
                   }}
                   className="w-6 h-6 p-0 rounded-full text-white shadow-sm transition-colors border-0"
-                  style={{ backgroundColor: 'var(--customer-primary-darker)' }}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.22)' }}
                   aria-label="Decrease quantity"
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
@@ -378,7 +364,7 @@ export default function ProductCard({
                     handleIncrease(e);
                   }}
                   className="w-6 h-6 p-0 rounded-full text-white shadow-sm transition-colors border-0"
-                  style={{ backgroundColor: 'var(--customer-primary-darker)' }}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.22)' }}
                   aria-label="Increase quantity"
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
@@ -403,7 +389,7 @@ export default function ProductCard({
               )}
 
               {/* 2. Name */}
-              <h3 className="text-xs md:text-sm font-bold text-neutral-900 mb-0.5 line-clamp-2 leading-tight overflow-hidden">
+              <h3 className="text-xs md:text-sm font-semibold text-neutral-900 mb-0.5 line-clamp-2 leading-snug overflow-hidden">
                 {product.name || product.productName || ''}
               </h3>
 
@@ -435,7 +421,7 @@ export default function ProductCard({
                     <div className="flex justify-between items-center text-[10px] leading-none py-0.5">
                        <span className="text-neutral-500 font-medium">1 unit</span>
                        <div className="flex items-center gap-1">
-                         <span className="text-xs font-bold text-red-600">₹{displayPrice}</span>
+                         <span className="text-xs font-bold text-neutral-900">₹{displayPrice}</span>
                        </div>
                     </div>
                     {/* Additional Tiers */}
@@ -443,7 +429,7 @@ export default function ProductCard({
                         <div key={idx} className="flex justify-between items-center text-[10px] leading-none py-0.5">
                            <span className="text-neutral-700 font-bold">{tier.minQty}+ units</span>
                            <div className="flex items-center gap-1">
-                             <span className="text-xs font-bold text-red-600">₹{tier.price}</span>
+                             <span className="text-xs font-bold text-neutral-900">₹{tier.price}</span>
                               <span className="text-neutral-600 font-bold bg-neutral-100 px-1">
                                {Math.round(((mrp - tier.price) / mrp) * 100)}% OFF
                              </span>
@@ -460,9 +446,9 @@ export default function ProductCard({
               )}
 
               {/* 5. Price with discount */}
-              <div className="mt-auto pt-0.5">
+              <div className="mt-auto pt-1">
                 <div className="flex items-baseline gap-1.5 flex-wrap">
-                  <span className="font-display text-base md:text-lg font-bold text-neutral-900 leading-tight">
+                  <span className="font-display text-lg md:text-xl font-bold text-neutral-900 leading-none tracking-tight">
                     ₹{currentUnitPrice.toLocaleString('en-IN')}
                   </span>
                   {mrp && mrp > displayPrice && (
@@ -503,7 +489,7 @@ export default function ProductCard({
                       <div className="flex justify-between items-center bg-neutral-100 px-2 py-1 text-[10px]">
                           <span className="font-medium text-neutral-600">Buy 1</span>
                           <div className="flex items-center gap-1">
-                              <span className="text-xs font-bold text-red-600">₹{displayPrice}</span>
+                              <span className="text-xs font-bold text-neutral-900">₹{displayPrice}</span>
                           </div>
                       </div>
                       {/* Additional Tiers */}
@@ -513,7 +499,7 @@ export default function ProductCard({
                                <div key={idx} className="flex justify-between items-center bg-neutral-100 px-2 py-1 text-[10px] border border-neutral-200">
                                   <span className="font-bold text-neutral-700">Buy {tier.minQty}+</span>
                                   <div className="flex items-center gap-1">
-                                      <span className="text-xs font-bold text-red-600">₹{tier.price}</span>
+                                      <span className="text-xs font-bold text-neutral-900">₹{tier.price}</span>
                                       {tierDiscount > 0 && <span className="text-[9px] text-neutral-600 font-bold">({tierDiscount}% OFF)</span>}
                                   </div>
                               </div>
@@ -564,13 +550,8 @@ export default function ProductCard({
                   variant="default"
                   size="sm"
                   onClick={handleAdd}
-                  className="w-full border-0 h-9 text-[11px] font-bold uppercase tracking-wider transition-all duration-300 text-white shadow-md hover:shadow-lg hover:scale-[1.03] active:scale-95 animate-gradient-flow"
-                  style={{
-                    backgroundImage:
-                      'linear-gradient(135deg, var(--customer-primary), var(--customer-accent), var(--customer-secondary))',
-                    boxShadow:
-                      '0 4px 10px -2px var(--customer-primary-alpha-40, rgba(0,0,0,0.25)), inset 0 1px 0 rgba(255,255,255,0.25)',
-                  }}
+                  className="sheen grad-action w-full border-0 h-10 text-[11px] font-bold uppercase tracking-[0.12em] transition-all duration-200 text-white hover:brightness-110 active:scale-95"
+                  style={{ boxShadow: 'inset 0 1.5px 0 rgba(255,255,255,0.28), var(--elev-2)' }}
                 >
                   <div className="flex items-center justify-center gap-1.5">
                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -585,17 +566,14 @@ export default function ProductCard({
               </div>
             ) : (
               <div
-                className="flex items-center justify-between gap-1 rounded-full px-1 py-1 h-9 shadow-md"
-                style={{
-                  backgroundImage: 'linear-gradient(135deg, var(--customer-primary), var(--customer-primary-dark))',
-                }}
+                className="grad-action flex items-center justify-between gap-1 rounded-full px-1 py-1 h-10"
               >
                 <Button
                   variant="default"
                   size="icon"
                   onClick={handleDecrease}
                   className="w-7 h-7 p-0 rounded-full text-white shadow-sm transition-colors border-0"
-                  style={{ backgroundColor: 'var(--customer-primary-darker)' }}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.22)' }}
                   aria-label="Decrease quantity"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
@@ -610,7 +588,7 @@ export default function ProductCard({
                   size="icon"
                   onClick={handleIncrease}
                   className="w-7 h-7 p-0 rounded-full text-white shadow-sm transition-colors border-0"
-                  style={{ backgroundColor: 'var(--customer-primary-darker)' }}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.22)' }}
                   aria-label="Increase quantity"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">

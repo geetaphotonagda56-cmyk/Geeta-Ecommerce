@@ -265,7 +265,7 @@ const ProductCard = memo(({
                 ₹{displayPrice.toLocaleString('en-IN')}
               </span>
               {hasDiscount && (
-                <span className="text-[9px] text-red-400 line-through">
+                <span className="text-[9px] text-neutral-400 line-through">
                   ₹{mrp.toLocaleString('en-IN')}
                 </span>
               )}

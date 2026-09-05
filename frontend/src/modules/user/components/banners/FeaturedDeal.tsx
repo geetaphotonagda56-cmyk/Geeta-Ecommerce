@@ -179,7 +179,7 @@ export default function FeaturedDeal() {
                                  {product.name}
                              </h4>
                              <div className="flex items-center gap-2 mt-1">
-                                 <span className="text-xs text-red-400 line-through">₹{mrp}</span>
+                                 <span className="text-xs text-neutral-400 line-through">₹{mrp}</span>
                                  <span className="text-sm font-bold text-[var(--customer-primary)]">₹{displayPrice}</span>
                              </div>
                              <UnitPricingHint product={product} className="text-[9px] font-semibold text-[var(--customer-primary)] mt-0.5" />

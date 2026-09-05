@@ -99,7 +99,7 @@ export default function Home() {
   const routerLocation = useRouterLocation();
   const navigationType = useNavigationType();
   const { location } = useLocation();
-  const { activeCategory, setActiveCategory, currentTheme: theme } = useThemeContext();
+  const { activeCategory, setActiveCategory } = useThemeContext();
   const { config } = useAppContext();
   const homeSectionOrder = useMemo(
     () => orderedEnabledKeys(config?.pageLayout?.home, HOME_LAYOUT_SECTIONS),
@@ -709,6 +709,11 @@ export default function Home() {
                           showStockInfo={false}
                           batchSize={columnCount >= 6 ? 12 : 8}
                         />
+                        {section.slug && (
+                          <div className="mt-7 flex justify-center">
+                            <ViewAllButton onClick={() => navigate(`/section/${section.slug}`)} />
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -835,8 +840,8 @@ export default function Home() {
     <div className="bg-white min-h-screen pb-20 md:pb-0">
       <div
         ref={contentRef}
-        className="-mt-2 pt-1 space-y-5 md:space-y-8 md:pt-4 pb-12"
-        style={{ backgroundColor: theme.primary[3] }}
+        className="-mt-2 pt-1 space-y-6 md:space-y-10 md:pt-4 pb-12"
+        style={{ backgroundColor: '#ffffff' }}
       >
         {homeSectionOrder.map((key) => (
           <Fragment key={key}>{sectionRenderers[key]}</Fragment>

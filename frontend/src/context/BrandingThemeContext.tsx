@@ -57,9 +57,9 @@ const FALLBACK_GLOBAL: GlobalThemeData = {
 };
 
 const FALLBACK_CUSTOMER: CustomerThemeData = {
-  primary: "#ef4444",
-  secondary: "#dc2626",
-  accent: "#f97316",
+  primary: "#12694a",
+  secondary: "#0b4531",
+  accent: "#ff7a3d",
   background: "#ffffff",
   text: "#111827",
   success: "#10b981",

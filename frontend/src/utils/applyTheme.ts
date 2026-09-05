@@ -122,6 +122,17 @@ export const applyCustomerTheme = (theme: CustomerTheme): void => {
     getReadableTextColor(theme.primary)
   );
 
+  // Accent shades. The storefront builds its accent gradient (savings,
+  // discounts, gift progress) from these, so the admin's accent colour
+  // drives those surfaces instead of a hardcoded hue.
+  root.style.setProperty("--customer-accent-light", lighten(theme.accent, 15));
+  root.style.setProperty("--customer-accent-dark", darken(theme.accent, 12));
+  root.style.setProperty("--customer-accent-alpha-40", withAlpha(theme.accent, 0.4));
+  root.style.setProperty(
+    "--customer-accent-text",
+    getReadableTextColor(theme.accent)
+  );
+
   root.style.setProperty("--customer-success", theme.success);
   root.style.setProperty("--customer-warning", theme.warning);
   root.style.setProperty("--customer-danger", theme.danger);
@@ -177,6 +188,10 @@ export const clearThemeVariables = (): void => {
     "--customer-background",
     "--customer-text",
     "--customer-primary-text",
+    "--customer-accent-light",
+    "--customer-accent-dark",
+    "--customer-accent-alpha-40",
+    "--customer-accent-text",
     "--customer-success",
     "--customer-warning",
     "--customer-danger",

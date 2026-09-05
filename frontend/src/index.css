@@ -8,6 +8,49 @@
   font-display: swap;
 }
 
+/* ─── Storefront design system ──────────────────────────────────────────
+   Every colour here is derived from the admin's Theme Settings, which
+   applyTheme.ts writes onto :root as --customer-* custom properties at
+   runtime. Nothing in the storefront hardcodes a brand hue: change the
+   customer theme in the admin panel and these gradients, buttons, bands
+   and accents all follow.
+
+   The hex values below are FALLBACKS ONLY. They apply for the split
+   second before the theme request resolves, or if it fails outright.
+
+   Roles:
+     canopy  — the deep brand band (hero, cart header)
+     action  — anything the customer can press (add, checkout, steppers)
+     accent  — value and savings (discount stamps, gift progress)          */
+:root {
+  /* Danger is a system state colour, deliberately outside the brand
+     accent vocabulary so an error never reads as a promotion. */
+  --brand-danger: #ef4136;
+
+  --grad-canopy: linear-gradient(
+    140deg,
+    var(--customer-primary-darker, #0b4531) 0%,
+    var(--customer-primary, #12694a) 55%,
+    var(--customer-primary-light, #23a06c) 100%
+  );
+  --grad-action: linear-gradient(
+    135deg,
+    var(--customer-primary, #12694a) 0%,
+    var(--customer-primary-dark, #0f5a3f) 100%
+  );
+  --grad-accent: linear-gradient(
+    135deg,
+    var(--customer-accent-light, #ffb020) 0%,
+    var(--customer-accent, #ff7a3d) 100%
+  );
+
+  /* Depth — neutral and restrained; elevation is not a brand signal */
+  --elev-1: 0 1px 2px rgba(17, 24, 39, 0.05);
+  --elev-2: 0 6px 16px -6px rgba(17, 24, 39, 0.14);
+  --elev-3: 0 18px 40px -14px rgba(17, 24, 39, 0.22);
+  --elev-action: 0 8px 20px -6px var(--customer-primary-alpha-40, rgba(17, 24, 39, 0.3));
+}
+
 @layer base {
   body {
     @apply bg-white md:bg-white text-neutral-900;
@@ -34,6 +77,74 @@
     min-height: 100vh;
     background: white;
     overflow-x: hidden;
+  }
+}
+
+@layer utilities {
+  /* ── Signature gradients ─────────────────────────────────────────── */
+  .grad-canopy { background-image: var(--grad-canopy); }
+  .grad-action { background-image: var(--grad-action); }
+  .grad-accent { background-image: var(--grad-accent); }
+
+  /* ── Depth ───────────────────────────────────────────────────────── */
+  .elev-1 { box-shadow: var(--elev-1); }
+  .elev-2 { box-shadow: var(--elev-2); }
+  .elev-3 { box-shadow: var(--elev-3); }
+  .elev-action { box-shadow: var(--elev-action); }
+
+  /* ── Glass surfaces ──────────────────────────────────────────────── */
+  .glass-light {
+    background-color: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+  }
+  .glass-dark {
+    background-color: var(--customer-primary-alpha-50, rgba(17, 24, 39, 0.45));
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .glass-light { background-color: #ffffff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+    .glass-dark { background-color: var(--customer-primary-darker, #111827); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  }
+
+  /* Signature device: a hand-stamped market price-tag used for every
+     discount badge across the product card, product detail and cart, so
+     the three pages read as one system. The jagged edge reads as a
+     stamped stub rather than a rounded SaaS pill. */
+  .price-stamp {
+    clip-path: polygon(
+      0% 20%, 8% 0%, 20% 12%, 32% 0%, 44% 12%, 56% 0%, 68% 12%, 80% 0%, 92% 12%, 100% 0%,
+      100% 80%, 92% 100%, 80% 88%, 68% 100%, 56% 88%, 44% 100%, 32% 88%, 20% 100%, 8% 88%, 0% 100%
+    );
+  }
+
+  /* Faint woven-crate texture for the hero band — a diagonal weave instead
+     of a flat gradient, evoking a produce sack rather than generic SaaS. */
+  .texture-weave {
+    background-image:
+      repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.05) 0px, rgba(255, 255, 255, 0.05) 1px, transparent 1px, transparent 10px),
+      repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.04) 0px, rgba(255, 255, 255, 0.04) 1px, transparent 1px, transparent 10px);
+  }
+
+  /* Light sweep across a surface on hover — used on primary CTAs so the
+     press feels like a physical object catching light. */
+  .sheen { position: relative; overflow: hidden; }
+  .sheen::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-120%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42), transparent);
+    transition: transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+  }
+  .sheen:hover::after { transform: translateX(120%); }
+  @media (prefers-reduced-motion: reduce) {
+    .sheen::after { transition: none; }
+    .sheen:hover::after { transform: translateX(-120%); }
   }
 }
 

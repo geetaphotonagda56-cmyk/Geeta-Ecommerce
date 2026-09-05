@@ -94,11 +94,19 @@ export default function CategoryTileSection({
           action={viewAllLink ? <ViewAllButton onClick={() => navigate(viewAllLink)} /> : undefined}
         />
       )}
-      <div className="px-4 md:px-6 lg:px-8 overflow-visible">
+      <div className="px-4 md:px-6 lg:px-8 overflow-visible pb-1">
         <div className={`grid ${gridCols} ${gapClass} overflow-visible auto-rows-fr`}>
           {tiles.map((tile) => {
-            const images =
-              tile.productImages || (tile.image ? [tile.image] : []);
+            // Prefer the category's own cover image when one has been
+            // uploaded — that's a deliberate editorial choice by the admin and
+            // should beat an auto-assembled collage of product shots. The
+            // collage stays as the fallback, and bestseller tiles keep their
+            // 2x2 product grid because there the products *are* the content.
+            const coverImage = tile.image;
+            const usingCover = !showProductCount && Boolean(coverImage);
+            const images = usingCover
+              ? [coverImage as string]
+              : tile.productImages || (coverImage ? [coverImage] : []);
             const hasImages = images.filter(Boolean).length > 0;
 
             return (
@@ -145,12 +153,12 @@ export default function CategoryTileSection({
                       handleTileClick(tile);
                     }
                   }}
-                  className={`flex flex-col bg-white rounded-xl border border-neutral-100 shadow-[0_1px_2px_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-6px_rgba(15,23,42,0.18)] hover:border-neutral-200 transition-all duration-200 ${showProductCount ? "px-2.5 pt-2.5" : "px-1.5 pt-1.5"
+                  className={`flex flex-col bg-white rounded-2xl border border-neutral-200 hover:border-[var(--customer-primary-light)] hover:elev-2 transition-all duration-200 ${showProductCount ? "px-2.5 pt-2.5" : "px-1.5 pt-1.5"
                     }`}>
                   {/* Image - Single image for non-bestsellers, 2x2 grid for bestsellers */}
                   <div
                     className={`w-full overflow-hidden rounded-lg flex items-center justify-center flex-shrink-0 ${showProductCount ? "h-32 md:h-36 mb-2" : "aspect-square"
-                      } ${tile.bgColor || "bg-cyan-50"}`}
+                      } ${tile.bgColor || "bg-white"}`}
                     style={{ transform: 'scale(0.9)', transformOrigin: 'center' }}>
                     {hasImages ? (
                       showProductCount ? (
@@ -183,7 +191,7 @@ export default function CategoryTileSection({
                         <AutoScrollImages
                           images={images}
                           alt={tile.name}
-                          variants={!tile.productImages ? tile.imageVariants : undefined}
+                          variants={usingCover || !tile.productImages ? tile.imageVariants : undefined}
                         />
                       )
                     ) : (
@@ -223,6 +231,15 @@ export default function CategoryTileSection({
             );
           })}
         </div>
+
+        {/* Repeat the section's "View all" at the end of the grid. Someone who
+            has scrolled the whole section is exactly the person who wants
+            more of it, and by then the header control is off screen. */}
+        {viewAllLink && (
+          <div className="mt-7 flex justify-center">
+            <ViewAllButton onClick={() => navigate(viewAllLink)} />
+          </div>
+        )}
       </div>
     </div>
   );
