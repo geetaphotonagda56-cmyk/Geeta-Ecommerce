@@ -194,7 +194,12 @@ const toNumber = (value: unknown): number | undefined => {
 
 export const buildIdInFilter = <T extends string | mongoose.Types.ObjectId>(ids?: T[]): Record<"$in", T[]> | undefined => {
   if (!ids || ids.length === 0) return undefined;
-  return { $in: ids };
+  // Mongo doesn't guarantee document order across calls with no explicit
+  // sort, so an unsorted $in array made the resulting query object
+  // serialize differently each time — silently breaking cache keys that
+  // hash this filter (e.g. the popularity-fallback cache below).
+  const sorted = [...ids].sort((a, b) => String(a).localeCompare(String(b)));
+  return { $in: sorted };
 };
 
 // Customer-side seller visibility is gated solely by `isEnabled`.
@@ -202,7 +207,9 @@ export const buildIdInFilter = <T extends string | mongoose.Types.ObjectId>(ids?
 // `true` — using it here previously hid every normal seller's products.)
 const visibleSellerQuery = { isEnabled: true } as const;
 
-const buildVisibleProductQuery = async (options: Partial<SearchOptions>) => {
+const VISIBLE_PRODUCT_QUERY_CACHE_TTL_MS = Number(process.env.SEARCH_VISIBLE_QUERY_CACHE_TTL_MS || 30_000);
+
+const buildVisibleProductQueryUncached = async (options: Partial<SearchOptions>) => {
   const query: Record<string, any> = {
     status: "Active",
     publish: true,
@@ -273,6 +280,19 @@ const buildVisibleProductQuery = async (options: Partial<SearchOptions>) => {
 
   if (andConditions.length) query.$and = andConditions;
   return query;
+};
+
+// This filter (which categories/sellers are visible) doesn't depend on the
+// search term at all, yet was rebuilt from scratch — 3+ sequential DB
+// round-trips (Category.find, AppSettings.findOne, Seller.find) — on every
+// single uncached search. Cache it independent of query text.
+const buildVisibleProductQuery = (options: Partial<SearchOptions>) => {
+  const cacheKey = buildSearchCacheKey("search:visible-query", {
+    category: options.category,
+    latitude: options.latitude ? Number(options.latitude.toFixed(2)) : undefined,
+    longitude: options.longitude ? Number(options.longitude.toFixed(2)) : undefined,
+  });
+  return cache.getOrSet(cacheKey, () => buildVisibleProductQueryUncached(options), VISIBLE_PRODUCT_QUERY_CACHE_TTL_MS);
 };
 
 const productProjection =
