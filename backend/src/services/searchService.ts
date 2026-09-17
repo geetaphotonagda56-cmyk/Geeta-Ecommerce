@@ -110,40 +110,38 @@ export const findBestMatchingVariant = (query: string, product: any): any | unde
   return best.variation;
 };
 
-const lexicalCandidateFields = [
-  "productName",
-  "smallDescription",
-  "description",
-  "tags",
-  "sku",
-  "barcode",
-  "variations.name",
-  "variations.value",
-  "variations.sku",
-  "variations.barcode",
-  "pack",
-];
+// Product/variant codes aren't covered by the text index, so they still need a
+// direct lookup — but scoped to just these 4 fields instead of the old
+// 11-field x 8-phrase regex explosion that forced an uncached collection scan.
+const codeCandidateFields = ["sku", "barcode", "variations.sku", "variations.barcode"];
 
-const buildLexicalCandidateConditions = (query: string) => {
-  const phrases = Array.from(new Set([query, ...getTokens(query)]))
-    .map((phrase) => phrase.trim())
-    .filter((phrase) => phrase.length > 1)
-    .slice(0, 8);
+const buildCodeCandidateConditions = (query: string) => {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  const regex = new RegExp(escapeRegex(trimmed), "i");
+  return codeCandidateFields.map((field) => ({ [field]: regex }));
+};
 
-  const exactConditions = phrases.flatMap((phrase) => {
-    const regex = new RegExp(escapeRegex(phrase), "i");
-    return lexicalCandidateFields.map((field) => ({ [field]: regex }));
-  });
-
-  const fuzzyPrefixConditions = phrases
-    .filter((phrase) => phrase.length >= 4)
-    .flatMap((phrase) => {
-      const prefixLength = Math.min(4, Math.max(3, phrase.length - 2));
-      const regex = new RegExp(`\\b${escapeRegex(phrase.slice(0, prefixLength))}`, "i");
-      return lexicalCandidateFields.map((field) => ({ [field]: regex }));
-    });
-
-  return [...exactConditions, ...fuzzyPrefixConditions];
+const buildTextSearchCandidates = async (productQuery: Record<string, any>, query: string) => {
+  try {
+    return await Product.find(
+      { ...productQuery, $text: { $search: query } },
+      { score: { $meta: "textScore" } }
+    )
+      .select(productProjection)
+      .select({ score: { $meta: "textScore" } })
+      .populate("category", "name image")
+      .populate("subcategory", "name")
+      .populate("brand", "name")
+      .sort({ score: { $meta: "textScore" } })
+      .limit(DEFAULT_CANDIDATE_LIMIT)
+      .lean();
+  } catch (error) {
+    // Falls back to the code/popularity candidates below if the text index
+    // lookup itself errors out (e.g. unsupported query syntax).
+    console.error("[search] $text search failed", error);
+    return [];
+  }
 };
 
 const mergeProductsById = (...groups: any[][]) => {
@@ -340,19 +338,20 @@ export const hybridProductSearch = async (options: SearchOptions) => {
 
     const productQuery = await productQueryPromise;
 
-    const lexicalConditions = buildLexicalCandidateConditions(query);
-    const lexicalCandidateQuery = lexicalConditions.length
-      ? { ...productQuery, $or: lexicalConditions }
-      : productQuery;
+    const codeConditions = buildCodeCandidateConditions(query);
+    const codeCandidateQuery = codeConditions.length ? { ...productQuery, $or: codeConditions } : null;
 
-    const [lexicalProducts, semanticProducts] = await Promise.all([
-      Product.find(lexicalCandidateQuery)
-        .select(productProjection)
-        .populate("category", "name image")
-        .populate("subcategory", "name")
-        .populate("brand", "name")
-        .limit(DEFAULT_CANDIDATE_LIMIT)
-        .lean(),
+    const [textProducts, codeProducts, semanticProducts] = await Promise.all([
+      buildTextSearchCandidates(productQuery, query),
+      codeCandidateQuery
+        ? Product.find(codeCandidateQuery)
+            .select(productProjection)
+            .populate("category", "name image")
+            .populate("subcategory", "name")
+            .populate("brand", "name")
+            .limit(DEFAULT_CANDIDATE_LIMIT)
+            .lean()
+        : Promise.resolve([]),
       Product.find(productQuery)
         .select(productProjection)
         .populate("category", "name image")
@@ -363,7 +362,7 @@ export const hybridProductSearch = async (options: SearchOptions) => {
         .lean(),
     ]);
 
-    const products = mergeProductsById(lexicalProducts, semanticProducts);
+    const products = mergeProductsById(textProducts, codeProducts, semanticProducts);
     const queryTokens = getTokens(query);
     const semanticOnlyThreshold =
       queryTokens.length <= 2 ? SHORT_QUERY_SEMANTIC_THRESHOLD : LONG_QUERY_SEMANTIC_THRESHOLD;
