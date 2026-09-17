@@ -12,9 +12,10 @@ import { useToast } from '../../../context/ToastContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
-import { Html5QrcodeSupportedFormats } from "html5-qrcode";
 import QRScannerModal from '../../../components/QRScannerModal';
 import { openBarcodeScanner } from '../../../utils/scannerPlatform';
+import { INTERACTIVE_API_TIMEOUT_MS } from '../../../services/api/config';
+import { isRequestTimeout } from '../../../utils/apiErrors';
 import ConfirmModal from '../../../components/ConfirmModal';
 import ImageCropperModal from '../../../components/ImageCropperModal';
 import { uploadImage } from '../../../services/api/uploadService';
@@ -915,8 +916,10 @@ const SellerPOSOrders = () => {
       }
       lastScanRef.current = { code: decodedText, time: now };
 
-      // Don't process if loading to prevent spam
-      if (loading) return;
+      // NOTE: deliberately no `if (loading) return` guard. A camera scan is a
+      // deliberate action that has already closed the viewfinder, so dropping it
+      // because an unrelated request is in flight just looks like a hung
+      // scanner. The cooldown above already absorbs repeat fires.
 
       console.log(`Scan result (${scanTarget}): ${decodedText}`, decodedResult);
 
@@ -946,7 +949,10 @@ const SellerPOSOrders = () => {
           // const audio = new Audio('/assets/beep.mp3'); audio.play().catch(e=>{});
 
           // Seller Product List catalog only (same as billing grid / admin product list scope for this seller)
-          const res = await getProducts({ search: decodedText, limit: 50, page: 1 });
+          const res = await getProducts(
+            { search: decodedText, limit: 50, page: 1 },
+            { timeoutMs: INTERACTIVE_API_TIMEOUT_MS }
+          );
           if (res.success && res.data && res.data.length > 0) {
              const productsFound = res.data;
              // Try to find exact match on Barcode or SKU
@@ -1076,8 +1082,17 @@ const SellerPOSOrders = () => {
              showToast("Product not found. Opening Quick Add.", "info");
           }
       } catch (e) {
+         // A failed lookup is not "not found" - opening Quick Add here would
+         // invite a duplicate for an item that is already in stock. Close the
+         // scanner so the UI never sits on a dead viewfinder.
          console.error("Scan Error", e);
-         showToast("Error processing scan", "error");
+         setShowScanner(false);
+         showToast(
+           isRequestTimeout(e)
+             ? `Lookup timed out for ${decodedText}. Check the connection and scan again.`
+             : "Could not look up that barcode. Please scan again.",
+           "error"
+         );
       }
   };
 
@@ -1192,109 +1207,13 @@ const SellerPOSOrders = () => {
     }
   }, [customers]);
 
-  useEffect(() => {
-    const startScanner = async () => {
-        if (!showScanner) return;
-
-        // Give a little time for the modal and DOM to mount
-        await new Promise(r => setTimeout(r, 300));
-        const element = document.getElementById('reader');
-        if (!element) return;
-
-        try {
-            // If there's an existing instance, try to stop it first
-            if (html5QrCodeRef.current) {
-                try {
-                    if (html5QrCodeRef.current.isScanning) {
-                        await html5QrCodeRef.current.stop();
-                    }
-                    html5QrCodeRef.current.clear();
-                } catch (e) {
-                    console.warn("Error stopping previous scanner", e);
-                }
-            }
-
-            // Create new instance
-            const supportedFormats = [
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.UPC_A,
-                Html5QrcodeSupportedFormats.UPC_E,
-                Html5QrcodeSupportedFormats.CODE_39,
-                Html5QrcodeSupportedFormats.CODE_93,
-                Html5QrcodeSupportedFormats.ITF,
-                Html5QrcodeSupportedFormats.CODABAR,
-                Html5QrcodeSupportedFormats.QR_CODE,
-                Html5QrcodeSupportedFormats.DATA_MATRIX,
-                Html5QrcodeSupportedFormats.PDF_417,
-                Html5QrcodeSupportedFormats.RSS_14,
-                Html5QrcodeSupportedFormats.RSS_EXPANDED,
-            ];
-            const scanner = new Html5Qrcode("reader", {
-                verbose: false,
-                formatsToSupport: supportedFormats,
-            });
-            html5QrCodeRef.current = scanner;
-
-            const config: any = {
-                fps: 30,
-                aspectRatio: 1.0,
-                disableFlip: false,
-                qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-                    // Larger scanning window for easier alignment
-                    const width = Math.floor(Math.min(viewfinderWidth * 0.9, 600));
-                    const height = Math.floor(width * 0.5); 
-                    return { width, height };
-                },
-                videoConstraints: {
-                    facingMode: "environment",
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    focusMode: "continuous"
-                },
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true
-                }
-            };
-
-            await scanner.start(
-                { facingMode: "environment" },
-                config,
-                onScanSuccess,
-                () => {} // Ignore errors per frame
-            );
-
-            // Set initial zoom and torch state after start
-            setZoomLevel(1);
-            setIsTorchOn(false);
-        } catch (err) {
-            console.error("Scanner Start Error:", err);
-            showToast("Failed to start camera. Please check permissions and ensure you are on HTTPS.", "error");
-            setShowScanner(false);
-        }
-    };
-
-    if (showScanner) {
-        startScanner();
-    }
-
-    return () => {
-        const cleanup = async () => {
-            if (html5QrCodeRef.current) {
-                try {
-                    if (html5QrCodeRef.current.isScanning) {
-                        await html5QrCodeRef.current.stop();
-                    }
-                    html5QrCodeRef.current.clear();
-                } catch (e) {
-                    console.error("Scanner Cleanup Error:", e);
-                }
-            }
-        };
-        cleanup();
-    };
-  }, [showScanner]);
+  // NOTE: a second, legacy html5-qrcode instance used to be started here on
+  // `showScanner`, alongside the one QRScannerModal owns. It was already dead
+  // code - it referenced html5QrCodeRef/setZoomLevel/setIsTorchOn, none of which
+  // exist in this file, and looked for a #reader element the modal no longer
+  // renders - so it only ever threw (swallowed inside its async cleanup) while
+  // risking a second camera stream on the device. QRScannerModal is the single
+  // owner of the camera lifecycle; see its wake-up recovery for lock/unlock.
 
   // Search Customers
   useEffect(() => {
@@ -1553,13 +1472,16 @@ const SellerPOSOrders = () => {
     // If not found in current products (maybe due to debounce or filter), fetch immediately
     setLoading(true);
     try {
-      const res = await getProducts({
-        search: trimmed,
-        category: selectedCategory || undefined,
-        brand: selectedBrand || undefined,
-        limit: 100,
-        page: 1,
-      });
+      const res = await getProducts(
+        {
+          search: trimmed,
+          category: selectedCategory || undefined,
+          brand: selectedBrand || undefined,
+          limit: 100,
+          page: 1,
+        },
+        { timeoutMs: INTERACTIVE_API_TIMEOUT_MS }
+      );
       if (res.success && res.data && res.data.length > 0) {
         const expanded = expandSellerCatalogProductsForPOS(res.data);
 
@@ -1577,7 +1499,12 @@ const SellerPOSOrders = () => {
       showToast("Product not found. Opening Quick Add.", "info");
     } catch (err) {
       console.error("Direct barcode search failed", err);
-      showToast("Error searching for product", "error");
+      showToast(
+        isRequestTimeout(err)
+          ? `Lookup timed out for ${trimmed}. Check the connection and scan again.`
+          : "Could not look up that barcode. Please scan again.",
+        "error"
+      );
     } finally {
       setLoading(false);
     }

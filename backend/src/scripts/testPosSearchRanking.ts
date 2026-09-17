@@ -1,4 +1,4 @@
-import { rankPOSProducts, scorePOSProduct, POS_MATCH_SCORE_THRESHOLD, POSRankableProduct } from "../modules/admin/utils/posSearchRanking";
+import { rankPOSProducts, scorePOSProduct, isScannedCodeQuery, POS_MATCH_SCORE_THRESHOLD, POSRankableProduct } from "../modules/admin/utils/posSearchRanking";
 import { getTokens } from "../utils/fuzzyMatch";
 
 let failures = 0;
@@ -67,6 +67,33 @@ if (barcodeResults.length === 1 && barcodeResults[0] === "Parle-G Biscuit 100g")
 } else {
   failures += 1;
   console.error(`FAIL variation-level barcode scan: got ${JSON.stringify(barcodeResults)}`);
+}
+
+// isScannedCodeQuery decides whether getPOSProducts may skip its catalogue-wide
+// fuzzy fallback. Getting it wrong in either direction is costly: too eager and
+// a mistyped product name stops finding anything; too shy and every scan of an
+// unlisted barcode fetches and scores the whole catalogue, which is what used
+// to leave the POS scanner spinning instead of opening Quick Add.
+const codeQueryCases: Array<[string, boolean]> = [
+  ["8901030826169", true],   // EAN-13 off a product
+  ["PG-100-A2", true],       // SKU with separators
+  ["item_9004", true],       // SKU with an underscore
+  [" 8901030826169 ", true], // padded by the scanner's line ending
+  ["12345", false],          // too short to be a scanned code
+  ["dummy", false],          // a word, no digits - keeps the typo fallback
+  ["mummy", false],
+  ["milk 1l", false],        // whitespace means a human typed it
+  ["Maggi 2-Minute", false],
+];
+
+for (const [input, expected] of codeQueryCases) {
+  const actual = isScannedCodeQuery(input);
+  if (actual === expected) {
+    console.log(`PASS isScannedCodeQuery(${JSON.stringify(input)}) === ${expected}`);
+  } else {
+    failures += 1;
+    console.error(`FAIL isScannedCodeQuery(${JSON.stringify(input)}): expected ${expected}, got ${actual}`);
+  }
 }
 
 if (failures > 0) {

@@ -22,6 +22,7 @@ import {
 import {
   decodeBarcodeFromFileWithWasm,
   ensureIosVideoPlayback,
+  findScannerVideoElement,
   prepareIosBarcodeWasm,
   startIosWasmVideoScan,
 } from "../utils/iosWasmBarcodeScanner";
@@ -376,6 +377,154 @@ export default function QRScannerModal({
     const playing = await ensureIosVideoPlayback(video);
     setIosPreviewStalled(!playing);
   }, [attachIosStream]);
+
+  // ─── Wake-up recovery ───────────────────────────────────────────────────
+  // Locking the phone (or switching apps) suspends the page and the OS reclaims
+  // the camera: the MediaStreamTrack ends or goes muted and the <video> pauses.
+  // Neither html5-qrcode nor the WASM loop notices - `isScanning` stays true and
+  // the loop keeps reading frames from a dead element - so on return the
+  // viewfinder looks alive but no scan ever fires again, and the only way out
+  // was reloading the page (losing the open bill). Detect the dead stream when
+  // the page becomes visible again and rebuild it in place.
+
+  const restartingRef = useRef(false);
+  const recoveryTimerRef = useRef<number | null>(null);
+
+  // Recovery must not fire before the first successful start: until then a
+  // "dead" stream just means the camera is still coming up, and tearing that
+  // down mid-start leaves html5-qrcode in an unusable state.
+  const hasBeenReadyRef = useRef(false);
+  useEffect(() => {
+    if (cameraReady) hasBeenReadyRef.current = true;
+  }, [cameraReady]);
+
+  /** The element the active profile actually renders its preview into. */
+  const getPreviewVideo = useCallback((): HTMLVideoElement | null => {
+    return isIosProfile ? iosVideoRef.current : findScannerVideoElement(readerId);
+  }, [isIosProfile, readerId]);
+
+  const isCameraStreamLive = useCallback(() => {
+    const video = getPreviewVideo();
+    if (!video || video.paused) return false;
+
+    const stream = isIosProfile
+      ? iosStreamRef.current
+      : (video.srcObject as MediaStream | null);
+    const track = stream?.getVideoTracks?.()[0];
+    if (!track) return false;
+
+    // `muted` here is the track-level flag the UA sets while it isn't delivering
+    // frames (backgrounded, pre-empted) - not the audio mute control.
+    return track.readyState === "live" && !track.muted;
+  }, [getPreviewVideo, isIosProfile]);
+
+  const restartCamera = useCallback(async () => {
+    if (handledRef.current || restartingRef.current) return;
+    restartingRef.current = true;
+
+    try {
+      if (isIosProfile) {
+        const video = iosVideoRef.current;
+        const track = iosStreamRef.current?.getVideoTracks?.()[0];
+
+        // A live track that merely got paused only needs play() - re-acquiring
+        // the camera would black out the preview for no reason.
+        if (video && track?.readyState === "live") {
+          const resumed = await ensureIosVideoPlayback(video);
+          if (resumed) {
+            // Restart the decode loop unconditionally. The preview being back
+            // says nothing about the loop that reads it, and a live viewfinder
+            // that never decodes is exactly the failure being fixed here.
+            stopWasmScanRef.current?.();
+            stopWasmScanRef.current = startIosWasmVideoScan(video, (text) => finishScan(text));
+            setIosPreviewStalled(false);
+            setCameraReady(true);
+            return;
+          }
+        }
+
+        stopIosCamera();
+        await attachIosStream(requestIosCameraStream());
+        return;
+      }
+
+      const scanner = scannerRef.current;
+      if (!scanner) return;
+      setCameraReady(false);
+      if (scanner.isScanning) {
+        try {
+          // stop() can never settle when the track it waits on was killed by the
+          // OS, which would leave restartingRef latched and block every later
+          // recovery attempt. Move on after a beat and start again regardless.
+          await Promise.race([
+            scanner.stop(),
+            new Promise((resolve) => window.setTimeout(resolve, 1500)),
+          ]);
+        } catch {
+          /* already stopped by the OS */
+        }
+      }
+      await beginLiveScanRef.current?.();
+    } catch (err) {
+      console.error("QRScannerModal: could not restart camera after wake", err);
+      setCameraReady(false);
+      if (isIosProfile) setIosPreviewStalled(true);
+    } finally {
+      restartingRef.current = false;
+    }
+  }, [isIosProfile, stopIosCamera, attachIosStream, finishScan]);
+
+  useEffect(() => {
+    const clearTimer = () => {
+      if (recoveryTimerRef.current === null) return;
+      window.clearTimeout(recoveryTimerRef.current);
+      recoveryTimerRef.current = null;
+    };
+
+    const scheduleRecovery = () => {
+      if (typeof document === "undefined") return;
+      if (document.visibilityState !== "visible") return;
+      if (handledRef.current || !hasBeenReadyRef.current) return;
+      clearTimer();
+      // Tracks report `muted` for a moment on resume and recover by themselves,
+      // so give the OS a beat before deciding the camera is really gone.
+      recoveryTimerRef.current = window.setTimeout(() => {
+        recoveryTimerRef.current = null;
+        if (handledRef.current || restartingRef.current) return;
+        if (isCameraStreamLive()) return;
+        void restartCamera();
+      }, 600);
+    };
+
+    document.addEventListener("visibilitychange", scheduleRecovery);
+    // pageshow fires on a bfcache restore, where visibilitychange may not.
+    window.addEventListener("pageshow", scheduleRecovery);
+    window.addEventListener("focus", scheduleRecovery);
+
+    return () => {
+      clearTimer();
+      document.removeEventListener("visibilitychange", scheduleRecovery);
+      window.removeEventListener("pageshow", scheduleRecovery);
+      window.removeEventListener("focus", scheduleRecovery);
+    };
+  }, [isCameraStreamLive, restartCamera]);
+
+  // Visibility events don't fire when another app steals the camera while this
+  // page stays in the foreground, so also watch for a stream that quietly dies
+  // under a viewfinder that has already reported itself ready.
+  useEffect(() => {
+    if (!cameraReady) return;
+
+    const interval = window.setInterval(() => {
+      if (handledRef.current || restartingRef.current) return;
+      if (!hasBeenReadyRef.current) return;
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (isCameraStreamLive()) return;
+      void restartCamera();
+    }, 3000);
+
+    return () => window.clearInterval(interval);
+  }, [cameraReady, isCameraStreamLive, restartCamera]);
 
   const handlePreviewTap = () => {
     unlockAudio();

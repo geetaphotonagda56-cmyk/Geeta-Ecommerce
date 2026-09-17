@@ -89,9 +89,23 @@ export const getSocketBaseURL = (): string => {
   return normalizeBaseUrl(socketUrl || "https://api.geeta.today");
 };
 
+/**
+ * Ceiling on how long any request may stay pending. Without it, a request made
+ * while a phone is asleep or switching networks can hang forever - the socket
+ * is dead but never errors - so the `finally { setLoading(false) }` that every
+ * caller relies on never runs and the screen is stuck on a spinner until a hard
+ * reload. Generous enough for bulk imports and image uploads; latency-sensitive
+ * calls (POS barcode lookups) pass a shorter `timeout` of their own.
+ */
+export const DEFAULT_API_TIMEOUT_MS = 60000;
+
+/** For interactive lookups that must fail fast rather than block the UI. */
+export const INTERACTIVE_API_TIMEOUT_MS = 12000;
+
 // Create axios instance
 const api: AxiosInstance = axios.create({
   baseURL: activeApiBaseUrl,
+  timeout: DEFAULT_API_TIMEOUT_MS,
   headers: {
     "Content-Type": "application/json",
   },
@@ -140,7 +154,11 @@ api.interceptors.response.use(
   },
   (error: any) => {
     const originalConfig = error.config as RetriableRequestConfig | undefined;
-    const hasNetworkError = !error.response;
+    // A timeout means this host answered too slowly, not that it's the wrong
+    // host, so it must not trip the base-URL failover below - retrying a slow
+    // request against a different base only doubles the wait.
+    const isTimeout = error.code === "ECONNABORTED" || error.code === "ETIMEDOUT";
+    const hasNetworkError = !error.response && !isTimeout;
     if (hasNetworkError && originalConfig && !originalConfig._apiFailoverAttempted) {
       const nextBase = advanceApiBaseCandidate();
       if (nextBase) {

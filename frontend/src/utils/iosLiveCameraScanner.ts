@@ -8,24 +8,43 @@ function detectAppleMobile(): boolean {
 }
 
 let primedStreamPromise: Promise<MediaStream> | null = null;
+let primedStreamExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * A primed stream is a LIVE camera: if the modal it was primed for never mounts
+ * (permission dialog dismissed, navigation away, an error between the click and
+ * the render) nothing would ever call takePrimedIosCameraStream, and the camera
+ * stays on - draining the battery, holding the torch, and blocking the next
+ * getUserMedia. Release it if it hasn't been claimed by then.
+ */
+const PRIMED_STREAM_TTL_MS = 15000;
 
 /** Call synchronously inside the Scan button click handler, before opening the modal. */
 export function primeIosCameraFromUserGesture(): void {
   if (!detectAppleMobile()) return;
   cancelPrimedIosCamera();
   primedStreamPromise = requestIosCameraStream();
+  primedStreamExpiryTimer = setTimeout(cancelPrimedIosCamera, PRIMED_STREAM_TTL_MS);
 }
 
 export function takePrimedIosCameraStream(): Promise<MediaStream> | null {
   const promise = primedStreamPromise;
   primedStreamPromise = null;
+  clearPrimedStreamExpiry();
   return promise;
 }
 
 export function cancelPrimedIosCamera(): void {
+  clearPrimedStreamExpiry();
   if (!primedStreamPromise) return;
   void primedStreamPromise.then(stopMediaStream).catch(() => {});
   primedStreamPromise = null;
+}
+
+function clearPrimedStreamExpiry(): void {
+  if (!primedStreamExpiryTimer) return;
+  clearTimeout(primedStreamExpiryTimer);
+  primedStreamExpiryTimer = null;
 }
 
 export function stopMediaStream(stream: MediaStream | null | undefined): void {

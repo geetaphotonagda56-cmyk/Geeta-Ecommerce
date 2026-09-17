@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { bannerService } from '../../../services/bannerService';
-import { getProducts } from '../../../services/api/admin/adminProductService';
+import { getProducts, getProductsByIds } from '../../../services/api/admin/adminProductService';
 import { uploadImage } from '../../../services/api/uploadService';
 import { Product } from '../../../types/domain';
 import ImageCropperModal from '../../../components/ImageCropperModal';
@@ -35,12 +35,9 @@ export default function AdminFlashDeal() {
             // Load selected product objects
             const ids = data.flashDealProductIds || [];
             if (ids.length > 0) {
-                 const res = await getProducts({ limit: 100 });
-                 if (res.success && res.data) {
-                     const allProducts = (res.data as any).products || res.data;
-                     const found = allProducts.filter((p: any) => ids.includes(p._id || p.id));
-                     setSelectedProducts(found);
-                 }
+                 // Resolve each saved ID directly. Filtering one page of
+                 // getProducts hid every selection outside that page.
+                 setSelectedProducts((await getProductsByIds(ids)) as any);
             }
         } catch (error) {
             console.error("Error fetching flash deal config:", error);

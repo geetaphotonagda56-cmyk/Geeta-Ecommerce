@@ -12,10 +12,11 @@ import { useToast } from '../../../context/ToastContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
-import { Html5QrcodeSupportedFormats } from "html5-qrcode";
 import QRScannerModal from '../../../components/QRScannerModal';
 import { openBarcodeScanner } from '../../../utils/scannerPlatform';
 import { useScanDedup } from '../../../hooks/useScanDedup';
+import { INTERACTIVE_API_TIMEOUT_MS } from '../../../services/api/config';
+import { isRequestTimeout } from '../../../utils/apiErrors';
 import ConfirmModal from '../../../components/ConfirmModal';
 import ImageCropperModal from '../../../components/ImageCropperModal';
 import { uploadImage } from '../../../services/api/uploadService';
@@ -460,15 +461,26 @@ const AdminPOSOrders = () => {
 
   // Flush immediately (bypassing the debounce) on tab close/refresh/backgrounding so the
   // last in-flight edit isn't lost to the debounce window.
+  //
+  // The snapshot to flush is read through a ref rather than closed over: `bills`
+  // embeds a full product object per cart line and changes on every keystroke,
+  // so depending on it here tore down and re-registered both listeners on every
+  // one of those renders - measurable churn on a phone mid-bill.
+  const persistSnapshotRef = useRef({ bills, activeBillId });
+  persistSnapshotRef.current = { bills, activeBillId };
+
   useEffect(() => {
-    const flush = () => persistBills(bills, activeBillId);
+    const flush = () => {
+      const snapshot = persistSnapshotRef.current;
+      persistBills(snapshot.bills, snapshot.activeBillId);
+    };
     window.addEventListener('beforeunload', flush);
     document.addEventListener('visibilitychange', flush);
     return () => {
       window.removeEventListener('beforeunload', flush);
       document.removeEventListener('visibilitychange', flush);
     };
-  }, [bills, activeBillId]);
+  }, []);
 
   // Sync URL with active bill tab
   useEffect(() => {
@@ -1023,11 +1035,11 @@ const AdminPOSOrders = () => {
           return;
       }
 
-      // Don't process if loading to prevent spam
-      if (loading) {
-          console.log('[SCANNER DEBUG] ⚠️ BLOCKED because loading=true — returning early.');
-          return;
-      }
+      // NOTE: deliberately no `if (loading) return` guard here. A camera scan is
+      // a deliberate user action that has already closed the viewfinder, so
+      // dropping it because some unrelated request was in flight is invisible to
+      // the operator - it looks like the scanner hung. isDuplicateScan above
+      // already absorbs the repeat fires this guard was meant to catch.
 
       console.log(`[SCANNER DEBUG] Processing scan (${scanTarget}): "${decodedText}" | Length: ${decodedText.length}`);
 
@@ -1058,7 +1070,10 @@ const AdminPOSOrders = () => {
 
           // Use POS Search for optimized results
           console.log('[SCANNER DEBUG] Calling getPOSProducts API with search:', decodedText);
-          const res = await getPOSProducts({ search: decodedText });
+          const res = await getPOSProducts(
+            { search: decodedText },
+            { timeoutMs: INTERACTIVE_API_TIMEOUT_MS }
+          );
           console.log('[SCANNER DEBUG] API response — success:', res.success, '| total products returned:', res.data?.length ?? 0);
 
           if (res.success && res.data && res.data.length > 0) {
@@ -1190,8 +1205,18 @@ const AdminPOSOrders = () => {
              showToast("Product not found. Opening Quick Add.", "info");
           }
       } catch (e) {
+         // A failed lookup is NOT "not found" - opening Quick Add here would
+         // invite a duplicate product for an item that is already in stock. Tell
+         // the operator what happened and close the scanner so the UI is never
+         // left sitting on a dead viewfinder.
          console.error("Scan Error", e);
-         showToast("Error processing scan", "error");
+         setShowScanner(false);
+         showToast(
+           isRequestTimeout(e)
+             ? `Lookup timed out for ${decodedText}. Check the connection and scan again.`
+             : "Could not look up that barcode. Please scan again.",
+           "error"
+         );
       }
   };
 
@@ -1556,10 +1581,13 @@ const AdminPOSOrders = () => {
   }, [showPurchaseSearch, purchaseSearchQuery]);
 
   // Barcode Scanner Handler
-  const submitScanQuery = async (raw: string, isManualEnter = false) => {
+  const submitScanQuery = async (raw: string) => {
     const trimmed = raw.trim();
     if (!trimmed) return;
-    if (loading && !isManualEnter) return; // Only block if not a direct Enter/Scan
+    // No `if (loading) return` guard: a scan is a deliberate action and
+    // discarding it while some unrelated request is in flight is invisible to
+    // the operator - it reads as a dead scanner. The cooldown below is what
+    // absorbs the repeat fires a hardware scanner produces.
 
     // Cooldown to prevent double scans from hardware scanners (600ms)
     if (isDuplicateScan(trimmed, 600)) {
@@ -1586,8 +1614,14 @@ const AdminPOSOrders = () => {
         return;
       }
 
-      // If not found in current products (maybe due to debounce or filter), fetch immediately using optimized POS API
-      const res = await getPOSProducts({ search: trimmed, limit: 1 });
+      // If not found in current products (maybe due to debounce or filter), fetch immediately using optimized POS API.
+      // Not `limit: 1`: the endpoint ranks by fuzzy relevance, so the product
+      // actually carrying this barcode is not guaranteed to rank first, and
+      // truncating the list would send an in-stock item to Quick Add.
+      const res = await getPOSProducts(
+        { search: trimmed, limit: 25 },
+        { timeoutMs: INTERACTIVE_API_TIMEOUT_MS }
+      );
       if (res.success && res.data && res.data.length > 0) {
         const expanded = expandProductsForPOS(res.data);
 
@@ -1604,13 +1638,21 @@ const AdminPOSOrders = () => {
       setShowQuickAdd(true);
       showToast("Product not found. Opening Quick Add.", "info");
     } catch (err) {
+      // Same reasoning as onScanSuccess: a failed lookup must not be reported as
+      // "not in inventory", and it must not fail silently either.
       console.error("Direct barcode search failed", err);
+      showToast(
+        isRequestTimeout(err)
+          ? `Lookup timed out for ${trimmed}. Check the connection and scan again.`
+          : "Could not look up that barcode. Please scan again.",
+        "error"
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const submitScanQueryRef = useRef<(raw: string, isManualEnter?: boolean) => void>(() => {});
+  const submitScanQueryRef = useRef<(raw: string) => void>(() => {});
   useEffect(() => {
     submitScanQueryRef.current = submitScanQuery;
   });
@@ -1647,7 +1689,7 @@ const AdminPOSOrders = () => {
         if (code.length >= 3) {
             e.preventDefault();
             e.stopPropagation();
-            submitScanQueryRef.current(code, true);
+            submitScanQueryRef.current(code);
         }
         return;
       }
@@ -1693,7 +1735,7 @@ const AdminPOSOrders = () => {
         if (searchQuery.trim()) {
             e.preventDefault();
             e.stopPropagation();
-            await submitScanQuery(searchQuery, true);
+            await submitScanQuery(searchQuery);
         }
     }
   };
@@ -6839,10 +6881,12 @@ const AdminPOSOrders = () => {
       {/* --- SCANNER MODAL --- */}
       {showScanner && (
         <QRScannerModal
-            onScanSuccess={(decodedText) => {
-                submitScanQuery(decodedText);
-                setShowScanner(false);
-            }}
+            /* onScanSuccess - not submitScanQuery - is the handler that honours
+               scanTarget, so routing camera scans straight to submitScanQuery
+               made every scan an inventory lookup: scanning into the Quick Add
+               form or a purchase row silently searched the catalogue instead of
+               filling the field. It also closes the scanner itself, per target. */
+            onScanSuccess={(decodedText) => { void onScanSuccess(decodedText, null); }}
             onScanFailure={(err) => console.warn(err)}
             onClose={() => setShowScanner(false)}
         />

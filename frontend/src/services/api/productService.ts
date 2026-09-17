@@ -190,11 +190,18 @@ export const createProduct = async (
 /**
  * Get seller's products with filters
  */
+/**
+ * `timeoutMs` overrides the client's default request timeout - POS barcode
+ * lookups pass a short one so a slow or half-dead mobile connection surfaces an
+ * error the operator can act on instead of parking the scanner on a spinner.
+ */
 export const getProducts = async (
-  params?: GetProductsParams
+  params?: GetProductsParams,
+  options?: { timeoutMs?: number }
 ): Promise<ApiResponse<Product[]>> => {
   const response = await api.get<ApiResponse<Product[]>>("/products", {
     params,
+    ...(options?.timeoutMs ? { timeout: options.timeoutMs } : {}),
   });
   return response.data;
 };

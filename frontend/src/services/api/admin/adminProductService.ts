@@ -549,21 +549,36 @@ export const createProduct = async (
 
 /**
  * Get all products
+ *
+ * `timeoutMs` overrides the client's default request timeout - see
+ * {@link getPOSProducts} for why barcode lookups want a short one.
  */
 export const getProducts = async (
-  params?: GetProductsParams
+  params?: GetProductsParams,
+  options?: { timeoutMs?: number }
 ): Promise<ApiResponse<Product[]>> => {
   const response = await api.get<ApiResponse<Product[]>>("/admin/products", {
     params,
+    ...(options?.timeoutMs ? { timeout: options.timeoutMs } : {}),
   });
   return response.data;
 };
 
 /**
  * Get POS Products (Optimized)
+ *
+ * `timeoutMs` overrides the client's default request timeout - barcode scans
+ * pass a short one so a slow or half-dead mobile connection surfaces an error
+ * the operator can act on instead of parking the scanner on a spinner.
  */
-export const getPOSProducts = async (params?: GetProductsParams): Promise<ApiResponse<Product[]>> => {
-    const response = await api.get<ApiResponse<Product[]>>("/admin/products/pos", { params });
+export const getPOSProducts = async (
+  params?: GetProductsParams,
+  options?: { timeoutMs?: number }
+): Promise<ApiResponse<Product[]>> => {
+    const response = await api.get<ApiResponse<Product[]>>("/admin/products/pos", {
+      params,
+      ...(options?.timeoutMs ? { timeout: options.timeoutMs } : {}),
+    });
     return response.data;
 };
 
@@ -575,6 +590,31 @@ export const getProductById = async (
 ): Promise<ApiResponse<Product>> => {
   const response = await api.get<ApiResponse<Product>>(`/admin/products/${id}`);
   return response.data;
+};
+
+/**
+ * Resolve a list of product IDs to full product objects.
+ *
+ * Used by the promotion screens (Flash Deals / Deal of the Day / Featured
+ * Deal), which store only IDs in AppSettings. Fetching each ID directly means
+ * a selected product is still found even when it falls outside
+ * a single page of getProducts. IDs that no longer resolve (deleted products)
+ * are dropped, and the caller's ordering is preserved.
+ */
+export const getProductsByIds = async (ids: string[]): Promise<Product[]> => {
+  const results = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        return await getProductById(id);
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  return results
+    .filter((res): res is ApiResponse<Product> => Boolean(res?.success && res.data))
+    .map((res) => res.data);
 };
 
 /**

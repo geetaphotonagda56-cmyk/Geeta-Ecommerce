@@ -19,6 +19,21 @@ const CODE_WEIGHT = 0.6;
  */
 export const POS_MATCH_SCORE_THRESHOLD = 0.3;
 
+/**
+ * True for a search term that is a machine-readable code (a scanned barcode,
+ * SKU or item code) rather than words a human typed: no whitespace, at least
+ * six characters, and containing a digit. Product names ("dummy", "milk 1l")
+ * fail one of those tests, so they keep the fuzzy/typo fallback.
+ *
+ * Callers use it to skip that fallback: fuzzy-scoring a digit string against
+ * product names cannot produce a meaningful match, so for a code the honest -
+ * and immediate - answer to "no literal hit" is "not in the catalogue".
+ */
+export const isScannedCodeQuery = (value: string): boolean => {
+  const trimmed = value.trim();
+  return /^[A-Za-z0-9._/-]{6,}$/.test(trimmed) && /[0-9]/.test(trimmed);
+};
+
 export function scorePOSProduct(product: POSRankableProduct, queryTokens: string[]): number {
   const nameScore = fieldMatchScore(queryTokens, product.productName) * NAME_WEIGHT;
   // The Product schema only stores sku/barcode on variations - there is no

@@ -875,21 +875,57 @@ export const getAllBestsellers = async (_req: Request, res: Response) => {
   }
 };
 
+// Shop.category / subCategory are declared as Mixed: they hold either a single
+// ObjectId or an array of them, and arrive populated (objects with _id) or raw.
+// Flatten whatever shape they are in into a plain ObjectId list.
+const toObjectIdList = (value: any): mongoose.Types.ObjectId[] => {
+  if (!value) return [];
+  const entries = Array.isArray(value) ? value : [value];
+  return entries
+    .map((entry: any) => {
+      const raw = entry && entry._id ? entry._id : entry;
+      return mongoose.Types.ObjectId.isValid(raw)
+        ? new mongoose.Types.ObjectId(String(raw))
+        : null;
+    })
+    .filter(Boolean) as mongoose.Types.ObjectId[];
+};
+
 // Get Products for a specific "Store" (Campaign/Collection)
 // Fetch products based on store configuration from database
 export const getStoreProducts = async (req: Request, res: Response) => {
   try {
     const { storeId } = req.params;
-    const { latitude, longitude } = req.query; // User location for filtering
+    const { latitude, longitude, page: pageParam, limit: limitParam } = req.query; // User location for filtering
+
+    const page = Math.max(1, Number(pageParam) || 1);
+    const limit = Math.min(100, Math.max(1, Number(limitParam) || 50));
+    const skip = (page - 1) * limit;
+
     let query: any = {
       status: "Active",
       publish: true,
     };
 
-    // Only show products from active categories
+    // Collected here and combined with $and at the end so that no block
+    // silently overwrites another — the store membership clause and the
+    // category visibility clause each need their own $or.
+    const andConditions: any[] = [];
+
+    // Only show products from active categories. Shop-by-store-only products
+    // are deliberately saved WITHOUT a category (see resolveCategoryId in
+    // productWriteService), so "has no category at all" has to pass too —
+    // otherwise this endpoint filters out the very products it exists to show.
     const activeCategories = await Category.find({ status: "Active" }).select("_id").lean();
     const activeCategoryIds = activeCategories.map(c => c._id);
-    query.category = { $in: activeCategoryIds };
+    andConditions.push({
+      $or: [
+        { category: { $in: activeCategoryIds } },
+        { subcategory: { $in: activeCategoryIds } },
+        { category: { $exists: false } },
+        { category: null },
+      ],
+    });
 
     console.log(`[getStoreProducts] Looking for shop with storeId: ${storeId}`);
 
@@ -940,40 +976,52 @@ export const getStoreProducts = async (req: Request, res: Response) => {
       // Get shop ID for filtering
       const shopId = (shop as any)._id;
 
-      // If shop has specific products assigned, use those
+      // A product belongs to a store through two independent, equally valid
+      // routes:
+      //   1. the admin ticking it on the Shop by Store page -> Shop.products[]
+      //   2. "Select Store" on the product form             -> product.shopId
+      // These used to be either/or — route 2 was only consulted when route 1
+      // was empty — so ticking a single box on the admin page silently hid
+      // every product that had been tagged through the form. Union them.
+      const taggedClause: any = { isShopByStoreOnly: true, shopId };
+
+      // Narrow the *tagged* products by the store's own category/subcategory
+      // when the store declares one. Products explicitly assigned by the admin
+      // are never narrowed — they were picked by hand.
+      const shopCategoryIds = toObjectIdList(shop.category);
+      const shopSubCategoryIds = toObjectIdList(shop.subCategory);
+      if (shopCategoryIds.length > 0 || shopSubCategoryIds.length > 0) {
+        taggedClause.$or = [
+          ...(shopCategoryIds.length > 0
+            ? [{ category: { $in: shopCategoryIds } }]
+            : []),
+          ...(shopSubCategoryIds.length > 0
+            ? [{ subcategory: { $in: shopSubCategoryIds } }]
+            : []),
+          // A shop-by-store-only product carries no category of its own — the
+          // shopId tag is the entire association, so it must not be narrowed
+          // out of its own store.
+          { category: { $exists: false } },
+          { category: null },
+        ];
+        console.log(
+          `[getStoreProducts] Narrowing tagged products by categories: ${shopCategoryIds.length}, subcategories: ${shopSubCategoryIds.length}`
+        );
+      }
+
+      const membership: any[] = [taggedClause];
       if (productIds.length > 0) {
-        query._id = { $in: productIds };
-        console.log(`[getStoreProducts] Filtering by product IDs: ${productIds.length} products`);
+        membership.push({ _id: { $in: productIds } });
       }
-      // Otherwise, filter by shopId and category/subcategory
-      else {
-        // Only show shop-by-store-only products when falling back to shopId/category matching
-        query.isShopByStoreOnly = true;
-        // Filter by shopId to show only products assigned to this shop
-        query.shopId = shopId;
-        console.log(`[getStoreProducts] Filtering by shopId: ${shopId}`);
-
-        if (shop.category) {
-          const categoryId = (shop.category as any)._id || (shop.category as any);
-          query.category = categoryId;
-          console.log(`[getStoreProducts] Also filtering by category: ${categoryId}`);
-
-          // If subcategory is also specified, filter by both
-          if (shop.subCategory) {
-            const subCategoryId = (shop.subCategory as any)._id || (shop.subCategory as any);
-            query.$or = [
-              { category: categoryId, shopId: shopId },
-              { subcategory: subCategoryId, shopId: shopId },
-            ];
-            console.log(`[getStoreProducts] Also filtering by subcategory: ${subCategoryId}`);
-          }
-        }
-      }
+      andConditions.push({ $or: membership });
+      console.log(
+        `[getStoreProducts] Matching ${productIds.length} assigned product IDs OR products tagged with shopId: ${shopId}`
+      );
     } else {
       // Fallback: try to match by category name (legacy support)
       const categoryId = await getCategoryIdByName(storeId);
       if (categoryId) {
-        query.category = categoryId;
+        andConditions.push({ category: categoryId });
         // Try to get category details for shop data
         const category = await Category.findById(categoryId).select("name slug image").lean();
         if (category) {
@@ -1003,6 +1051,10 @@ export const getStoreProducts = async (req: Request, res: Response) => {
     const visibleSellerIds = visibleSellers.map(s => s._id);
     query.seller = { $in: visibleSellerIds };
 
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
+    }
+
     console.log(`[getStoreProducts] Final query:`, JSON.stringify(query, null, 2));
 
     const products = await Product.find(query)
@@ -1011,22 +1063,23 @@ export const getStoreProducts = async (req: Request, res: Response) => {
       .populate("brand", "name")
       .populate("seller", "storeName")
       .sort({ createdAt: -1 })
-      .limit(50)
+      .skip(skip)
+      .limit(limit)
       .lean({ virtuals: true });
 
     const total = await Product.countDocuments(query);
 
-    console.log(`[getStoreProducts] Found ${total} products matching query, returning ${products.length}`);
+    console.log(`[getStoreProducts] Found ${total} products matching query, returning ${products.length} (page ${page}, limit ${limit})`);
 
     return res.status(200).json({
       success: true,
       data: products.map(p => ({ ...p, isAvailable: true })),
       shop: shopData,
       pagination: {
-        page: 1,
-        limit: 50,
+        page,
+        limit,
         total,
-        pages: Math.ceil(total / 50),
+        pages: Math.ceil(total / limit),
       },
     });
   } catch (error: any) {

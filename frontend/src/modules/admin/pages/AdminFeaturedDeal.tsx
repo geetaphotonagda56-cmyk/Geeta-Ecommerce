@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { bannerService } from '../../../services/bannerService';
-import { getProducts } from '../../../services/api/admin/adminProductService';
+import { getProducts, getProductsByIds } from '../../../services/api/admin/adminProductService';
 import { Product } from '../../../types/domain';
 
 export default function AdminFeaturedDeal() {
@@ -10,6 +10,7 @@ export default function AdminFeaturedDeal() {
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([]); // Store full objects for display
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [saveError, setSaveError] = useState(false);
 
   // Initial load
   useEffect(() => {
@@ -20,12 +21,9 @@ export default function AdminFeaturedDeal() {
 
             const ids = data.featuredDealProductIds || [];
             if (ids.length > 0) {
-                 const res = await getProducts({ limit: 100 });
-                 if (res.success && res.data) {
-                     const allProducts = (res.data as any).products || res.data;
-                     const found = allProducts.filter((p: any) => ids.includes(p._id || p.id));
-                     setSelectedProducts(found);
-                 }
+                 // Resolve each saved ID directly. Filtering one page of
+                 // getProducts hid every selection outside that page.
+                 setSelectedProducts((await getProductsByIds(ids)) as any);
             }
         } catch (error) {
             console.error("Error initializing Featured Deals:", error);
@@ -71,18 +69,26 @@ export default function AdminFeaturedDeal() {
       setSelectedProducts(selectedProducts.filter(p => (p._id || p.id) !== productId));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setLoading(true);
-    bannerService.updateDealsConfig({
-        featuredDealProductIds: config.featuredDealProductIds,
-        featuredDealActive: config.featuredDealActive ?? true
-    });
-
-    setTimeout(() => {
-        setLoading(false);
+    try {
+        // Await the save: firing it off and reporting success on a timer
+        // meant a rejected request still showed "updated successfully",
+        // and the deals silently came back empty on the next load.
+        await bannerService.updateDealsConfig({
+            featuredDealProductIds: config.featuredDealProductIds,
+            featuredDealActive: config.featuredDealActive ?? true
+        });
+        setSaveError(false);
         setMessage('Featured Deals updated successfully!');
+    } catch (e) {
+        console.error('Failed to save Featured Deals:', e);
+        setSaveError(true);
+        setMessage('Could not save Featured Deals. Please try again.');
+    } finally {
+        setLoading(false);
         setTimeout(() => setMessage(''), 3000);
-    }, 500);
+    }
   };
 
   return (
@@ -192,7 +198,7 @@ export default function AdminFeaturedDeal() {
                     {loading ? 'Saving Changes...' : 'Save Featured Deals'}
                 </button>
                 {message && (
-                    <div className="mt-4 p-3 bg-[var(--primary-alpha-10)] text-[var(--primary-darker)] rounded-lg text-sm text-center border border-green-100 animate-in fade-in">
+                    <div className={`mt-4 p-3 rounded-lg text-sm text-center animate-in fade-in ${saveError ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-[var(--primary-alpha-10)] text-[var(--primary-darker)] border border-green-100'}`}>
                         {message}
                     </div>
                 )}

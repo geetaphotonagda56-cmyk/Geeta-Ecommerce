@@ -144,7 +144,24 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen, isDarkMode, on
       console.log('❌ Admin disconnected from socket server');
     });
 
+    // socket.io reconnects on its own, but its backoff keeps growing while the
+    // device is asleep and no timer fires to drive it, so a phone that has been
+    // locked for a while comes back to a socket that stays down for minutes.
+    // Nudge it the moment the page is visible again.
+    const reconnectOnWake = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (newSocket.connected) return;
+      newSocket.connect();
+    };
+
+    document.addEventListener('visibilitychange', reconnectOnWake);
+    window.addEventListener('pageshow', reconnectOnWake);
+    window.addEventListener('online', reconnectOnWake);
+
     return () => {
+      document.removeEventListener('visibilitychange', reconnectOnWake);
+      window.removeEventListener('pageshow', reconnectOnWake);
+      window.removeEventListener('online', reconnectOnWake);
       newSocket.disconnect();
     };
   }, [isAuthenticated, token, user?.userId, user?.id, user?.userType, user?.role]);

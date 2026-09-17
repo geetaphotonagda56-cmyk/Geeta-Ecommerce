@@ -2,9 +2,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import Button from '../../components/ui/button';
-import { Product } from '../../types/domain';
-import { useEffect, useState } from 'react';
-import { getProducts } from '../../services/api/customerProductService';
+import { useCuratedStoreProducts } from '../../hooks/useCuratedStoreProducts';
 import WishlistButton from '../../components/WishlistButton';
 import ShareButton from '../../components/ShareButton';
 import UnitPricingHint from './components/UnitPricingHint';
@@ -13,24 +11,7 @@ import { calculateProductPrice } from '../../utils/priceUtils';
 export default function SportsStore() {
   const navigate = useNavigate();
   const { cart, addToCart, updateQuantity } = useCart();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        const response = await getProducts({ category: 'sports' });
-        setProducts(response.data as unknown as Product[]);
-      } catch (error) {
-        console.error('Failed to fetch sports products:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProducts();
-  }, []);
+  const { products, loading } = useCuratedStoreProducts('sports', 'sports');
 
   return (
     <div className="min-h-screen bg-white">

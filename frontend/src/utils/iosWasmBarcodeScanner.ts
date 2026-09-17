@@ -34,19 +34,43 @@ export async function decodeBarcodeFromFileWithWasm(file: Blob): Promise<string 
   }
 }
 
+/**
+ * A decode that hasn't come back within this long is treated as lost rather
+ * than in-flight. iOS suspends (and can tear down) the WASM worker when the
+ * screen locks mid-decode, so without this the `busy` latch below would stay
+ * set forever and the scan loop would never decode another frame - the phone
+ * would come back awake showing a live preview that silently ignores barcodes.
+ */
+const DECODE_WATCHDOG_MS = 5000;
+
 export function startIosWasmVideoScan(
   video: HTMLVideoElement,
   onFound: (text: string) => void
 ): () => void {
   let active = true;
   let busy = false;
+  let busySince = 0;
   let lastFrameAt = 0;
   const frameIntervalMs = 160;
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { willReadFrequently: true });
 
   const tick = async (now: number) => {
-    if (!active || busy || !context) return;
+    if (!active) return;
+    // No 2d context means no decode is ever possible; there is nothing to
+    // reschedule for.
+    if (!context) return;
+
+    if (busy) {
+      if (Date.now() - busySince < DECODE_WATCHDOG_MS) {
+        // Keep the animation-frame chain alive instead of returning: dropping
+        // out here (the old behaviour) ended the loop permanently the moment a
+        // frame overlapped an in-flight decode.
+        requestAnimationFrame(tick);
+        return;
+      }
+      busy = false;
+    }
 
     if (now - lastFrameAt < frameIntervalMs) {
       if (active) requestAnimationFrame(tick);
@@ -67,6 +91,7 @@ export function startIosWasmVideoScan(
 
     lastFrameAt = now;
     busy = true;
+    busySince = Date.now();
 
     try {
       await prepareIosBarcodeWasm();

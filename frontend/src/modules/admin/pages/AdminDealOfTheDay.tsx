@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { bannerService } from '../../../services/bannerService';
-import { getProducts } from '../../../services/api/admin/adminProductService';
+import { getProducts, getProductsByIds } from '../../../services/api/admin/adminProductService';
 import { Product } from '../../../types/domain';
 
 export default function AdminDealOfTheDay() {
@@ -10,6 +10,7 @@ export default function AdminDealOfTheDay() {
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([]); // Store full objects for display
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [saveError, setSaveError] = useState(false);
 
   // Initial load
   useEffect(() => {
@@ -25,12 +26,9 @@ export default function AdminDealOfTheDay() {
             // }
 
             if (ids.length > 0) {
-                 const res = await getProducts({ limit: 100 });
-                 if (res.success && res.data) {
-                     const allProducts = (res.data as any).products || res.data;
-                     const found = allProducts.filter((p: any) => ids.includes(p._id || p.id));
-                     setSelectedProducts(found);
-                 }
+                 // Resolve each saved ID directly. Filtering one page of
+                 // getProducts hid every selection outside that page.
+                 setSelectedProducts((await getProductsByIds(ids)) as any);
             }
         } catch (error) {
             console.error("Error initializing Deal of the Day:", error);
@@ -76,19 +74,27 @@ export default function AdminDealOfTheDay() {
       setSelectedProducts(selectedProducts.filter(p => (p._id || p.id) !== productId));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setLoading(true);
-    bannerService.updateDealsConfig({
-        dealOfTheDayProductIds: config.dealOfTheDayProductIds,
-        dealOfTheDayProductId: undefined, // Clear legacy single ID to avoid confusion
-        dealOfTheDayActive: config.dealOfTheDayActive ?? true
-    });
-
-    setTimeout(() => {
-        setLoading(false);
+    try {
+        // Await the save: firing it off and reporting success on a timer
+        // meant a rejected request still showed "updated successfully",
+        // and the deals silently came back empty on the next load.
+        await bannerService.updateDealsConfig({
+            dealOfTheDayProductIds: config.dealOfTheDayProductIds,
+            dealOfTheDayProductId: undefined, // Clear legacy single ID to avoid confusion
+            dealOfTheDayActive: config.dealOfTheDayActive ?? true
+        });
+        setSaveError(false);
         setMessage('Deal of the Day updated successfully!');
+    } catch (e) {
+        console.error('Failed to save Deal of the Day:', e);
+        setSaveError(true);
+        setMessage('Could not save Deal of the Day. Please try again.');
+    } finally {
+        setLoading(false);
         setTimeout(() => setMessage(''), 3000);
-    }, 500);
+    }
   };
 
   return (
@@ -199,7 +205,7 @@ export default function AdminDealOfTheDay() {
                     {loading ? 'Saving Changes...' : 'Save Deal of the Day'}
                 </button>
                 {message && (
-                    <div className="mt-4 p-3 bg-[var(--primary-alpha-10)] text-[var(--primary-darker)] rounded-lg text-sm text-center border border-green-100 animate-in fade-in">
+                    <div className={`mt-4 p-3 rounded-lg text-sm text-center animate-in fade-in ${saveError ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-[var(--primary-alpha-10)] text-[var(--primary-darker)] border border-green-100'}`}>
                         {message}
                     </div>
                 )}

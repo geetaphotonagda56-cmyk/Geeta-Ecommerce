@@ -11,8 +11,7 @@ interface SpiritualProduct extends Product {
 }
 
 // Product type definition is already imported or can be used from domain
-import { useEffect, useState } from 'react';
-import { getProducts } from '../../services/api/customerProductService';
+import { useCuratedStoreProducts } from '../../hooks/useCuratedStoreProducts';
 import WishlistButton from '../../components/WishlistButton';
 import ShareButton from '../../components/ShareButton';
 import UnitPricingHint from './components/UnitPricingHint';
@@ -21,26 +20,7 @@ import { calculateProductPrice } from '../../utils/priceUtils';
 export default function SpiritualStore() {
   const navigate = useNavigate();
   const { cart, addToCart, updateQuantity } = useCart();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        // Assuming 'spiritual' is the correct category ID in your database
-        const response = await getProducts({ category: 'spiritual' });
-        // Correctly casting or mapping the response data
-        setProducts(response.data as unknown as Product[]);
-      } catch (error) {
-        console.error('Failed to fetch spiritual products:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProducts();
-  }, []);
+  const { products, loading } = useCuratedStoreProducts('spiritual', 'spiritual');
 
   return (
     <div className="min-h-screen bg-white">

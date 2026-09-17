@@ -15,7 +15,12 @@ import {
 } from "../../product/productWriteService";
 import { adminProductPolicy } from "../../product/productPolicies";
 import { toDetail, toListItem, toListItems } from "../../product/productReadMapper";
-import { scorePOSProduct, scoreBulkEditProduct, POS_MATCH_SCORE_THRESHOLD } from "../utils/posSearchRanking";
+import {
+  scorePOSProduct,
+  scoreBulkEditProduct,
+  isScannedCodeQuery,
+  POS_MATCH_SCORE_THRESHOLD,
+} from "../utils/posSearchRanking";
 import { getTokens } from "../../../utils/fuzzyMatch";
 
 // ==================== Category Controllers ====================
@@ -1528,6 +1533,22 @@ export const getPOSProducts = asyncHandler(
     };
 
     const regexMatches = await Product.find(regexQuery).select(selectFields).populate("category", "name").lean();
+
+    // A scanned barcode/SKU is an exact lookup, never a typo-prone phrase. When
+    // the indexed regex query above finds nothing for one, the code genuinely
+    // isn't in the catalog, so answer "not found" immediately and let the POS
+    // open its Quick Add form. Falling through to the fuzzy path instead meant
+    // every scan of an unlisted barcode fetched and Levenshtein-scored the
+    // ENTIRE active catalog - seconds of work on a mobile connection, which is
+    // what left the scanner spinning instead of opening Quick Add - only to
+    // score a digit string against product names, which cannot match anyway.
+    if (regexMatches.length === 0 && isScannedCodeQuery(String(search))) {
+      return res.status(200).json({
+        success: true,
+        message: "POS products fetched successfully",
+        data: []
+      });
+    }
 
     // A single-word typo (e.g. "mummy" for "dummy"/"Mammy") never appears as
     // a literal substring anywhere, so no DB regex can pre-filter for it -
