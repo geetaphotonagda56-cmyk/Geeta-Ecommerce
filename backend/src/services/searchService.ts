@@ -27,12 +27,11 @@ const DEFAULT_CANDIDATE_LIMIT = Number(process.env.SEARCH_CANDIDATE_LIMIT || 500
 // uncached request. Cap the merged set before scoring — text-search results
 // are already relevance-ranked, so the highest-value candidates survive.
 const MAX_SCORING_CANDIDATES = Number(process.env.SEARCH_SCORING_CANDIDATE_LIMIT || 400);
-const SEMANTIC_WEIGHT = 0.35;
-const KEYWORD_WEIGHT = 0.65;
+// Query-time semantic (embedding) scoring was removed — see computeSearch —
+// so keyword matching now carries the full ranking weight.
+const SEMANTIC_WEIGHT = 0;
+const KEYWORD_WEIGHT = 1;
 const LEXICAL_MATCH_THRESHOLD = 0.18;
-const SHORT_QUERY_SEMANTIC_THRESHOLD = 0.62;
-const LONG_QUERY_SEMANTIC_THRESHOLD = 0.52;
-const SEMANTIC_ONLY_FINAL_THRESHOLD = 0.35;
 const SEARCH_CACHE_TTL_MS = Number(process.env.SEARCH_CACHE_TTL_MS || 60_000);
 const TRENDING_CACHE_TTL_MS = Number(process.env.SEARCH_TRENDING_CACHE_TTL_MS || 120_000);
 const SUGGESTIONS_CACHE_TTL_MS = Number(process.env.SEARCH_SUGGESTIONS_CACHE_TTL_MS || 30_000);
@@ -324,16 +323,12 @@ export const hybridProductSearch = async (options: SearchOptions) => {
     pagination: { page: number; limit: number; total: number; pages: number };
     meta: { query: string; weights: { semantic: number; keyword: number } };
   }> => {
-    let queryEmbedding: number[] = [];
-    const productQueryPromise = buildVisibleProductQuery(options);
-
-    try {
-      queryEmbedding = await generateEmbedding(query, 8000);
-    } catch (error) {
-      console.warn("[Search] Semantic embedding timed out or failed; falling back to lexical-only search", error);
-    }
-
-    const productQuery = await productQueryPromise;
+    // Computing a fresh embedding for every uncached query added ~27s of
+    // CPU-bound model inference to the request path for a mere 35% ranking
+    // weight. Keyword/$text matching already carries the search, so we no
+    // longer compute a per-query embedding here (products keep their stored
+    // embeddings for other uses, e.g. getSimilarProductsForProduct).
+    const productQuery = await buildVisibleProductQuery(options);
 
     const codeConditions = buildCodeCandidateConditions(query);
     const codeCandidateQuery = codeConditions.length ? { ...productQuery, $or: codeConditions } : null;
@@ -363,42 +358,26 @@ export const hybridProductSearch = async (options: SearchOptions) => {
       0,
       MAX_SCORING_CANDIDATES
     );
-    const queryTokens = getTokens(query);
-    const semanticOnlyThreshold =
-      queryTokens.length <= 2 ? SHORT_QUERY_SEMANTIC_THRESHOLD : LONG_QUERY_SEMANTIC_THRESHOLD;
 
     const scored = products
       .map((product: any) => {
-        const semanticScore = queryEmbedding.length && Array.isArray(product.embedding) && product.embedding.length
-          ? Math.max(0, cosineSimilarity(queryEmbedding, product.embedding) || 0)
-          : 0;
         const lexicalScore = keywordScore(query, product);
         const popularityBoost = Math.min(0.08, Math.log10((product.searchCount || 0) + 1) * 0.02);
         const stockPenalty = product.stock === 0 ? 0.05 : 0;
-        const finalScore = Math.max(
-          0,
-          semanticScore * SEMANTIC_WEIGHT + lexicalScore * KEYWORD_WEIGHT + popularityBoost - stockPenalty
-        );
+        const finalScore = Math.max(0, lexicalScore * KEYWORD_WEIGHT + popularityBoost - stockPenalty);
         const matchedVariant = findBestMatchingVariant(query, product);
 
         return mapProductForClient(
           product,
           {
-            semanticScore: Number(semanticScore.toFixed(4)),
+            semanticScore: 0,
             keywordScore: Number(lexicalScore.toFixed(4)),
             finalScore: Number(finalScore.toFixed(4)),
           },
           matchedVariant
         );
       })
-      .filter(
-        (product) =>
-          product.searchScore.keywordScore >= LEXICAL_MATCH_THRESHOLD ||
-          (
-            product.searchScore.semanticScore >= semanticOnlyThreshold &&
-            product.searchScore.finalScore >= SEMANTIC_ONLY_FINAL_THRESHOLD
-          )
-      );
+      .filter((product) => product.searchScore.keywordScore >= LEXICAL_MATCH_THRESHOLD);
 
     const sorted = sortResults(scored, options.sort || "relevance");
     const total = sorted.length;
