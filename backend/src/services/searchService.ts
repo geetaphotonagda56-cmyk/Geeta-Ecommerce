@@ -312,21 +312,11 @@ export const hybridProductSearch = async (options: SearchOptions) => {
     longitude: options.longitude ? Number(options.longitude.toFixed(2)) : undefined,
   });
 
-  const cached = cache.get<{
+  const computeSearch = async (): Promise<{
     results: any[];
     pagination: { page: number; limit: number; total: number; pages: number };
     meta: { query: string; weights: { semantic: number; keyword: number } };
-  }>(cacheKey);
-
-  let results: any[] = [];
-  let total = 0;
-  let pages = 0;
-
-  if (cached) {
-    results = cached.results;
-    total = cached.pagination.total;
-    pages = cached.pagination.pages;
-  } else {
+  }> => {
     let queryEmbedding: number[] = [];
     const productQueryPromise = buildVisibleProductQuery(options);
 
@@ -401,24 +391,27 @@ export const hybridProductSearch = async (options: SearchOptions) => {
       );
 
     const sorted = sortResults(scored, options.sort || "relevance");
-    total = sorted.length;
-    pages = Math.ceil(total / limit);
+    const total = sorted.length;
+    const pages = Math.ceil(total / limit);
     const start = (page - 1) * limit;
-    results = sorted.slice(start, start + limit);
+    const results = sorted.slice(start, start + limit);
 
-    cache.set(
-      cacheKey,
-      {
-        results,
-        pagination: { page, limit, total, pages },
-        meta: {
-          query,
-          weights: { semantic: SEMANTIC_WEIGHT, keyword: KEYWORD_WEIGHT },
-        },
+    return {
+      results,
+      pagination: { page, limit, total, pages },
+      meta: {
+        query,
+        weights: { semantic: SEMANTIC_WEIGHT, keyword: KEYWORD_WEIGHT },
       },
-      SEARCH_CACHE_TTL_MS
-    );
-  }
+    };
+  };
+
+  // getOrSet de-dupes concurrent identical searches into a single computation
+  // instead of each one independently re-running the full candidate fetch +
+  // scoring pipeline (the pattern that previously took /customer/home down).
+  const cached = await cache.getOrSet(cacheKey, computeSearch, SEARCH_CACHE_TTL_MS);
+  const { results, pagination } = cached;
+  const { total } = pagination;
 
   if (results.length) {
     await Product.updateMany(
@@ -446,12 +439,7 @@ export const hybridProductSearch = async (options: SearchOptions) => {
 
   return {
     results,
-    pagination: {
-      page,
-      limit,
-      total,
-      pages,
-    },
+    pagination,
     meta: {
       query,
       weights: { semantic: SEMANTIC_WEIGHT, keyword: KEYWORD_WEIGHT },
