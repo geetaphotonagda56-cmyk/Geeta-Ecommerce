@@ -128,13 +128,8 @@ const buildCodeCandidateConditions = (query: string) => {
   return codeCandidateFields.map((field) => ({ [field]: regex }));
 };
 
-const buildTextSearchCandidates = async (
-  productQuery: Record<string, any>,
-  query: string,
-  timings?: Record<string, any>
-) => {
+const buildTextSearchCandidates = async (productQuery: Record<string, any>, query: string) => {
   try {
-    const t0 = Date.now();
     const docs = await Product.find(
       { ...productQuery, $text: { $search: query } },
       { score: { $meta: "textScore" } }
@@ -144,18 +139,11 @@ const buildTextSearchCandidates = async (
       .sort({ score: { $meta: "textScore" } })
       .limit(DEFAULT_CANDIDATE_LIMIT)
       .lean();
-    const t1 = Date.now();
-    const populated = await Product.populate(docs, [
+    return await Product.populate(docs, [
       { path: "category", select: "name image" },
       { path: "subcategory", select: "name" },
       { path: "brand", select: "name" },
     ]);
-    const t2 = Date.now();
-    if (timings) {
-      timings.textRawFetch = t1 - t0;
-      timings.textPopulate = t2 - t1;
-    }
-    return populated;
   } catch (error) {
     // Falls back to the code/popularity candidates below if the text index
     // lookup itself errors out (e.g. unsupported query syntax).
@@ -170,29 +158,21 @@ const buildTextSearchCandidates = async (
 // minute to minute, so a long TTL keeps this off the request path entirely.
 const POPULARITY_FALLBACK_CACHE_TTL_MS = Number(process.env.SEARCH_POPULARITY_CACHE_TTL_MS || 300_000);
 
-const getPopularityFallbackCandidates = (productQuery: Record<string, any>, timings?: Record<string, any>) => {
+const getPopularityFallbackCandidates = (productQuery: Record<string, any>) => {
   const cacheKey = `search:popularity-fallback:${JSON.stringify(productQuery)}`;
   return cache.getOrSet(
     cacheKey,
     async () => {
-      const t0 = Date.now();
       const docs = await Product.find(productQuery)
         .select(productProjection)
         .sort({ searchCount: -1, popular: -1, createdAt: -1 })
         .limit(POPULARITY_CANDIDATE_LIMIT)
         .lean();
-      const t1 = Date.now();
-      const populated = await Product.populate(docs, [
+      return await Product.populate(docs, [
         { path: "category", select: "name image" },
         { path: "subcategory", select: "name" },
         { path: "brand", select: "name" },
       ]);
-      const t2 = Date.now();
-      if (timings) {
-        timings.popularityRawFetch = t1 - t0;
-        timings.popularityPopulate = t2 - t1;
-      }
-      return populated;
     },
     POPULARITY_FALLBACK_CACHE_TTL_MS
   );
@@ -397,50 +377,32 @@ export const hybridProductSearch = async (options: SearchOptions) => {
   const computeSearch = async (): Promise<{
     results: any[];
     pagination: { page: number; limit: number; total: number; pages: number };
-    meta: { query: string; weights: { semantic: number; keyword: number }; timings?: Record<string, number> };
+    meta: { query: string; weights: { semantic: number; keyword: number } };
   }> => {
-    // Temporary stage-level timing to pin down exactly which DB/CPU step is
-    // still slow for broad/filtered queries — remove once diagnosed.
-    const timings: Record<string, number> = {};
-    const time = async <T>(label: string, work: () => Promise<T>): Promise<T> => {
-      const t0 = Date.now();
-      try {
-        return await work();
-      } finally {
-        timings[label] = Date.now() - t0;
-      }
-    };
-
-    const productQuery = await time("buildVisibleProductQuery", () => buildVisibleProductQuery(options));
+    const productQuery = await buildVisibleProductQuery(options);
 
     const codeConditions = buildCodeCandidateConditions(query);
     const codeCandidateQuery = codeConditions.length ? { ...productQuery, $or: codeConditions } : null;
 
     const [textProducts, codeProducts, semanticProducts] = await Promise.all([
-      time("textSearch", () => buildTextSearchCandidates(productQuery, query, timings)),
-      time("codeSearch", () =>
-        codeCandidateQuery
-          ? Product.find(codeCandidateQuery)
-              .select(productProjection)
-              .populate("category", "name image")
-              .populate("subcategory", "name")
-              .populate("brand", "name")
-              .limit(DEFAULT_CANDIDATE_LIMIT)
-              .lean()
-          : Promise.resolve([])
-      ),
-      time("popularityFallback", () => getPopularityFallbackCandidates(productQuery, timings)),
+      buildTextSearchCandidates(productQuery, query),
+      codeCandidateQuery
+        ? Product.find(codeCandidateQuery)
+            .select(productProjection)
+            .populate("category", "name image")
+            .populate("subcategory", "name")
+            .populate("brand", "name")
+            .limit(DEFAULT_CANDIDATE_LIMIT)
+            .lean()
+        : Promise.resolve([]),
+      getPopularityFallbackCandidates(productQuery),
     ]);
 
-
-    const mergeStart = Date.now();
     const products = mergeProductsById(textProducts, codeProducts, semanticProducts).slice(
       0,
       MAX_SCORING_CANDIDATES
     );
-    timings.mergeAndSlice = Date.now() - mergeStart;
 
-    const scoringStart = Date.now();
     const scored = products
       .map((product: any) => {
         const lexicalScore = keywordScore(query, product);
@@ -460,16 +422,12 @@ export const hybridProductSearch = async (options: SearchOptions) => {
         );
       })
       .filter((product) => product.searchScore.keywordScore >= LEXICAL_MATCH_THRESHOLD);
-    timings.scoring = Date.now() - scoringStart;
-    timings.candidateCount = products.length;
 
-    const sortStart = Date.now();
     const sorted = sortResults(scored, options.sort || "relevance");
     const total = sorted.length;
     const pages = Math.ceil(total / limit);
     const start = (page - 1) * limit;
     const results = sorted.slice(start, start + limit);
-    timings.sortAndPaginate = Date.now() - sortStart;
 
     return {
       results,
@@ -477,7 +435,6 @@ export const hybridProductSearch = async (options: SearchOptions) => {
       meta: {
         query,
         weights: { semantic: SEMANTIC_WEIGHT, keyword: KEYWORD_WEIGHT },
-        timings,
       },
     };
   };
@@ -520,7 +477,6 @@ export const hybridProductSearch = async (options: SearchOptions) => {
       query,
       weights: { semantic: SEMANTIC_WEIGHT, keyword: KEYWORD_WEIGHT },
       latencyMs,
-      timings: cached.meta.timings,
     },
   };
 };
