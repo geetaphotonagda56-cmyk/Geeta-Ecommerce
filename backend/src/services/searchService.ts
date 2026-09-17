@@ -19,7 +19,14 @@ import {
   fieldMatchScore,
 } from "../utils/fuzzyMatch";
 
-const DEFAULT_CANDIDATE_LIMIT = Number(process.env.SEARCH_CANDIDATE_LIMIT || 1500);
+const DEFAULT_CANDIDATE_LIMIT = Number(process.env.SEARCH_CANDIDATE_LIMIT || 500);
+// In-memory scoring (cosine similarity + Levenshtein-based fuzzy matching) is
+// CPU-bound per candidate. Common/broad query terms (e.g. "chocolate") can
+// match thousands of documents across the 3 merged candidate sources, and
+// scoring all of them was slow enough to blow past the gateway timeout on an
+// uncached request. Cap the merged set before scoring — text-search results
+// are already relevance-ranked, so the highest-value candidates survive.
+const MAX_SCORING_CANDIDATES = Number(process.env.SEARCH_SCORING_CANDIDATE_LIMIT || 400);
 const SEMANTIC_WEIGHT = 0.35;
 const KEYWORD_WEIGHT = 0.65;
 const LEXICAL_MATCH_THRESHOLD = 0.18;
@@ -352,7 +359,10 @@ export const hybridProductSearch = async (options: SearchOptions) => {
         .lean(),
     ]);
 
-    const products = mergeProductsById(textProducts, codeProducts, semanticProducts);
+    const products = mergeProductsById(textProducts, codeProducts, semanticProducts).slice(
+      0,
+      MAX_SCORING_CANDIDATES
+    );
     const queryTokens = getTokens(query);
     const semanticOnlyThreshold =
       queryTokens.length <= 2 ? SHORT_QUERY_SEMANTIC_THRESHOLD : LONG_QUERY_SEMANTIC_THRESHOLD;
