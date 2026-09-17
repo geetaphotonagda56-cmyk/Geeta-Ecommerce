@@ -204,30 +204,6 @@ const getPopularityFallbackCandidates = (productQuery: Record<string, any>, timi
   );
 };
 
-// Temporary: confirms whether Mongo is actually using the new compound
-// index or still falling back to a collection scan + in-memory sort.
-const explainPopularityQuery = async (productQuery: Record<string, any>) => {
-  try {
-    const explain: any = await Product.find(productQuery)
-      .select(productProjection)
-      .sort({ searchCount: -1, popular: -1, createdAt: -1 })
-      .limit(DEFAULT_CANDIDATE_LIMIT)
-      .explain("executionStats");
-    const stats = explain?.executionStats;
-    const winningPlan = explain?.queryPlanner?.winningPlan;
-    return {
-      stage: winningPlan?.inputStage?.inputStage?.stage || winningPlan?.inputStage?.stage || winningPlan?.stage,
-      indexUsed: winningPlan?.inputStage?.inputStage?.indexName || winningPlan?.inputStage?.indexName,
-      totalDocsExamined: stats?.totalDocsExamined,
-      totalKeysExamined: stats?.totalKeysExamined,
-      nReturned: stats?.nReturned,
-      executionTimeMillis: stats?.executionTimeMillis,
-    };
-  } catch (error) {
-    return { error: String(error) };
-  }
-};
-
 const mergeProductsById = (...groups: any[][]) => {
   const seen = new Set<string>();
   return groups.flat().filter((product) => {
@@ -347,8 +323,16 @@ const buildVisibleProductQuery = (options: Partial<SearchOptions>) => {
   return cache.getOrSet(cacheKey, () => buildVisibleProductQueryUncached(options), VISIBLE_PRODUCT_QUERY_CACHE_TTL_MS);
 };
 
-const productProjection =
-  "+embedding productName smallDescription description category subcategory brand tags price discPrice compareAtPrice stock mainImage galleryImages pack discount rating reviewsCount deliveryTime variations unitPricing searchCount popular dealOfDay createdAt";
+const baseProductFields =
+  "productName smallDescription description category subcategory brand tags price discPrice compareAtPrice stock mainImage galleryImages pack discount rating reviewsCount deliveryTime variations unitPricing searchCount popular dealOfDay createdAt";
+
+// `embedding` is a 384-number vector per product and is `select: false` in the
+// schema for good reason. Search candidate queries fetch up to 500 docs each,
+// so force-loading it added megabytes of payload per query — and since
+// query-time semantic scoring was removed, it was being fetched only to be
+// deleted again in mapProductForClient. Only similarity lookups need it.
+const productProjection = baseProductFields;
+const productProjectionWithEmbedding = `+embedding ${baseProductFields}`;
 
 const sortResults = (results: any[], sort: SearchOptions["sort"]) => {
   if (sort === "price_asc") return results.sort((a, b) => ((a.listing?.minPrice ?? a.price) || 0) - ((b.listing?.minPrice ?? b.price) || 0));
@@ -454,7 +438,6 @@ export const hybridProductSearch = async (options: SearchOptions) => {
       time("popularityFallback", () => getPopularityFallbackCandidates(productQuery, timings)),
     ]);
 
-    (timings as any).popularityExplain = await explainPopularityQuery(productQuery);
 
     const mergeStart = Date.now();
     const products = mergeProductsById(textProducts, codeProducts, semanticProducts).slice(
@@ -560,7 +543,7 @@ export const getSimilarProductsForProduct = async (productId: string, limit = 6)
   if (cached) return cached;
 
   const target = await Product.findOne({ _id: productId, status: "Active", publish: true })
-    .select(productProjection)
+    .select(productProjectionWithEmbedding)
     .populate("category", "name image")
     .populate("subcategory", "name")
     .populate("brand", "name")
@@ -583,7 +566,7 @@ export const getSimilarProductsForProduct = async (productId: string, limit = 6)
     _id: { $ne: target._id },
     embedding: { $exists: true, $ne: [] },
   })
-    .select(productProjection)
+    .select(productProjectionWithEmbedding)
     .populate("category", "name image")
     .populate("subcategory", "name")
     .populate("brand", "name")
