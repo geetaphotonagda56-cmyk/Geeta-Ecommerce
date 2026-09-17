@@ -176,6 +176,30 @@ const getPopularityFallbackCandidates = (productQuery: Record<string, any>) => {
   );
 };
 
+// Temporary: confirms whether Mongo is actually using the new compound
+// index or still falling back to a collection scan + in-memory sort.
+const explainPopularityQuery = async (productQuery: Record<string, any>) => {
+  try {
+    const explain: any = await Product.find(productQuery)
+      .select(productProjection)
+      .sort({ searchCount: -1, popular: -1, createdAt: -1 })
+      .limit(DEFAULT_CANDIDATE_LIMIT)
+      .explain("executionStats");
+    const stats = explain?.executionStats;
+    const winningPlan = explain?.queryPlanner?.winningPlan;
+    return {
+      stage: winningPlan?.inputStage?.inputStage?.stage || winningPlan?.inputStage?.stage || winningPlan?.stage,
+      indexUsed: winningPlan?.inputStage?.inputStage?.indexName || winningPlan?.inputStage?.indexName,
+      totalDocsExamined: stats?.totalDocsExamined,
+      totalKeysExamined: stats?.totalKeysExamined,
+      nReturned: stats?.nReturned,
+      executionTimeMillis: stats?.executionTimeMillis,
+    };
+  } catch (error) {
+    return { error: String(error) };
+  }
+};
+
 const mergeProductsById = (...groups: any[][]) => {
   const seen = new Set<string>();
   return groups.flat().filter((product) => {
@@ -401,6 +425,8 @@ export const hybridProductSearch = async (options: SearchOptions) => {
       ),
       time("popularityFallback", () => getPopularityFallbackCandidates(productQuery)),
     ]);
+
+    (timings as any).popularityExplain = await explainPopularityQuery(productQuery);
 
     const mergeStart = Date.now();
     const products = mergeProductsById(textProducts, codeProducts, semanticProducts).slice(
