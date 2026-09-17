@@ -160,7 +160,7 @@ const POPULARITY_FALLBACK_CACHE_TTL_MS = Number(process.env.SEARCH_POPULARITY_CA
 
 const getPopularityFallbackCandidates = (productQuery: Record<string, any>) => {
   const cacheKey = `search:popularity-fallback:${JSON.stringify(productQuery)}`;
-  return cache.getOrSet(
+  return cache.getOrRefresh(
     cacheKey,
     async () => {
       const docs = await Product.find(productQuery)
@@ -294,7 +294,11 @@ const buildVisibleProductQuery = (options: Partial<SearchOptions>) => {
     latitude: options.latitude ? Number(options.latitude.toFixed(2)) : undefined,
     longitude: options.longitude ? Number(options.longitude.toFixed(2)) : undefined,
   });
-  return cache.getOrSet(cacheKey, () => buildVisibleProductQueryUncached(options), VISIBLE_PRODUCT_QUERY_CACHE_TTL_MS);
+  return cache.getOrRefresh(
+    cacheKey,
+    () => buildVisibleProductQueryUncached(options),
+    VISIBLE_PRODUCT_QUERY_CACHE_TTL_MS
+  );
 };
 
 const baseProductFields =

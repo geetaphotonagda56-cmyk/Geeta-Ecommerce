@@ -50,6 +50,51 @@ class Cache {
   }
 
   /**
+   * Like getOrSet, but an expired value is served immediately and refreshed
+   * behind the request instead of making the caller wait for the producer.
+   * Only the very first call for a key (nothing cached at all) blocks.
+   *
+   * Use this for values that are expensive to compute but tolerate being
+   * slightly out of date — otherwise every TTL expiry lands its full cost on
+   * whichever unlucky request arrives first.
+   */
+  async getOrRefresh<T>(
+    key: string,
+    producer: () => Promise<T>,
+    ttl: number = this.DEFAULT_TTL
+  ): Promise<T> {
+    const entry = this.cache.get(key);
+    if (!entry) return this.getOrSet(key, producer, ttl);
+
+    if (Date.now() < entry.expiresAt) return entry.data as T;
+
+    this.refreshInBackground(key, producer, ttl);
+    return entry.data as T;
+  }
+
+  private refreshInBackground<T>(key: string, producer: () => Promise<T>, ttl: number): void {
+    if (this.inFlight.has(key)) return;
+
+    const promise = producer()
+      .then((value) => {
+        this.set(key, value, ttl);
+        return value;
+      })
+      .finally(() => {
+        this.inFlight.delete(key);
+      });
+
+    this.inFlight.set(key, promise);
+
+    // No caller is waiting on this one, and keeping the stale value is the
+    // right outcome on failure — but it still needs a handler so a rejection
+    // here can't take the process down.
+    promise.catch((error) => {
+      console.error(`[cache] Background refresh failed for ${key}`, error);
+    });
+  }
+
+  /**
    * Get cached data
    */
   get<T>(key: string): T | null {
