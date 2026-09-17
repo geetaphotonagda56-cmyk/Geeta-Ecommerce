@@ -19,14 +19,14 @@ import {
   fieldMatchScore,
 } from "../utils/fuzzyMatch";
 
-const DEFAULT_CANDIDATE_LIMIT = Number(process.env.SEARCH_CANDIDATE_LIMIT || 500);
-// In-memory scoring (cosine similarity + Levenshtein-based fuzzy matching) is
-// CPU-bound per candidate. Common/broad query terms (e.g. "chocolate") can
-// match thousands of documents across the 3 merged candidate sources, and
-// scoring all of them was slow enough to blow past the gateway timeout on an
-// uncached request. Cap the merged set before scoring — text-search results
-// are already relevance-ranked, so the highest-value candidates survive.
+// Fetching more candidates per source than the merged set can ever hold is
+// pure wasted transfer: the merge keeps text results first, so whenever text
+// search alone fills the cap, every popularity document fetched is discarded.
 const MAX_SCORING_CANDIDATES = Number(process.env.SEARCH_SCORING_CANDIDATE_LIMIT || 400);
+const DEFAULT_CANDIDATE_LIMIT = Number(process.env.SEARCH_CANDIDATE_LIMIT || MAX_SCORING_CANDIDATES);
+// The popularity fallback only exists to catch fuzzy matches $text missed, and
+// it is the lowest-priority source in the merge, so it needs far fewer docs.
+const POPULARITY_CANDIDATE_LIMIT = Number(process.env.SEARCH_POPULARITY_CANDIDATE_LIMIT || 200);
 // Query-time semantic (embedding) scoring was removed — see computeSearch —
 // so keyword matching now carries the full ranking weight.
 const SEMANTIC_WEIGHT = 0;
@@ -164,18 +164,12 @@ const buildTextSearchCandidates = async (
   }
 };
 
-// The "most popular/newest visible products" fallback candidates don't
-// depend on the search term at all, yet were being recomputed from scratch
-// on every uncached search — a query sorting the whole visible catalog by
-// searchCount/popular/createdAt with no covering index, taking ~27s
-// regardless of what was searched (confirmed live: 0-result and 66-result
-// queries took the same time). Cache it independent of the query text so
-// only the first search after expiry pays that cost.
-const POPULARITY_FALLBACK_CACHE_TTL_MS = Number(process.env.SEARCH_POPULARITY_CACHE_TTL_MS || 30_000);
+// These fallback candidates don't depend on the search term at all, so they're
+// cached independently of the query text — otherwise every distinct search
+// re-ran the same catalog-wide sort. "Most popular products" doesn't shift
+// minute to minute, so a long TTL keeps this off the request path entirely.
+const POPULARITY_FALLBACK_CACHE_TTL_MS = Number(process.env.SEARCH_POPULARITY_CACHE_TTL_MS || 300_000);
 
-// Temporary: split the raw fetch from the populate step so we can see which
-// one actually accounts for the time (explain() on the raw query alone
-// showed 25ms, but the real call — which also populates — takes 30s+).
 const getPopularityFallbackCandidates = (productQuery: Record<string, any>, timings?: Record<string, any>) => {
   const cacheKey = `search:popularity-fallback:${JSON.stringify(productQuery)}`;
   return cache.getOrSet(
@@ -185,7 +179,7 @@ const getPopularityFallbackCandidates = (productQuery: Record<string, any>, timi
       const docs = await Product.find(productQuery)
         .select(productProjection)
         .sort({ searchCount: -1, popular: -1, createdAt: -1 })
-        .limit(DEFAULT_CANDIDATE_LIMIT)
+        .limit(POPULARITY_CANDIDATE_LIMIT)
         .lean();
       const t1 = Date.now();
       const populated = await Product.populate(docs, [
