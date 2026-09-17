@@ -21,6 +21,26 @@ export const normalizeVector = (vector: number[]): number[] => {
   return vector.map((value) => value / magnitude);
 };
 
+export const withTimeout = async <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> => {
+  let timer: NodeJS.Timeout | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 export const loadModel = async (): Promise<FeatureExtractionPipeline> => {
   if (extractor) return extractor;
   if (loadingPromise) return loadingPromise;
@@ -53,13 +73,17 @@ export const loadModel = async (): Promise<FeatureExtractionPipeline> => {
   return loadingPromise;
 };
 
-export const generateEmbedding = async (text: string): Promise<number[]> => {
+export const generateEmbedding = async (text: string, timeoutMs = 8000): Promise<number[]> => {
   const normalizedText = String(text || "").replace(/\s+/g, " ").trim();
   if (!normalizedText) return [];
 
   try {
-    const model = await loadModel();
-    const output = await model(normalizedText, { pooling: "mean", normalize: false });
+    const model = await withTimeout(loadModel(), timeoutMs, "Embedding model load");
+    const output = await withTimeout(
+      model(normalizedText, { pooling: "mean", normalize: false }),
+      timeoutMs,
+      "Embedding inference"
+    );
     return normalizeVector(Array.from(output.data));
   } catch (error) {
     console.error("[Embedding] Failed to generate embedding", error);

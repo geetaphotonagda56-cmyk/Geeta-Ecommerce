@@ -329,10 +329,16 @@ export const hybridProductSearch = async (options: SearchOptions) => {
     total = cached.pagination.total;
     pages = cached.pagination.pages;
   } else {
-    const [queryEmbedding, productQuery] = await Promise.all([
-      generateEmbedding(query),
-      buildVisibleProductQuery(options),
-    ]);
+    let queryEmbedding: number[] = [];
+    const productQueryPromise = buildVisibleProductQuery(options);
+
+    try {
+      queryEmbedding = await generateEmbedding(query, 8000);
+    } catch (error) {
+      console.warn("[Search] Semantic embedding timed out or failed; falling back to lexical-only search", error);
+    }
+
+    const productQuery = await productQueryPromise;
 
     const lexicalConditions = buildLexicalCandidateConditions(query);
     const lexicalCandidateQuery = lexicalConditions.length
@@ -364,7 +370,7 @@ export const hybridProductSearch = async (options: SearchOptions) => {
 
     const scored = products
       .map((product: any) => {
-        const semanticScore = Array.isArray(product.embedding) && product.embedding.length
+        const semanticScore = queryEmbedding.length && Array.isArray(product.embedding) && product.embedding.length
           ? Math.max(0, cosineSimilarity(queryEmbedding, product.embedding) || 0)
           : 0;
         const lexicalScore = keywordScore(query, product);
