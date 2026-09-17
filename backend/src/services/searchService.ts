@@ -150,6 +150,32 @@ const buildTextSearchCandidates = async (productQuery: Record<string, any>, quer
   }
 };
 
+// The "most popular/newest visible products" fallback candidates don't
+// depend on the search term at all, yet were being recomputed from scratch
+// on every uncached search — a query sorting the whole visible catalog by
+// searchCount/popular/createdAt with no covering index, taking ~27s
+// regardless of what was searched (confirmed live: 0-result and 66-result
+// queries took the same time). Cache it independent of the query text so
+// only the first search after expiry pays that cost.
+const POPULARITY_FALLBACK_CACHE_TTL_MS = Number(process.env.SEARCH_POPULARITY_CACHE_TTL_MS || 30_000);
+
+const getPopularityFallbackCandidates = (productQuery: Record<string, any>) => {
+  const cacheKey = `search:popularity-fallback:${JSON.stringify(productQuery)}`;
+  return cache.getOrSet(
+    cacheKey,
+    () =>
+      Product.find(productQuery)
+        .select(productProjection)
+        .populate("category", "name image")
+        .populate("subcategory", "name")
+        .populate("brand", "name")
+        .sort({ searchCount: -1, popular: -1, createdAt: -1 })
+        .limit(DEFAULT_CANDIDATE_LIMIT)
+        .lean(),
+    POPULARITY_FALLBACK_CACHE_TTL_MS
+  );
+};
+
 const mergeProductsById = (...groups: any[][]) => {
   const seen = new Set<string>();
   return groups.flat().filter((product) => {
@@ -344,14 +370,7 @@ export const hybridProductSearch = async (options: SearchOptions) => {
             .limit(DEFAULT_CANDIDATE_LIMIT)
             .lean()
         : Promise.resolve([]),
-      Product.find(productQuery)
-        .select(productProjection)
-        .populate("category", "name image")
-        .populate("subcategory", "name")
-        .populate("brand", "name")
-        .sort({ searchCount: -1, popular: -1, createdAt: -1 })
-        .limit(DEFAULT_CANDIDATE_LIMIT)
-        .lean(),
+      getPopularityFallbackCandidates(productQuery),
     ]);
 
     const products = mergeProductsById(textProducts, codeProducts, semanticProducts).slice(

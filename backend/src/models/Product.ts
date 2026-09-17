@@ -632,6 +632,10 @@ ProductSchema.index({ searchCount: -1 });
 ProductSchema.index({ status: 1, publish: 1 }); // For getProducts
 ProductSchema.index({ category: 1, status: 1, publish: 1 }); // For category products
 ProductSchema.index({ subcategory: 1, status: 1, publish: 1 }); // For subcategory products
+// Covers the search popularity-fallback query (status/publish equality +
+// searchCount/popular sort) so Mongo can use an index scan instead of a
+// full collection scan + in-memory sort of every visible product.
+ProductSchema.index({ status: 1, publish: 1, searchCount: -1, popular: -1 });
 ProductSchema.index({
   productName: "text",
   smallDescription: "text",
