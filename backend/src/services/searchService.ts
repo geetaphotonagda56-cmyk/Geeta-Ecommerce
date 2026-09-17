@@ -128,20 +128,34 @@ const buildCodeCandidateConditions = (query: string) => {
   return codeCandidateFields.map((field) => ({ [field]: regex }));
 };
 
-const buildTextSearchCandidates = async (productQuery: Record<string, any>, query: string) => {
+const buildTextSearchCandidates = async (
+  productQuery: Record<string, any>,
+  query: string,
+  timings?: Record<string, any>
+) => {
   try {
-    return await Product.find(
+    const t0 = Date.now();
+    const docs = await Product.find(
       { ...productQuery, $text: { $search: query } },
       { score: { $meta: "textScore" } }
     )
       .select(productProjection)
       .select({ score: { $meta: "textScore" } })
-      .populate("category", "name image")
-      .populate("subcategory", "name")
-      .populate("brand", "name")
       .sort({ score: { $meta: "textScore" } })
       .limit(DEFAULT_CANDIDATE_LIMIT)
       .lean();
+    const t1 = Date.now();
+    const populated = await Product.populate(docs, [
+      { path: "category", select: "name image" },
+      { path: "subcategory", select: "name" },
+      { path: "brand", select: "name" },
+    ]);
+    const t2 = Date.now();
+    if (timings) {
+      timings.textRawFetch = t1 - t0;
+      timings.textPopulate = t2 - t1;
+    }
+    return populated;
   } catch (error) {
     // Falls back to the code/popularity candidates below if the text index
     // lookup itself errors out (e.g. unsupported query syntax).
@@ -159,19 +173,33 @@ const buildTextSearchCandidates = async (productQuery: Record<string, any>, quer
 // only the first search after expiry pays that cost.
 const POPULARITY_FALLBACK_CACHE_TTL_MS = Number(process.env.SEARCH_POPULARITY_CACHE_TTL_MS || 30_000);
 
-const getPopularityFallbackCandidates = (productQuery: Record<string, any>) => {
+// Temporary: split the raw fetch from the populate step so we can see which
+// one actually accounts for the time (explain() on the raw query alone
+// showed 25ms, but the real call — which also populates — takes 30s+).
+const getPopularityFallbackCandidates = (productQuery: Record<string, any>, timings?: Record<string, any>) => {
   const cacheKey = `search:popularity-fallback:${JSON.stringify(productQuery)}`;
   return cache.getOrSet(
     cacheKey,
-    () =>
-      Product.find(productQuery)
+    async () => {
+      const t0 = Date.now();
+      const docs = await Product.find(productQuery)
         .select(productProjection)
-        .populate("category", "name image")
-        .populate("subcategory", "name")
-        .populate("brand", "name")
         .sort({ searchCount: -1, popular: -1, createdAt: -1 })
         .limit(DEFAULT_CANDIDATE_LIMIT)
-        .lean(),
+        .lean();
+      const t1 = Date.now();
+      const populated = await Product.populate(docs, [
+        { path: "category", select: "name image" },
+        { path: "subcategory", select: "name" },
+        { path: "brand", select: "name" },
+      ]);
+      const t2 = Date.now();
+      if (timings) {
+        timings.popularityRawFetch = t1 - t0;
+        timings.popularityPopulate = t2 - t1;
+      }
+      return populated;
+    },
     POPULARITY_FALLBACK_CACHE_TTL_MS
   );
 };
@@ -411,7 +439,7 @@ export const hybridProductSearch = async (options: SearchOptions) => {
     const codeCandidateQuery = codeConditions.length ? { ...productQuery, $or: codeConditions } : null;
 
     const [textProducts, codeProducts, semanticProducts] = await Promise.all([
-      time("textSearch", () => buildTextSearchCandidates(productQuery, query)),
+      time("textSearch", () => buildTextSearchCandidates(productQuery, query, timings)),
       time("codeSearch", () =>
         codeCandidateQuery
           ? Product.find(codeCandidateQuery)
@@ -423,7 +451,7 @@ export const hybridProductSearch = async (options: SearchOptions) => {
               .lean()
           : Promise.resolve([])
       ),
-      time("popularityFallback", () => getPopularityFallbackCandidates(productQuery)),
+      time("popularityFallback", () => getPopularityFallbackCandidates(productQuery, timings)),
     ]);
 
     (timings as any).popularityExplain = await explainPopularityQuery(productQuery);
