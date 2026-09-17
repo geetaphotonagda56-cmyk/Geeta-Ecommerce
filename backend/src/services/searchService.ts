@@ -162,6 +162,11 @@ const toNumber = (value: unknown): number | undefined => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
+export const buildIdInFilter = <T extends string | mongoose.Types.ObjectId>(ids?: T[]): Record<"$in", T[]> | undefined => {
+  if (!ids || ids.length === 0) return undefined;
+  return { $in: ids };
+};
+
 // Customer-side seller visibility is gated solely by `isEnabled`.
 // (`canCreateCategories` is an admin/authoring permission whose default is
 // `true` — using it here previously hid every normal seller's products.)
@@ -174,7 +179,10 @@ const buildVisibleProductQuery = async (options: Partial<SearchOptions>) => {
   };
 
   const activeCategories = await Category.find({ status: "Active" }).select("_id").lean();
-  query.category = { $in: activeCategories.map((category) => category._id) };
+  const categoryFilter = buildIdInFilter(activeCategories.map((category) => category._id));
+  if (categoryFilter) {
+    query.category = categoryFilter;
+  }
 
   const andConditions: any[] = [
     {
@@ -221,10 +229,16 @@ const buildVisibleProductQuery = async (options: Partial<SearchOptions>) => {
       _id: { $in: nearbySellerIds },
       ...visibleSellerQuery,
     }).select("_id");
-    query.seller = { $in: visibleSellers.map((seller) => seller._id) };
+    const nearbySellerFilter = buildIdInFilter(visibleSellers.map((seller) => seller._id));
+    if (nearbySellerFilter) {
+      query.seller = nearbySellerFilter;
+    }
   } else {
     const visibleSellers = await Seller.find(visibleSellerQuery).select("_id");
-    query.seller = { $in: visibleSellers.map((seller) => seller._id) };
+    const visibleSellerFilter = buildIdInFilter(visibleSellers.map((seller) => seller._id));
+    if (visibleSellerFilter) {
+      query.seller = visibleSellerFilter;
+    }
   }
 
   if (andConditions.length) query.$and = andConditions;
