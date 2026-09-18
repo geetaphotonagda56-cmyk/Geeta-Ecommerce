@@ -28,14 +28,26 @@ export default function FlashDealsPage() {
 
         // 1. Specific IDs from Flash Deal configuration
         if (configResponse.flashDealProductIds && configResponse.flashDealProductIds.length > 0) {
-          const promises = configResponse.flashDealProductIds.map((id: string) => getProductById(id, location?.latitude, location?.longitude));
+          // Resolve each ID independently. A deal list routinely outlives the
+          // products in it, and /customer/products/:id answers 404 for one that
+          // was deleted or unpublished. Letting that rejection escape Promise.all
+          // failed the whole batch, so a single stale ID turned the page into
+          // "Failed to load deals" and the surviving deals never rendered.
+          const promises = configResponse.flashDealProductIds.map(async (id: string) => {
+            try {
+              return await getProductById(id, location?.latitude, location?.longitude);
+            } catch (err) {
+              console.warn(`[FlashDeals] Skipping product ${id}:`, err);
+              return null;
+            }
+          });
           const results = await Promise.all(promises);
           fetchedProducts = results
-            .filter((res) => res.success && res.data)
+            .filter((res) => res?.success && res.data)
             .map((res) => ({
-              ...res.data,
-              id: (res.data as any)._id || (res.data as any).id,
-              isAvailable: (res.data as any).isAvailableAtLocation !== false,
+              ...res!.data,
+              id: (res!.data as any)._id || (res!.data as any).id,
+              isAvailable: (res!.data as any).isAvailableAtLocation !== false,
             }));
         }
 
