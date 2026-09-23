@@ -198,12 +198,12 @@ async function seed() {
         console.log('Connected to MongoDB');
 
         // 1. Create or Find Admin Seller
-        let seller = await Seller.findOne({ email: 'retail@Geeta Stores.com' });
+        let seller = await Seller.findOne({ email: 'retail@geetastores.com' });
         if (!seller) {
             console.log('Creating default seller...');
             seller = await Seller.create({
                 sellerName: 'Geeta Stores Retail',
-                email: 'retail@Geeta Stores.com',
+                email: 'retail@geetastores.com',
                 password: 'password123',
                 mobile: '9876543210',
                 storeName: 'Geeta Stores Retail Pvt Ltd',

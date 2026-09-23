@@ -185,7 +185,7 @@ export default function AdminStockManagement() {
     });
   };
 
-  const LIVE_BASE_URL = "https://geeta.today";
+  const LIVE_BASE_URL = "https://geetastores.com";
   const buildLiveProductUrl = (productId: string) => `${LIVE_BASE_URL}/product/${productId}`;
 
   useEffect(() => {

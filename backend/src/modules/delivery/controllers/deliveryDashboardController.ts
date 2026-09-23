@@ -235,7 +235,7 @@ export const getHelpSupport = asyncHandler(async (_req: Request, res: Response) 
 
     const contactOptions = [
         { label: 'Call Support', value: '+91-1800-XXX-XXXX', icon: 'phone' },
-        { label: 'Email Support', value: 'support@Geeta Stores.com', icon: 'email' },
+        { label: 'Email Support', value: 'support@geetastores.com', icon: 'email' },
         { label: 'Live Chat', value: 'Available 24/7', icon: 'chat' },
     ];
 

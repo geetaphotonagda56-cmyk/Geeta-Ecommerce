@@ -10,7 +10,7 @@ const DEFAULT_ADMIN_ROLE = (process.env.DEFAULT_ADMIN_ROLE as 'Super Admin' | 'A
 /**
  * Ensure a default admin user exists for quick access to the admin panel.
  * Mobile: 9876543210 (default)
- * Email: admin@Geeta Stores.com (default)
+ * Email: admin@geetastores.com (default)
  * Password: Admin@123 (not used for OTP login but stored for completeness)
  */
 export async function ensureDefaultAdmin() {

@@ -158,13 +158,13 @@ Make sure to set these correctly:
 
 **Backend `.env`**:
 ```
-FRONTEND_URL=https://Geeta Stores.com,https://www.Geeta Stores.com
+FRONTEND_URL=https://geetastores.com,https://www.geetastores.com
 NODE_ENV=production
 ```
 
 **Frontend Build**:
 ```
-VITE_API_URL=https://api.Geeta Stores.com
+VITE_API_URL=https://api.geetastores.com
 ```
 
 ## Still Not Working?

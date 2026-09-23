@@ -153,9 +153,9 @@ export default function SellerOrderDetail() {
     yPos += 6;
     doc.text('Phone: 8956656429', margin, yPos);
     yPos += 6;
-    doc.text('Email: info@Geeta Stores.com', margin, yPos);
+    doc.text('Email: info@geetastores.com', margin, yPos);
     yPos += 6;
-    doc.text('Website: https://Geeta Stores.com', margin, yPos);
+    doc.text('Website: https://geetastores.com', margin, yPos);
     yPos += 12;
 
     // Invoice Details (Right aligned)
@@ -426,10 +426,10 @@ export default function SellerOrderDetail() {
                   <span className="font-medium">Phone:</span> 8956656429
                 </div>
                 <div>
-                  <span className="font-medium">Email:</span> info@Geeta Stores.com
+                  <span className="font-medium">Email:</span> info@geetastores.com
                 </div>
                 <div>
-                  <span className="font-medium">Website:</span> https://Geeta Stores.com
+                  <span className="font-medium">Website:</span> https://geetastores.com
                 </div>
               </div>
             </div>

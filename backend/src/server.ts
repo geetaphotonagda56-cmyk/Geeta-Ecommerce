@@ -31,11 +31,9 @@ const httpServer = createServer(app);
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
-  "https://geeta.today",
-  "https://www.geeta.today",
-  "http://geeta.today",
-  "http://www.geeta.today",
-  "https://api.geeta.today",
+  "https://geetastores.com",
+  "https://www.geetastores.com",
+  "https://api.geetastores.com",
 
   // Add more origins from environment variable if needed, cleaning up quotes and trailing slashes
   ...(process.env.FRONTEND_URL
@@ -53,24 +51,26 @@ const corsOptions: cors.CorsOptions = {
     // Normalize origin (remove trailing slash and lowercase)
     const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
 
-    // Special case: allow any geeta.today domain or localhost
-    const isGeetaToday = normalizedOrigin.endsWith("geeta.today") ||
-                        normalizedOrigin.includes("geeta.today");
-
     const isLocalhost = normalizedOrigin.startsWith("http://localhost:") ||
                        normalizedOrigin.startsWith("http://127.0.0.1:") ||
                        normalizedOrigin.startsWith("https://localhost:");
 
+    // Match on the parsed hostname so look-alikes such as
+    // geetastores.com.evil.com or notgeetastores.com are rejected
+    let isGeetaStores = false;
     // Vercel preview / production deployments (e.g. *.vercel.app)
     let isVercelApp = false;
     try {
       const u = new URL(normalizedOrigin);
+      isGeetaStores = u.protocol === "https:" &&
+                      (u.hostname === "geetastores.com" || u.hostname.endsWith(".geetastores.com"));
       isVercelApp = u.protocol === "https:" && u.hostname.endsWith(".vercel.app");
     } catch {
+      isGeetaStores = false;
       isVercelApp = false;
     }
 
-    if (isGeetaToday || isLocalhost || isVercelApp) {
+    if (isGeetaStores || isLocalhost || isVercelApp) {
       return callback(null, true);
     }
 

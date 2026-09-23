@@ -46,23 +46,25 @@ export const initializeSocket = (httpServer: HttpServer) => {
                 // Normalize origin (remove trailing slash and lowercase)
                 const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
 
-                // Special case: allow any geeta.today domain or localhost
-                const isGeetaToday = normalizedOrigin.endsWith("geeta.today") ||
-                                    normalizedOrigin.includes("geeta.today");
-
                 const isLocalhost = normalizedOrigin.startsWith("http://localhost:") ||
                                    normalizedOrigin.startsWith("http://127.0.0.1:") ||
                                    normalizedOrigin.startsWith("https://localhost:");
 
+                // Match on the parsed hostname so look-alikes such as
+                // geetastores.com.evil.com or notgeetastores.com are rejected
+                let isGeetaStores = false;
                 let isVercelAppSocket = false;
                 try {
                     const u = new URL(normalizedOrigin);
+                    isGeetaStores = u.protocol === "https:" &&
+                                    (u.hostname === "geetastores.com" || u.hostname.endsWith(".geetastores.com"));
                     isVercelAppSocket = u.protocol === "https:" && u.hostname.endsWith(".vercel.app");
                 } catch {
+                    isGeetaStores = false;
                     isVercelAppSocket = false;
                 }
 
-                if (isGeetaToday || isLocalhost || isVercelAppSocket) {
+                if (isGeetaStores || isLocalhost || isVercelAppSocket) {
                     return callback(null, true);
                 }
 

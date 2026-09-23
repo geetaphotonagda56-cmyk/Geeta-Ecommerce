@@ -439,7 +439,7 @@ export default function SellerStockBulkImport({
     uploadInFlightRef.current = true;
     const apiBase =
       import.meta.env.VITE_API_BASE_URL ||
-      (import.meta.env.DEV ? "/api/v1" : "https://api.geeta.today/api/v1");
+      (import.meta.env.DEV ? "/api/v1" : "https://api.geetastores.com/api/v1");
 
     setUploading(true);
     setImportFailures([]);

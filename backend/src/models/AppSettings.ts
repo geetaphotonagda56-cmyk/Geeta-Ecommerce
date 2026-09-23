@@ -700,7 +700,7 @@ AppSettingsSchema.statics.getSettings = async function () {
   if (!settings) {
     settings = await this.create({
       appName: "Geeta Stores",
-      contactEmail: "contact@Geeta Stores.com",
+      contactEmail: "contact@geetastores.com",
       contactPhone: "1234567890",
     });
   }

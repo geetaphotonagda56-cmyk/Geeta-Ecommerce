@@ -1248,7 +1248,7 @@ export default function ProductDetail() {
                       </div>
                       <div className="flex items-start">
                         <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Customer Care Details:</span>
-                        <span className="text-xs text-neutral-600">Email: help@Geeta Stores.com</span>
+                        <span className="text-xs text-neutral-600">Email: help@geetastores.com</span>
                       </div>
                       <div className="flex items-start">
                         <span className="text-xs font-semibold text-neutral-800 w-[180px] flex-shrink-0">Country of Origin:</span>

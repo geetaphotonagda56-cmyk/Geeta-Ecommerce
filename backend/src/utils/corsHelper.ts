@@ -39,10 +39,10 @@ export const isOriginAllowed = (origin: string | undefined): boolean => {
       .map((url) => url.trim().replace(/\/$/, '')) // Remove trailing slashes
       .filter((url) => url.length > 0);
 
-    // Default production origins (explicitly include www.Geeta Stores.com)
+    // Default production origins (explicitly include www.geetastores.com)
     const defaultOrigins = [
-      'https://www.Geeta Stores.com',
-      'https://Geeta Stores.com',
+      'https://www.geetastores.com',
+      'https://geetastores.com',
     ];
 
     // Combine and remove duplicates

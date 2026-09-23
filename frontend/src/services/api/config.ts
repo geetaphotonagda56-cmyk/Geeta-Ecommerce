@@ -32,15 +32,15 @@ const buildApiBaseCandidates = (): string[] => {
     return unique([fromEnvBase, fromEnvRoot, "/api/v1"]);
   }
 
-  // The site's own origin (www.geeta.today / geeta.today) and any relative
+  // The site's own origin (www.geetastores.com / geetastores.com) and any relative
   // path never actually serve the API - they're the static SPA host whose
   // catch-all rewrite returns index.html for any path, including /api/*.
   // That's a 200 response, not a network error, so the axios failover below
-  // can never detect it's wrong. Once a transient blip on api.geeta.today
+  // can never detect it's wrong. Once a transient blip on api.geetastores.com
   // trips the failover, landing here silently and permanently poisons the
   // session with fake "successful" HTML responses. Don't list them at all -
   // only the real API host belongs here.
-  return unique([fromEnvBase, fromEnvRoot, "https://api.geeta.today/api/v1"]);
+  return unique([fromEnvBase, fromEnvRoot, "https://api.geetastores.com/api/v1"]);
 };
 
 const API_BASE_CANDIDATES = buildApiBaseCandidates();
@@ -86,7 +86,7 @@ export const getSocketBaseURL = (): string => {
   const apiBaseUrl = getApiBaseURL();
   const socketUrl = apiBaseUrl.replace(/\/api\/v\d+$|\/api$/, '');
 
-  return normalizeBaseUrl(socketUrl || "https://api.geeta.today");
+  return normalizeBaseUrl(socketUrl || "https://api.geetastores.com");
 };
 
 /**

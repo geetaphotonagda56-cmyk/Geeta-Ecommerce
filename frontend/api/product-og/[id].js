@@ -5,8 +5,8 @@
 // requests for /product/:id here based on User-Agent; everyone else keeps
 // getting the normal SPA shell.
 
-const API_BASE = process.env.API_BASE_URL || "https://api.geeta.today/api/v1";
-const SITE_URL = "https://www.geeta.today";
+const API_BASE = process.env.API_BASE_URL || "https://api.geetastores.com/api/v1";
+const SITE_URL = "https://www.geetastores.com";
 const FALLBACK_IMAGE = `${SITE_URL}/geetastoreslogo.png`;
 const FALLBACK_TITLE = "Geeta Stores - Fast Grocery Delivery";
 const FALLBACK_DESCRIPTION =

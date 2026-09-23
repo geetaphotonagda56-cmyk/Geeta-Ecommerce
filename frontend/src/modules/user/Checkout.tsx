@@ -1957,7 +1957,7 @@ export default function Checkout() {
               <div>
                 <h3 className="font-bold text-neutral-900 mb-2">Contact Support</h3>
                 <p>
-                  For any cancellation requests or queries, please contact our customer support team at support@Geeta Stores.com or call +91-7898111456
+                  For any cancellation requests or queries, please contact our customer support team at support@geetastores.com or call +91-7898111456
                 </p>
               </div>
             </div>
