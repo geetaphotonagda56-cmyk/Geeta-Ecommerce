@@ -74,7 +74,7 @@ function normalizeMobileNumber(mobile: string): string {
  * {#var#} placeholder is substituted with the OTP.
  */
 function buildOtpMessage(otp: string): string {
-  return `Your OTP is ${otp} for registration to the Geeta Stores and wholesale. https://www.geetastores.com/login GEETA STATIONARY`;
+  return `Your OTP is ${otp} for registration to the Geeta Stores and wholesale. https://www.geeta.today/login GEETA STATIONARY`;
 }
 
 /**
