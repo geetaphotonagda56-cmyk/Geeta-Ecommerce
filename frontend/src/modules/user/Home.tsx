@@ -6,6 +6,7 @@ import LowestPricesEver from "./components/LowestPricesEver";
 import FavoriteProducts from "./components/FavoriteProducts";
 import NewArrivals from "./components/NewArrivals";
 import CategoryTileSection from "./components/CategoryTileSection";
+import ShopByCategory from "./components/ShopByCategory";
 import OptimizedImage from "../../components/OptimizedImage";
 import ViewAllButton from "./components/ViewAllButton";
 import SectionHeader from "./components/SectionHeader";
@@ -587,6 +588,8 @@ export default function Home() {
 
     hero: <HomeHero activeTab={activeTab} onTabChange={handleTabChange} />,
 
+    shopByCategory: activeTab === "all" ? <ShopByCategory /> : null,
+
     userFavorites: activeTab === "all" ? <FavoriteProducts /> : null,
 
     newProducts: activeTab === "all" ? <NewArrivals /> : null,
@@ -837,11 +840,10 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-white min-h-screen pb-20 md:pb-0">
+    <div className="bg-[var(--hp-bg)] min-h-screen pb-20 md:pb-0">
       <div
         ref={contentRef}
-        className="-mt-2 pt-1 space-y-6 md:space-y-10 md:pt-4 pb-12"
-        style={{ backgroundColor: '#ffffff' }}
+        className="pt-0 space-y-6 md:space-y-10 md:pt-4 pb-12 bg-[var(--hp-bg)]"
       >
         {homeSectionOrder.map((key) => (
           <Fragment key={key}>{sectionRenderers[key]}</Fragment>

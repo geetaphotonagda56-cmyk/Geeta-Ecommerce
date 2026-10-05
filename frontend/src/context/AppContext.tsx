@@ -6,6 +6,7 @@ export interface PublicConfig {
     appName: string;
     appLogo?: string;
     appFavicon?: string;
+    estimatedDeliveryTime?: string;
     contactPhone?: string;
     contactEmail?: string;
     businessCategory?: string;

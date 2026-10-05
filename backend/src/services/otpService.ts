@@ -11,7 +11,9 @@ const BULK_SMS_COUNTRY = process.env.BULK_SMS_COUNTRY || '0';
 const API_TIMEOUT = 30000; // 30 seconds
 
 if (!BULK_SMS_AUTH_KEY) {
-  if (process.env.NODE_ENV === 'production' || process.env.USE_MOCK_OTP === 'false') {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[OTP] BULK_SMS_AUTH_KEY is not set - OTP sends will fail until it is configured');
+  } else if (process.env.USE_MOCK_OTP === 'false') {
     console.warn('Bulk SMS credentials are not fully set in environment variables');
   }
 }
@@ -133,6 +135,9 @@ async function sendSmsViaApi(mobile: string, message: string): Promise<void> {
     timeout: API_TIMEOUT,
   });
 
+  const maskedMobile = cleanMobile.replace(/\d(?=\d{4})/g, '*');
+  console.log(`[OTP] Bulk SMS gateway called for ${maskedMobile}: HTTP ${response.status}`, response.data);
+
   handleSmsResponse(response.data);
 }
 
@@ -217,9 +222,19 @@ function getSpecialBypassOtp(mobile: string): string {
 
 /**
  * Check if mock mode should be used
+ *
+ * A missing auth key only falls back to mock mode outside production. In
+ * production it must fail loudly instead: silently mocking there tells users
+ * "OTP sent" while the SMS gateway is never called at all.
  */
 function isMockMode(): boolean {
-  return process.env.USE_MOCK_OTP === 'true' || !BULK_SMS_AUTH_KEY;
+  if (process.env.USE_MOCK_OTP === 'true') {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[OTP] USE_MOCK_OTP=true in production - SMS gateway is NOT being called');
+    }
+    return true;
+  }
+  return !BULK_SMS_AUTH_KEY && process.env.NODE_ENV !== 'production';
 }
 
 /**

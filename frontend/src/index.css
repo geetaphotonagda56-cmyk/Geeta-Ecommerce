@@ -51,6 +51,39 @@
   --elev-action: 0 8px 20px -6px var(--customer-primary-alpha-40, rgba(17, 24, 39, 0.3));
 }
 
+/* ─── Home page (revamp) tokens ─────────────────────────────────────────
+   The redesigned home page uses its own neutral palette instead of the
+   admin-driven --customer-* brand colours. Dark values apply when
+   useColorMode puts .storefront-dark on <html>.                          */
+:root {
+  --hp-bg: #ffffff;
+  --hp-surface: #ffffff;
+  --hp-field: #f4f4f5;
+  --hp-text: #111111;
+  --hp-text-muted: #6b6b6b;
+  --hp-text-subtle: #a1a1aa;
+  --hp-border: #e4e4e7;
+  --hp-icon: #111111;
+  --hp-press: #f4f4f5;
+  --hp-accent: #8a1538;
+  --hp-card-tint: #fcf0f4;
+}
+
+.storefront-dark {
+  --hp-bg: #0f0f10;
+  --hp-surface: #0f0f10;
+  --hp-field: #1c1c1f;
+  --hp-text: #f5f5f5;
+  --hp-text-muted: #a1a1aa;
+  --hp-text-subtle: #71717a;
+  --hp-border: #2e2e33;
+  --hp-icon: #f5f5f5;
+  --hp-press: #1c1c1f;
+  --hp-accent: #f27a98;
+  --hp-card-tint: #241a1e;
+  color-scheme: dark;
+}
+
 @layer base {
   body {
     @apply bg-white md:bg-white text-neutral-900;

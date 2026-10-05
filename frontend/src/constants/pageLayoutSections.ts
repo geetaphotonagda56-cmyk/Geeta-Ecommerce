@@ -15,6 +15,7 @@ export interface PageLayoutEntry {
 export const HOME_LAYOUT_SECTIONS: PageLayoutSectionDef[] = [
   { key: "popup", label: "Popup Banner (First Visit)" },
   { key: "hero", label: "Hero Header & Category Tabs" },
+  { key: "shopByCategory", label: "Shop by Category" },
   { key: "userFavorites", label: "Your Favorites (Logged-in Users)" },
   { key: "newProducts", label: "New Arrivals" },
   { key: "mainBannerSlider", label: "Main Banner Slider" },
@@ -50,7 +51,9 @@ export const PRODUCT_DETAIL_LAYOUT_SECTIONS: PageLayoutSectionDef[] = [
 /**
  * Merges a saved layout array with the code-defined catalog: saved entries
  * keep their saved order/enabled state; any catalog key not yet present in
- * `saved` is appended at the end as enabled. Entries whose key no longer
+ * `saved` is added as enabled, right after the section that precedes it in
+ * the catalog (or at the start if it is first), so a newly introduced
+ * section lands where it was designed to sit. Entries whose key no longer
  * exists in the catalog are dropped.
  */
 export function mergeWithDefaults(
@@ -60,10 +63,14 @@ export function mergeWithDefaults(
   const catalogKeys = new Set(catalog.map((section) => section.key));
   const cleaned = (saved || []).filter((entry) => catalogKeys.has(entry.key));
   const seenKeys = new Set(cleaned.map((entry) => entry.key));
-  catalog.forEach((section) => {
-    if (!seenKeys.has(section.key)) {
-      cleaned.push({ key: section.key, enabled: true });
-    }
+  catalog.forEach((section, catalogIndex) => {
+    if (seenKeys.has(section.key)) return;
+    // Catalog is walked in order, so the previous key is always in `cleaned`.
+    const insertAt = catalogIndex === 0
+      ? 0
+      : cleaned.findIndex((entry) => entry.key === catalog[catalogIndex - 1].key) + 1;
+    cleaned.splice(insertAt, 0, { key: section.key, enabled: true });
+    seenKeys.add(section.key);
   });
   return cleaned;
 }

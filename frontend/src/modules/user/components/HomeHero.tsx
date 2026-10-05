@@ -4,17 +4,15 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { getTheme } from '../../../utils/themes';
 import { useLocation } from '../../../hooks/useLocation';
+import { useColorMode } from '../../../hooks/useColorMode';
 import { getCategories } from '../../../services/api/customerProductService';
 import { Category } from '../../../types/domain';
-import ShareButton from '../../../components/ShareButton';
 import { getCachedHeaderCategoriesPublic, getHeaderCategoriesPublic } from '../../../services/api/headerCategoryService';
 import { getIconByName } from '../../../utils/iconLibrary';
-import { useThemeContext } from '../../../context/ThemeContext';
 import { useAppContext } from '../../../context/AppContext';
 import { useLanguage, AppLanguage } from '../../../context/LanguageContext';
-import { Mic } from 'lucide-react';
+import { ChevronDown, Mic, Moon, Search, Sun, User } from 'lucide-react';
 import { useToast } from '../../../context/ToastContext';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -63,19 +61,11 @@ const ALL_TAB: Tab = {
 interface LanguageDropdownProps {
   language: AppLanguage;
   setLanguage: (lang: AppLanguage) => void;
-  isSticky: boolean;
-  themeKey: string; // Added themeKey prop
 }
 
-const LanguageDropdown = ({ language, setLanguage, isSticky, themeKey }: LanguageDropdownProps) => {
+const LanguageDropdown = ({ language, setLanguage }: LanguageDropdownProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const theme = getTheme(themeKey || 'all'); // Use themeKey here
-
-  // Extract primary color for active state
-  // Theme usually returns colors like '#HEX' or 'rgb(...)'.
-  // We'll use a fallback or try to use the theme's primary color.
-  const activeColor = theme.primary && theme.primary[0] ? theme.primary[0] : '#0d9488'; // Defaulting to teal-like if fail
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -104,31 +94,15 @@ const LanguageDropdown = ({ language, setLanguage, isSticky, themeKey }: Languag
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 px-2 py-1 outline-none transition-colors border-r border-gray-300 mr-2 h-5"
+        className="flex items-center gap-0.5 px-1.5 h-6 outline-none text-[var(--hp-text-muted)]"
+        aria-label="Change language"
       >
-        <span
-          className="text-xs font-bold leading-none"
-          style={{ color: isSticky ? '#6b7280' : '#4b5563' }}
-        >
-          {language}
-        </span>
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={isSticky ? "#9ca3af" : "#6b7280"}
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`transform transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
+        <span className="text-[11px] font-semibold leading-none">{language}</span>
+        <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} strokeWidth={2.5} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full right-0 mt-2 w-32 bg-white rounded-lg shadow-xl border border-neutral-100 overflow-hidden z-[100] animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+        <div className="absolute top-full right-0 mt-2 w-32 rounded-xl bg-[var(--hp-surface)] border border-[var(--hp-border)] shadow-lg overflow-hidden z-[100] animate-in fade-in zoom-in-95 duration-200 origin-top-right">
           <div className="py-1">
             {options.map((opt) => (
               <button
@@ -137,11 +111,7 @@ const LanguageDropdown = ({ language, setLanguage, isSticky, themeKey }: Languag
                   setLanguage(opt.value);
                   setIsOpen(false);
                 }}
-                className={`w-full text-left px-4 py-2 text-xs font-medium transition-colors hover:bg-neutral-50 flex items-center justify-between group`}
-                style={{
-                  color: language === opt.value ? activeColor : '#374151',
-                  backgroundColor: language === opt.value ? 'rgba(0,0,0,0.02)' : 'transparent'
-                }}
+                className={`w-full text-left px-4 py-2 text-xs transition-colors hover:bg-[var(--hp-press)] flex items-center justify-between text-[var(--hp-text)] ${language === opt.value ? 'font-semibold' : 'font-medium'}`}
               >
                 <span>{opt.label}</span>
                 {language === opt.value && (
@@ -232,7 +202,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     fetchHeaderCategories();
   }, []);
 
-  const { themeKey: currentThemeKey } = useThemeContext();
+  const { isDark, toggleMode } = useColorMode();
 
   const navigate = useNavigate();
   const { location: userLocation, requestLocation, isLocationLoading } = useLocation();
@@ -481,42 +451,34 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     onTabChange?.(tabId);
   };
 
-  const theme = getTheme(currentThemeKey);
-  // The hero is the one place the storefront gets to state who it is, so it
-  // uses the fixed brand canopy gradient rather than the per-category tint.
-  // Category identity still comes through on the tab indicator and section
-  // accents below.
-  const heroGradient = 'var(--grad-canopy)';
-  void theme;
+  // Placeholder reads as a short list ("Mango, orange, apple") and the list
+  // rolls forward through the tab's suggestions every couple of seconds.
+  const placeholderFor = (start: number) => {
+    const count = Math.min(3, searchSuggestions.length);
+    const items = Array.from({ length: count }, (_, i) => searchSuggestions[(start + i) % searchSuggestions.length]);
+    const text = items.join(', ');
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  };
 
-  // Render the sticky content (Search + Tabs).
-  //
-  // This is the "shelf": a white surface that sits over the bottom of the
-  // dark canopy band and detaches to the top of the screen on scroll.
-  // Because it is white in both states, sticking no longer flips every
-  // colour in here — the only thing that changes is its corner radius.
+  // Render the sticky content (Search + Tabs). The top row (delivery info)
+  // scrolls away; this shelf detaches to the top of the screen on scroll.
   const renderStickyContent = () => (
     <div
       ref={stickyRef}
       className={
         isSticky
-          ? 'fixed top-0 left-0 right-0 z-[9999] bg-white elev-2 animate-fade-in'
-          : 'relative z-50 bg-white rounded-t-[28px]'
+          ? 'fixed top-0 left-0 right-0 z-[9999] bg-[var(--hp-surface)] border-b border-[var(--hp-border)] animate-fade-in'
+          : 'relative z-50 bg-[var(--hp-surface)]'
       }
     >
-      <div className="px-4 md:px-6 lg:px-8 pt-3.5 md:pt-4 pb-1">
+      <div className="px-4 md:px-6 lg:px-8 pt-2 pb-1">
         {/* Search Bar */}
         <div
           onClick={() => navigate('/search')}
-          className="w-full md:max-w-2xl md:mx-auto rounded-2xl border border-neutral-200 bg-white px-3.5 py-3 flex items-center gap-2.5 cursor-pointer transition-colors duration-200 hover:border-[var(--customer-primary-light)]"
+          className="w-full md:max-w-2xl md:mx-auto h-11 rounded-xl bg-[var(--hp-field)] px-3.5 flex items-center gap-2.5 cursor-pointer"
         >
-          <span className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-[var(--customer-primary-alpha-10)]">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="11" cy="11" r="8" stroke="var(--customer-primary)" strokeWidth="2" />
-              <path d="m21 21-4.35-4.35" stroke="var(--customer-primary)" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </span>
-          <div className="flex-1 relative h-4 overflow-hidden">
+          <Search className="flex-shrink-0 h-[18px] w-[18px] text-[var(--hp-text-subtle)]" strokeWidth={2} />
+          <div className="flex-1 relative h-5 overflow-hidden">
             {searchSuggestions.map((suggestion, index) => {
               const isActive = index === currentSearchIndex;
               const prevIndex = (currentSearchIndex - 1 + searchSuggestions.length) % searchSuggestions.length;
@@ -526,31 +488,26 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                   key={suggestion}
                   className={`absolute inset-0 flex items-center transition-all duration-500 ${isActive ? 'translate-y-0 opacity-100' : isPrev ? '-translate-y-full opacity-0' : 'translate-y-full opacity-0'}`}
                 >
-                  <span className="text-xs text-neutral-500">
-                    {language === 'HI' ? 'खोजें' : 'Search'} &apos;{suggestion}&apos;
+                  <span className="truncate text-sm text-[var(--hp-text-subtle)]">
+                    {language === 'HI' ? `खोजें: ${placeholderFor(index)}` : placeholderFor(index)}
                   </span>
                 </div>
               );
             })}
           </div>
 
-          <LanguageDropdown
-            language={language}
-            setLanguage={setLanguage}
-            isSticky={isSticky}
-            themeKey={currentThemeKey}
-          />
+          <LanguageDropdown language={language} setLanguage={setLanguage} />
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               handleVoiceSearch();
             }}
-            className="grad-action flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full active:scale-95 transition-transform"
+            className="flex-shrink-0 flex items-center justify-center w-7 h-7 -mr-1 rounded-full text-[var(--hp-text-muted)] active:scale-95 transition-transform"
             aria-label="Search by voice"
             title="Search by voice"
           >
-            <Mic className="h-3.5 w-3.5 text-white" />
+            <Mic className="h-[18px] w-[18px]" strokeWidth={2} />
           </button>
         </div>
       </div>
@@ -624,66 +581,49 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   const { config } = useAppContext();
 
   return (
-    <div
-      ref={heroRef}
-      className="texture-weave relative z-20 overflow-hidden rounded-b-[32px]"
-      style={{ background: heroGradient, paddingBottom: 0, marginBottom: 0 }}
-    >
-      {/* Warm light spilling in from the top-right — the sunrise accent
-          showing up as atmosphere rather than another coloured element. */}
-      <div
-        className="pointer-events-none absolute -top-24 -right-16 w-72 h-72 rounded-full opacity-30 blur-3xl"
-        style={{ background: 'radial-gradient(circle, var(--customer-accent), transparent 70%)' }}
-        aria-hidden="true"
-      />
-
-      {/* Top section with logo + delivery address - NOT sticky */}
-      <div className="relative">
-        <div ref={topSectionRef} className="px-4 md:px-6 lg:px-8 pt-4 pb-5 md:pt-5 md:pb-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex-shrink-0 md:invisible">
-              <img
-                src={config?.appLogo || "/assets/geetastoreslogo.png"}
-                alt={config?.appName || "Geeta Stores"}
-                className="h-9 md:h-11 w-auto object-contain"
-              />
-            </div>
-            <ShareButton
-              iconOnly
-              title={config?.appName || "Geeta Stores"}
-              text={`Check out ${config?.appName || "Geeta Stores"} - fast grocery delivery!`}
-              imageUrl={config?.appLogo || `${window.location.origin}/assets/geetastoreslogo.png`}
-              className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full bg-white/12 backdrop-blur-sm text-white hover:bg-white/22 transition-colors"
-            />
-          </div>
-
-          {/* Where the order is going. Left-aligned to the same edge as the
-              logo above and the search field below, so the whole band reads
-              as one column rather than three separately-placed rows. */}
+    <div ref={heroRef} className="relative z-20 bg-[var(--hp-surface)]">
+      {/* Top row: delivery ETA + address, theme toggle, profile — NOT sticky */}
+      <div ref={topSectionRef} className="px-4 md:px-6 lg:px-8 pt-3 pb-2">
+        <div className="flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => { if (!isLocationLoading) requestLocation(); }}
             disabled={isLocationLoading}
-            className={`group mt-4 block w-full text-left ${isLocationLoading ? 'opacity-70' : ''}`}
+            className={`min-w-0 flex-1 text-left ${isLocationLoading ? 'opacity-70' : ''}`}
           >
-            <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Delivering to
+            <span className="block text-[17px] leading-tight font-bold text-[var(--hp-text)]">
+              Delivery in {config?.estimatedDeliveryTime || '12-15 mins'}
             </span>
-            <span className="mt-1 flex items-center gap-1.5 text-white">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 text-white/70" aria-hidden="true">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <span className="truncate text-[15px] md:text-lg font-semibold" title={locationDisplayText}>
+            <span className="mt-0.5 flex items-center gap-0.5 text-[var(--hp-text-muted)]">
+              <span className="truncate text-xs" title={locationDisplayText}>
                 {isLocationLoading
                   ? 'Finding you…'
                   : locationDisplayText || 'Set your location'}
               </span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 text-white/60 transition-transform group-hover:translate-y-0.5" aria-hidden="true">
-                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <ChevronDown className="flex-shrink-0 h-3.5 w-3.5" strokeWidth={2.5} />
             </span>
           </button>
+
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleMode}
+              className="w-9 h-9 flex items-center justify-center rounded-full text-[var(--hp-icon)] active:bg-[var(--hp-press)] transition-colors"
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={isDark ? 'Light mode' : 'Dark mode'}
+            >
+              {isDark ? <Sun className="h-5 w-5" strokeWidth={1.8} /> : <Moon className="h-5 w-5" strokeWidth={1.8} />}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/account')}
+              className="w-9 h-9 flex items-center justify-center rounded-full border-[1.5px] border-[var(--hp-icon)] text-[var(--hp-icon)] active:bg-[var(--hp-press)] transition-colors"
+              aria-label="Account"
+              title="Account"
+            >
+              <User className="h-[18px] w-[18px]" strokeWidth={2} />
+            </button>
+          </div>
         </div>
       </div>
 
