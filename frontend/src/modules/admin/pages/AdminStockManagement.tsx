@@ -170,6 +170,15 @@ export default function AdminStockManagement() {
   const [filterRedundant, setFilterRedundant] = useState("None");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [selectedProductDetails, setSelectedProductDetails] = useState<ProductVariation | null>(null);
+  // Stock as shown when the Quick Edit modal opened, so Save can tell whether
+  // the user actually edited it (see the Quick Edit save handler).
+  const quickEditOpenedStockRef = useRef<{ id: string; stock: unknown } | null>(null);
+  useEffect(() => {
+    quickEditOpenedStockRef.current = selectedProductDetails
+      ? { id: selectedProductDetails.id, stock: selectedProductDetails.stock }
+      : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProductDetails?.id]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [sellersList, setSellersList] = useState<Seller[]>([]);
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
@@ -2396,7 +2405,21 @@ export default function AdminStockManagement() {
                      const product = products.find(p => p._id === selectedProductDetails.productId);
                      if (!product) return;
                      
-                     const variations = Array.isArray(product.variations) ? [...product.variations] : [];
+                     // Every variation goes out without `stock`: the server then keeps
+                     // each one's live stock. `product` is this page's (possibly cached)
+                     // copy, so sending its stock values would roll back any sales/POS
+                     // decrements made since it was loaded - for every variation, not
+                     // just the one being edited. Only a stock the user actually changed
+                     // in this modal is sent (below).
+                     const variations: any[] = Array.isArray(product.variations)
+                       ? product.variations.map(({ stock: _stock, ...rest }: any) => rest)
+                       : [];
+                     const openedStock = quickEditOpenedStockRef.current?.id === selectedProductDetails.id
+                       ? quickEditOpenedStockRef.current.stock
+                       : undefined;
+                     const stockEdited =
+                       openedStock === undefined ||
+                       Number(selectedProductDetails.stock) !== Number(openedStock);
                      // Block/Room No. and Rack live on the variation subdocument, not the
                      // product root - patch the first variation here so edits from this
                      // modal actually persist (the top-level fields below are otherwise
@@ -2413,7 +2436,6 @@ export default function AdminStockManagement() {
                         productName: selectedProductDetails.name,
                         price: Number(selectedProductDetails.price),
                         compareAtPrice: Number(selectedProductDetails.compareAtPrice),
-                        stock: Number(selectedProductDetails.stock) || 0,
                         publish: selectedProductDetails.publish,
                         category: selectedProductDetails.categoryId,
                         subcategory: subCategories.find(s => s.name === selectedProductDetails.subCategory)?._id || undefined,
@@ -2435,14 +2457,16 @@ export default function AdminStockManagement() {
                      };
 
                      // Handle variation updates if needed
-                     if (product.variations && product.variations.length > 0 && selectedProductDetails.id.includes('-')) {
+                     if (variations.length > 0 && selectedProductDetails.id.includes('-')) {
                         const vIndex = parseInt(selectedProductDetails.id.split('-')[1]);
-                        if (!isNaN(vIndex)) {
-                           const newVariations = [...product.variations];
+                        if (!isNaN(vIndex) && variations[vIndex]) {
+                           const newVariations = [...variations];
                            newVariations[vIndex] = {
                               ...newVariations[vIndex],
                               price: Number(selectedProductDetails.price),
-                              stock: typeof selectedProductDetails.stock === 'number' ? selectedProductDetails.stock : (newVariations[vIndex] as any).stock,
+                              ...(stockEdited && typeof selectedProductDetails.stock === 'number'
+                                ? { stock: selectedProductDetails.stock }
+                                : {}),
                               compareAtPrice: Number(selectedProductDetails.compareAtPrice),
                               purchasePrice: Number(selectedProductDetails.purchasePrice),
                               wholesalePrice: Number(selectedProductDetails.wholesalePrice),
