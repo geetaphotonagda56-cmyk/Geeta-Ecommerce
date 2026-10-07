@@ -5,6 +5,7 @@ import Order from "../../../models/Order";
 import Return from "../../../models/Return";
 import SellerPurchaseEntry from "../../../models/SellerPurchaseEntry";
 import { asyncHandler } from "../../../utils/asyncHandler";
+import { totalStockExpr } from "../../product/variantHelpers";
 
 // Helper to escape regex special characters
 const escapeRegex = (string: string) => {
@@ -473,7 +474,7 @@ export const getGSTSalesReport = asyncHandler(
                     productName: "$productName",
                     hsn: "$_resolvedHsn",
                     quantity: "$quantity",
-                    stock: { $ifNull: ["$productDoc.stock", 0] }, // Current stock of the product
+                    stock: totalStockExpr("productDoc."), // Current stock of the product (variant total)
                     price: "$unitPrice", // Selling Price
                     taxPercentage: "$_resolvedGst",
                     taxableAmount: {

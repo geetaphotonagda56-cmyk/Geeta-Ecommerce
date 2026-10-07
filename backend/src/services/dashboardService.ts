@@ -3,6 +3,7 @@ import Category from "../models/Category";
 import SubCategory from "../models/SubCategory";
 import Product from "../models/Product";
 import Order from "../models/Order";
+import { totalStockExpr } from "../modules/product/variantHelpers";
 // import OrderItem from "../models/OrderItem";
 // import Seller from "../models/Seller";
 
@@ -66,8 +67,16 @@ export const getDashboardStats = async (): Promise<DashboardStats> => {
         status: { $in: ["Received", "Pending", "Processed"] },
       }).catch(() => 0),
       Order.countDocuments({ status: "Cancelled" }).catch(() => 0),
-      Product.countDocuments({ stock: 0, status: "Active" }).catch(() => 0),
-      Product.countDocuments({ stock: { $lte: 10, $gt: 0 }, status: "Active" }).catch(() => 0),
+      Product.countDocuments({
+        status: "Active",
+        $expr: { $lte: [totalStockExpr(), 0] },
+      }).catch(() => 0),
+      Product.countDocuments({
+        status: "Active",
+        $expr: {
+          $and: [{ $gt: [totalStockExpr(), 0] }, { $lte: [totalStockExpr(), 10] }],
+        },
+      }).catch(() => 0),
       Order.aggregate([
         { $match: { status: "Delivered", paymentStatus: "Paid" } },
         { $group: { _id: null, total: { $sum: { $ifNull: ["$total", 0] } } } },

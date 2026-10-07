@@ -108,6 +108,32 @@ export function getProductDocTotalStock(product: any): number {
   return resolveTotalStock(variantsFromProductDoc(product), product);
 }
 
+/**
+ * Aggregation expression for a product's total stock: the sum of variant stock
+ * (negatives clamped to 0) when the product has variants, otherwise the legacy
+ * root `stock`. Root stock is stale on migrated products, so it is only read
+ * when there are no variants. `prefix` is the path to the product document,
+ * e.g. "productDoc." after a $lookup + $unwind.
+ */
+export function totalStockExpr(prefix = ""): Record<string, unknown> {
+  const variations = `$${prefix}variations`;
+  return {
+    $cond: [
+      { $gt: [{ $size: { $ifNull: [variations, []] } }, 0] },
+      {
+        $sum: {
+          $map: {
+            input: variations,
+            as: "v",
+            in: { $max: [0, { $ifNull: ["$$v.stock", 0] }] },
+          },
+        },
+      },
+      { $max: [0, { $ifNull: [`$${prefix}stock`, 0] }] },
+    ],
+  };
+}
+
 export function isProductDocInStock(product: any, allowNegative = false): boolean {
   if (allowNegative) return true;
   return getProductDocTotalStock(product) > 0;
