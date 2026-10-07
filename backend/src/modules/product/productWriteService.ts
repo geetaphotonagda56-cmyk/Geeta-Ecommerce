@@ -256,6 +256,24 @@ export class ProductWriteService {
 
     if (!body.variants && !body.variations) {
       mergedBody.variations = existing.variations;
+    } else {
+      // A variant sent without `stock` means "stock not edited" - keep the
+      // live value instead of letting normalizeVariant default it to 0.
+      // Bulk edit relies on this so saving a price change from a page that
+      // was loaded a while ago can't roll back stock that sales/POS have
+      // decremented since.
+      const variantsKey = body.variants ? "variants" : "variations";
+      const incoming = body[variantsKey];
+      if (Array.isArray(incoming)) {
+        const liveStockById = new Map<string, number>(
+          (existing.variations || []).map((v: any) => [String(v._id), Number(v.stock) || 0])
+        );
+        mergedBody[variantsKey] = incoming.map((v: any) => {
+          if (!v || v.stock != null || !v._id) return v;
+          const liveStock = liveStockById.get(String(v._id));
+          return liveStock === undefined ? v : { ...v, stock: liveStock };
+        });
+      }
     }
 
     const normalized = normalizeCreatePayload(mergedBody, {

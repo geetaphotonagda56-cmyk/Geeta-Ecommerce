@@ -25,7 +25,6 @@ import { fetchImageAsFile } from "../../../services/api/uploadService";
 import ImageCropperModal from "../../../components/ImageCropperModal";
 
 interface AdminStockBulkEditProps {
-  products: Product[];
   categories: Category[];
   initialPage?: number;
   initialLimit?: number;
@@ -150,7 +149,6 @@ interface EditableProduct {
 }
 
 export default function AdminStockBulkEdit({
-  products,
   categories,
   initialPage = 1,
   initialLimit = 10,
@@ -168,7 +166,10 @@ export default function AdminStockBulkEdit({
   const [serverPagination, setServerPagination] = useState<
     { page: number; limit: number; total: number; pages: number } | null
   >(null);
-  const [pageLoading, setPageLoading] = useState(false);
+  // Starts true: the grid is only ever filled by fetchPage's fresh server
+  // read, never from the parent page's (possibly cached) product list.
+  const [pageLoading, setPageLoading] = useState(true);
+  const fetchRequestIdRef = useRef(0);
   const editedCacheRef = useRef<Map<string, EditableProduct>>(new Map());
   const [changesVersion, setChangesVersion] = useState(0);
   // "Attach Existing Product" deactivates (not deletes) the merged-in
@@ -330,6 +331,10 @@ export default function AdminStockBulkEdit({
   };
 
   const fetchPage = async (nextPage: number, nextLimit: number) => {
+    // Typing in search fires overlapping requests; only the latest one may
+    // populate the grid, or a slow earlier response lands last and shows
+    // rows (and stock) for a query that's no longer on screen.
+    const requestId = ++fetchRequestIdRef.current;
     setPageLoading(true);
     try {
       const res = await getProducts({
@@ -342,6 +347,8 @@ export default function AdminStockBulkEdit({
         page: nextPage,
         limit: nextLimit,
       } as any);
+
+      if (requestId !== fetchRequestIdRef.current) return;
 
       if (!res.success) {
         alert((res as any)?.message || "Failed to load products");
@@ -432,10 +439,11 @@ export default function AdminStockBulkEdit({
       setPage(nextPage);
       setPageLimit(nextLimit);
     } catch (e: any) {
+      if (requestId !== fetchRequestIdRef.current) return;
       console.error("Bulk edit fetch failed", e);
       alert(e?.response?.data?.message || e?.message || "Failed to load products");
     } finally {
-      setPageLoading(false);
+      if (requestId === fetchRequestIdRef.current) setPageLoading(false);
     }
   };
 
@@ -536,89 +544,6 @@ export default function AdminStockBulkEdit({
     fetchData();
   }, []);
 
-  // Initialize editable products
-  useEffect(() => {
-    if (serverPagination) return;
-    const initialized = products.map((p: any) => {
-      const cached = editedCacheRef.current.get(p._id);
-      if (cached) return { ...cached, original: cached.original || p };
-      let categoryId = "";
-      if (p.category) {
-         if (typeof p.category === "object" && p.category !== null) {
-           categoryId = p.category._id || "";
-         } else if (typeof p.category === "string") {
-          categoryId = p.category;
-        }
-      }
-
-      let subCategoryId = "";
-      if (p.subcategory) {
-          if (typeof p.subcategory === 'object' && p.subcategory !== null) {
-              subCategoryId = p.subcategory._id;
-          } else if (typeof p.subcategory === 'string' && p.subcategory !== "-") {
-              subCategoryId = p.subcategory;
-          }
-      }
-
-      let brandId = "";
-      if (p.brand) {
-          if (typeof p.brand === 'object' && p.brand !== null) {
-              brandId = p.brand._id;
-          } else if (typeof p.brand === 'string') {
-              brandId = p.brand;
-          }
-      }
-
-      const images: ProductImage[] = [];
-      if (p.mainImage) {
-        images.push({ id: `main-${p._id}`, url: p.mainImage });
-      }
-      getProductGalleryImages(p).forEach((url: string, i: number) => {
-        images.push({ id: `gal-${p._id}-${i}`, url });
-      });
-
-      return {
-        id: p._id,
-        original: p,
-        productName: p.productName,
-        categoryId: categoryId,
-        compareAtPrice: p.compareAtPrice || 0,
-        price: p.price,
-        stock: p.stock,
-        publish: p.publish,
-        // New fields initialization
-        itemCode: p.variations?.[0]?.sku || (p as any).itemCode || p.sku || "",
-        blockNumber: p.variations?.[0]?.blockNumber || (p as any).blockNumber || "",
-        rackNumber: p.variations?.[0]?.rackNumber || (p as any).rackNumber || "",
-        description: p.smallDescription || p.description || "",
-        tags: (p.tags || []).join(", "),
-        barcode: p.variations?.[0]?.barcode || (Array.isArray((p as any).barcode) ? (p as any).barcode : (p as any).barcode ? [(p as any).barcode] : []),
-        hsnCode: (p as any).hsnCode || "",
-        pack: (p as any).pack || "",
-        purchasePrice: p.variations?.[0]?.purchasePrice || (p as any).purchasePrice || 0,
-        mfgDate: (p as any).mfgDate || "",
-        expiryDate: (p as any).expiryDate || "",
-        weight: (p as any).weight || "",
-        deliveryTime: (p as any).deliveryTime || "",
-        lowStockQuantity: (p as any).lowStockQuantity || 5,
-        wholesalePrice: p.variations?.[0]?.wholesalePrice || (p as any).wholesalePrice || 0,
-        subSubCategory: (p as any).subSubCategory || "",
-        subCategoryId: subCategoryId, // Add this
-        brand: typeof p.brand === "object" ? (p.brand as any).name : "-",
-        brandId: brandId,
-        tax: p.tax || "",
-        offerPrice: p.discPrice || 0,
-        unitPricing: p.variations?.[0]?.tieredPrices && p.variations[0].tieredPrices.length > 0 ? p.variations[0].tieredPrices : (p.unitPricing && p.unitPricing.length > 0 ? p.unitPricing : [{ minQty: 1, price: 0 }]), // Initialize
-        images: images,
-        isChanged: false,
-        attributes: [],
-        variations: p.variations || [],
-        variationName: (p as any).variationName || "",
-        isNew: false,
-      };
-    });
-    setEditableProducts((prev) => [...prev.filter((x) => x.isNew), ...initialized]);
-  }, [products, serverPagination]);
 
   const handleFieldChange = (
     index: number,
@@ -1010,6 +935,17 @@ export default function AdminStockBulkEdit({
       return;
     }
 
+    // Stock is only sent for a variation whose stock cell was actually
+    // edited (it differs from what this page loaded). For anything else it is
+    // left undefined, which JSON drops, and the server keeps the variation's
+    // live stock - so saving e.g. a price change can't overwrite sales/POS
+    // decrements made since this page was opened. New variations (no _id)
+    // always send theirs.
+    const stockIfEdited = (v: any, editedStock: number, loadedStock: unknown): number | undefined => {
+      if (!v?._id || loadedStock == null) return editedStock;
+      return editedStock === (Number(loadedStock) || 0) ? undefined : editedStock;
+    };
+
     setSaving(true);
     try {
       const updatePromises = changedExisting.map(async (p) => {
@@ -1073,7 +1009,7 @@ export default function AdminStockBulkEdit({
                  ...v,
                  price: p.price,
                  compareAtPrice: p.compareAtPrice,
-                 stock: Number(p.stock) || 0,
+                 stock: stockIfEdited(v, Number(p.stock) || 0, (p.original as any)?.stock),
                  discPrice: p.offerPrice || p.price,
                  wholesalePrice: p.wholesalePrice || 0,
                  purchasePrice: p.purchasePrice || 0,
@@ -1090,7 +1026,11 @@ export default function AdminStockBulkEdit({
                  ...v,
                  price: v.price,
                  compareAtPrice: v.compareAtPrice,
-                 stock: Number(v.stock) || 0,
+                 stock: stockIfEdited(
+                   v,
+                   Number(v.stock) || 0,
+                   (p.original as any)?.variations?.find((o: any) => o?._id && String(o._id) === String(v._id))?.stock
+                 ),
                  discPrice: v.discPrice || v.price,
                  wholesalePrice: v.wholesalePrice || 0,
                  purchasePrice: v.purchasePrice || 0,
@@ -2038,6 +1978,13 @@ export default function AdminStockBulkEdit({
       case "deliveryTime":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="text" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm" value={product.deliveryTime} onChange={(e) => handleFieldChange(originalIndex, 'deliveryTime', e.target.value)} /></td>;
       case "stock":
+        // With several variations, stock only exists per variation (handleSave
+        // never persists the parent row's own stock for them), so show their
+        // live total read-only instead of an input whose edits would be lost.
+        if ((product.variations || []).length > 1) {
+          const variationTotal = (product.variations || []).reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
+          return <td key={key} className="p-2 border-r border-neutral-200 text-sm text-right font-mono tabular-nums text-neutral-500" title="Total of all variations - edit stock on each variation row">{variationTotal}</td>;
+        }
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-3 py-2 bg-transparent border-none focus:ring-2 focus:ring-[var(--primary-color)] focus:bg-white text-sm text-right font-mono tabular-nums" value={product.stock === 0 ? "" : product.stock} onChange={(e) => handleFieldChange(originalIndex, "stock", e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))} /></td>;
       case "offerPrice":
         return <td key={key} className="p-0 border-r border-neutral-200"><input type="number" className="w-full h-full px-2 py-2 bg-transparent border-none text-sm text-right font-mono tabular-nums" value={product.offerPrice === 0 ? "" : product.offerPrice} onChange={(e) => handleFieldChange(originalIndex, 'offerPrice', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} /></td>;
@@ -2781,7 +2728,7 @@ export default function AdminStockBulkEdit({
           </table>
           {filteredProducts.length === 0 && (
             <div className="p-8 text-center text-neutral-500">
-              No products found.
+              {pageLoading ? "Loading products..." : "No products found."}
             </div>
           )}
         </div>

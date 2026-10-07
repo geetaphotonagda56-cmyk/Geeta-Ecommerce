@@ -2123,12 +2123,16 @@ export default function AdminStockManagement() {
 
       {showBulkEdit && (
         <AdminStockBulkEdit
-          products={products}
           categories={categories}
           initialPage={currentPage}
           initialLimit={rowsPerPage}
           onClose={() => setShowBulkEdit(false)}
-          onSave={() => fetchData({ force: true })}
+          onSave={() => {
+            // A bulk save can touch products on any page/search, so every
+            // cached listing is stale now - not just the one on screen.
+            productsCache.clear();
+            fetchData({ force: true });
+          }}
         />
       )}
 

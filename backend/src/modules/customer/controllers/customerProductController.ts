@@ -132,7 +132,9 @@ export const getProducts = async (req: Request, res: Response) => {
     ];
 
     if (negativeStockSoldOut) {
-      query.stock = { $gt: 0 };
+      // Stock lives on the variants; the root `stock` field is stale legacy
+      // data (see resolveTotalStock in variantHelpers).
+      query["variations.stock"] = { $gt: 0 };
     }
 
     // Customer-side seller visibility is gated only by `isEnabled`.

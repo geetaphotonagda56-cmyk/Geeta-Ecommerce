@@ -89,11 +89,23 @@ export function getLegacyRootStock(product: any): number {
   return Number.isFinite(rootStock) && rootStock > 0 ? rootStock : 0;
 }
 
+/**
+ * Sellable stock for a product. Variant stock is the only live source of
+ * truth - sales, POS and bulk edit all write `variations.N.stock`, while the
+ * root `stock` field is no longer in the schema and is never updated. Many
+ * documents still carry a stale root value from before the variant
+ * migration, so it must only be used when there are no variants at all;
+ * otherwise a product that has sold down (or out) keeps showing that frozen
+ * number.
+ */
+function resolveTotalStock(variants: ProductVariant[], product?: any): number {
+  if (variants.length > 0) return getTotalStock(variants);
+  return product ? getLegacyRootStock(product) : 0;
+}
+
 /** Total sellable stock from variants, with legacy root `stock` fallback. */
 export function getProductDocTotalStock(product: any): number {
-  const variantTotal = getTotalStock(variantsFromProductDoc(product));
-  if (variantTotal > 0) return variantTotal;
-  return getLegacyRootStock(product);
+  return resolveTotalStock(variantsFromProductDoc(product), product);
 }
 
 export function isProductDocInStock(product: any, allowNegative = false): boolean {
@@ -159,9 +171,7 @@ export function computeListing(
   allowNegative = false,
   product?: any
 ): ProductListingComputed {
-  const variantStock = getTotalStock(variants);
-  const legacyStock = product ? getLegacyRootStock(product) : 0;
-  const totalStock = Math.max(variantStock, legacyStock);
+  const totalStock = resolveTotalStock(variants, product);
 
   let minPrice = getMinDisplayPrice(variants);
   let maxPrice = getMaxDisplayPrice(variants);
